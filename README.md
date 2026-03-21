@@ -20,11 +20,17 @@ Targets:
 ## Commands
 
 ```bash
+ariaflow add <url>
+ariaflow preflight
+ariaflow run
+ariaflow status
+ariaflow ucc
+```
+
+You can also run it as a module:
+
+```bash
 python -m aria_queue add <url>
-python -m aria_queue preflight
-python -m aria_queue run
-python -m aria_queue status
-python -m aria_queue ucc
 ```
 
 ## Goals
@@ -62,3 +68,15 @@ Define rules later in `config/post-actions.json`.
 - TIC: tests declare intent in docstring form and verify observable result shapes.
 
 This is still a minimal compliance layer, not a full framework implementation.
+
+## Homebrew
+
+The intended macOS installation path is a Homebrew tap. The formula's `url`
+points at a versioned upstream archive. When you publish a new version, update:
+
+- the formula `url`
+- the formula `sha256`
+- the formula `version`
+
+If the download location changes, you do not patch Homebrew globally; you update
+the tap formula for the new asset.
