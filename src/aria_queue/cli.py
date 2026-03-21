@@ -6,6 +6,7 @@ import json
 from . import __version__
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, load_queue
+from .install import install_all
 from .web import serve
 
 
@@ -37,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     web = sub.add_parser("serve", help="start the local web UI")
     web.add_argument("--host", default="127.0.0.1")
     web.add_argument("--port", type=int, default=8000)
+
+    install = sub.add_parser("install", help="install ariaflow, aria2 launchd, and the web UI on macOS")
+    install.add_argument("--dry-run", action="store_true")
 
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
@@ -94,6 +98,11 @@ def main() -> int:
             server.serve_forever()
         except KeyboardInterrupt:
             server.server_close()
+        return 0
+
+    if args.command == "install":
+        result = install_all(dry_run=args.dry_run)
+        print(json.dumps(result, indent=2, sort_keys=True))
         return 0
 
     return 1
