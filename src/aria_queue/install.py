@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from . import __version__ as current_version
 from .platform.launchd import (
     aria2_status,
     ariaflow_status,
@@ -76,6 +77,32 @@ def brew_is_installed(package: str) -> bool:
     return Path(brew).exists() and subprocess.call([brew, "list", package], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
 
+def brew_package_version(package: str) -> str | None:
+    brew = shutil.which("brew")
+    if brew is None:
+        for candidate in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
+            if Path(candidate).exists():
+                brew = candidate
+                break
+    if brew is None:
+        return None
+    try:
+        completed = subprocess.run(
+            [brew, "list", "--versions", package],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except Exception:
+        return None
+    text = completed.stdout.strip()
+    if not text:
+        return None
+    parts = text.split()
+    return parts[1] if len(parts) > 1 else None
+
+
 def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:
     commands = [["brew", "tap", "bonomani/ariaflow"], ["brew", "install", "ariaflow"]]
     if dry_run:
@@ -126,6 +153,7 @@ def install_all(dry_run: bool = False, include_web: bool = False) -> dict[str, d
 
 def status_all() -> dict[str, dict[str, object]]:
     ariaflow_installed = brew_is_installed("ariaflow")
+    ariaflow_version = brew_package_version("ariaflow")
     aria2 = aria2_status()
     serve = ariaflow_status()
     plan = {
@@ -135,7 +163,11 @@ def status_all() -> dict[str, dict[str, object]]:
             outcome="converged" if ariaflow_installed else "unchanged",
             completion="complete",
             reason="match" if ariaflow_installed else "missing",
-            detail="ariaflow package installed" if ariaflow_installed else "ariaflow package absent",
+            detail=(
+                f"ariaflow installed {ariaflow_version or 'unknown'}; current production {current_version}"
+                if ariaflow_installed
+                else f"ariaflow package absent; current production {current_version}"
+            ),
         ),
         "aria2-launchd": ucc_record(
             target="aria2-launchd",
@@ -143,7 +175,11 @@ def status_all() -> dict[str, dict[str, object]]:
             outcome="converged" if aria2["loaded"] else "unchanged",
             completion="complete",
             reason="match" if aria2["loaded"] else "missing",
-            detail="aria2 launchd loaded" if aria2["loaded"] else "aria2 launchd absent",
+            detail=(
+                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'})"
+                if aria2["loaded"]
+                else "aria2 launchd absent"
+            ),
         ),
     }
     if serve["loaded"] or serve["plist_exists"]:
@@ -153,7 +189,11 @@ def status_all() -> dict[str, dict[str, object]]:
             outcome="converged" if serve["loaded"] else "unchanged",
             completion="complete",
             reason="match" if serve["loaded"] else "missing",
-            detail="ariaflow web launchd loaded" if serve["loaded"] else "ariaflow web launchd absent",
+            detail=(
+                f"ariaflow web launchd loaded for {current_version}"
+                if serve["loaded"]
+                else f"ariaflow web launchd absent; current production {current_version}"
+            ),
         )
     else:
         plan["ariaflow-serve-launchd"] = ucc_record(
@@ -162,7 +202,7 @@ def status_all() -> dict[str, dict[str, object]]:
             outcome="skipped",
             completion="complete",
             reason="optional",
-            detail="ariaflow web UI is optional and not installed by default",
+            detail=f"ariaflow web UI is optional and not installed by default; current production {current_version}",
         )
     return plan
 

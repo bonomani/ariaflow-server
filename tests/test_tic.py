@@ -114,6 +114,16 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(status["ariaflow"]["meta"]["contract"], "UCC")
         self.assertIn(status["ariaflow"]["result"]["outcome"], ["converged", "unchanged"])
 
+    def test_lifecycle_status_includes_versions(self) -> None:
+        with patch("aria_queue.install.brew_is_installed", return_value=True), \
+             patch("aria_queue.install.brew_package_version", return_value="0.1.1-alpha.19"), \
+             patch("aria_queue.install.aria2_status", return_value={"loaded": True, "plist_exists": True, "session_exists": True, "version": "1.37.0"}), \
+             patch("aria_queue.install.ariaflow_status", return_value={"loaded": True, "plist_exists": True}):
+            status = status_all()
+        self.assertIn("0.1.1-alpha.19", status["ariaflow"]["result"]["message"])
+        self.assertIn("1.37.0", status["aria2-launchd"]["result"]["message"])
+        self.assertIn("0.1.1a19", status["ariaflow-serve-launchd"]["result"]["message"])
+
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
         self.assertIn("aria2-launchd", plan)

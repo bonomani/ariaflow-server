@@ -41,10 +41,19 @@ def _launchctl_load(plist: Path) -> None:
 
 
 def aria2_status() -> dict[str, bool]:
+    version = None
+    if _launchctl_list(ARIA2_LABEL):
+        try:
+            from ..core import aria_rpc
+
+            version = aria_rpc("aria2.getVersion", timeout=5)["result"]["version"]
+        except Exception:
+            version = None
     return {
         "loaded": _launchctl_list(ARIA2_LABEL),
         "plist_exists": aria2_plist_path().exists(),
         "session_exists": (aria2_session_dir() / "session.txt").exists(),
+        "version": version,
     }
 
 
