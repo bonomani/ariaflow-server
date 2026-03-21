@@ -75,21 +75,21 @@ INDEX_HTML = """<!doctype html>
         linear-gradient(180deg, #050b15 0%, var(--bg) 100%);
       min-height: 100vh;
     }
-    .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 42px; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 20px 32px; }
     .hero {
       display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 12px;
+      grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+      gap: 10px;
       align-items: end;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
-    .title h1 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.6rem); letter-spacing: -0.04em; }
-    .title p { margin: 6px 0 0; color: var(--muted); max-width: 60ch; line-height: 1.4; font-size: 0.96rem; }
+    .title h1 { margin: 0; font-size: clamp(1.45rem, 2.4vw, 2.1rem); letter-spacing: -0.04em; }
+    .title p { margin: 4px 0 0; color: var(--muted); max-width: 44ch; line-height: 1.35; font-size: 0.88rem; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 18px;
-      padding: 18px;
+      padding: 14px;
       box-shadow: var(--shadow);
       backdrop-filter: blur(16px);
     }
@@ -103,25 +103,25 @@ INDEX_HTML = """<!doctype html>
     .summary {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
+      gap: 10px;
     }
     .metric {
       background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.85));
       border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 14px;
-      min-height: 92px;
+      padding: 11px 12px;
+      min-height: 76px;
     }
-    .metric .label { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
-    .metric .value { font-size: 1.75rem; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
-    .metric .sub { color: var(--muted); font-size: 0.92rem; margin-top: 6px; }
+    .metric .label { color: var(--muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .metric .value { font-size: 1.45rem; font-weight: 700; margin-top: 4px; letter-spacing: -0.03em; }
+    .metric .sub { color: var(--muted); font-size: 0.82rem; margin-top: 3px; }
     .topline {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       color: var(--muted);
-      font-size: 0.92rem;
+      font-size: 0.88rem;
     }
     .topline strong { color: var(--text); }
     .toolbar { display: grid; gap: 12px; }
@@ -313,6 +313,7 @@ INDEX_HTML = """<!doctype html>
     body.page-log .show-log { display: block; }
     @media (max-width: 980px) {
       .hero, .summary { grid-template-columns: 1fr; }
+      .hero { align-items: start; }
       .span-8, .span-7, .span-5, .span-4, .span-6 { grid-column: span 12; }
     }
   </style>
@@ -339,6 +340,7 @@ INDEX_HTML = """<!doctype html>
           <span>Speed: <strong id="sum-speed">-</strong></span>
         </div>
         <div class="chips">
+          <div class="chip">Runner <strong id="chip-runner">idle</strong></div>
           <div class="chip">Cap <strong id="chip-cap">-</strong></div>
           <div class="chip">Last issue <strong id="chip-error">none</strong></div>
         </div>
@@ -820,6 +822,7 @@ INDEX_HTML = """<!doctype html>
         document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         document.getElementById('chip-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
         document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || data.bandwidth_global?.limit || '-');
+        document.getElementById('chip-runner').textContent = data.state && data.state.running ? 'running' : 'idle';
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
         document.getElementById('mode-label').textContent = activeStateLabel(active, state);
