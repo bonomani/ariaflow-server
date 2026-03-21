@@ -18,16 +18,12 @@ Release workflow:
 - Create and push the tag, for example `v0.1.1-alpha.13`.
 - Publish a GitHub release from that tag.
 - Verify the release is `isDraft: false` and `isPrerelease: true` for alpha releases.
-- Update the Homebrew tap repo to point at the new tag and asset hash.
-- Push the tap repo after the formula update.
+- The release workflow automatically dispatches a `sync-formula` event to `bonomani/homebrew-ariaflow` via `repository_dispatch` after publishing the release. The tap formula is updated automatically — no manual tap update needed.
 
 Homebrew notes:
 
-- The tap repo is the install surface for macOS users.
-- When the release asset changes, update:
-  - the formula `url`
-  - the formula `sha256`
-  - the formula `version`
+- The tap repo (`bonomani/homebrew-ariaflow`) syncs automatically on each release via the dispatch in `release.yml`.
+- The sync picks the latest non-draft release sorted by `created_at` descending.
 - Do not leave the tap pointing at an older alpha tag after a new prerelease is published.
 
 Verification:
