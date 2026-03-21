@@ -392,7 +392,6 @@ INDEX_HTML = """<!doctype html>
           <option value="0">Off</option>
         </select>
       </label>
-      <button class="secondary" id="refresh-btn" onclick="refresh()">Refresh now</button>
       <button class="secondary" id="theme-btn" onclick="toggleTheme()">Theme</button>
     </div>
     <div class="hero">
@@ -846,8 +845,11 @@ INDEX_HTML = """<!doctype html>
       return (items || []).map((item) => {
         const matches = liveItems.find((live) => live && (item.gid === live.gid || (state?.active_gid && item.gid === state.active_gid) || (item.url && live.url && item.url === live.url)));
         if (!matches) return item;
+        const total = Number(matches.totalLength || item.totalLength || 0);
+        const done = Number(matches.completedLength || item.completedLength || 0);
+        const computedPercent = total > 0 ? (done / total) * 100 : null;
         const live = {
-          percent: matches.percent,
+          percent: matches.percent != null ? matches.percent : computedPercent,
           downloadSpeed: matches.downloadSpeed,
           totalLength: matches.totalLength,
           completedLength: matches.completedLength,
@@ -874,14 +876,14 @@ INDEX_HTML = """<!doctype html>
       const live = item.live || {};
       const activeish = ["downloading", "paused", "recovered"].includes(status) || item.recovered;
       const liveStatus = live.status || null;
-      const progress = live.percent != null ? live.percent : item.percent;
       const speed = live.downloadSpeed || item.downloadSpeed;
       const totalLength = live.totalLength || item.totalLength;
       const completedLength = live.completedLength || item.completedLength;
+      const progress = live.percent != null ? live.percent : item.percent;
+      const computedProgress = progress != null
+        ? progress
+        : (Number(totalLength || 0) > 0 ? (Number(completedLength || 0) / Number(totalLength || 1)) * 100 : 0);
       const displayUrl = item.url || live.url || "";
-      const recoveryBadge = item.recovered
-        ? `<span class="badge warn">${item.recovery_session_id ? 'recovered · recovery batch' : 'recovered'}</span>`
-        : "";
       const ariaBadge = liveStatus ? `<span class="badge ${badgeClass(liveStatus)}">aria2: ${liveStatus}</span>` : "";
       const pauseButton = activeish
         ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="${status === 'paused' ? 'Resume' : 'Pause'}">${status === 'paused' ? '▶' : '⏸'}</button>`
@@ -894,16 +896,16 @@ INDEX_HTML = """<!doctype html>
         </div>
       ` : "";
       const activePanel = activeish ? `
-        <div class="meter"><div style="width:${Math.round(Number(progress || 0))}%"></div></div>
+        <div class="meter"><div style="width:${Math.round(Number(computedProgress || 0))}%"></div></div>
         <div class="statusline">
-          <span>${Math.round(Number(progress || 0))}% done</span>
+          <span>${Math.round(Number(computedProgress || 0))}% done</span>
           <span>${speed ? formatRate(speed) : "waiting"}</span>
         </div>
         <div class="meta">
           ${totalLength ? `<span>Total ${formatBytes(totalLength)}</span>` : ""}
           ${completedLength ? `<span>Done ${formatBytes(completedLength)}</span>` : ""}
           ${item.gid ? `<span>GID ${item.gid}</span>` : ""}
-          ${recoveryBadge}
+          ${item.recovered ? `<span class="badge warn">${item.recovery_session_id ? 'recovered · recovery batch' : 'recovered'}</span>` : ""}
           ${item.recovered_at ? `<span>Recovered ${item.recovered_at}</span>` : ""}
           ${item.error_message ? `<span class="mono">${item.error_message}</span>` : ""}
         </div>

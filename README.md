@@ -83,8 +83,9 @@ The web frontend is optional and intentionally local-only:
 
 Install options:
 
-- `ariaflow install` installs the core and `aria2` launchd support
+- `ariaflow install` installs the core backend/frontend package
 - `ariaflow install --with-web` also installs the optional web launchd service
+- `ariaflow install --with-aria2` also installs the optional `aria2` launchd service
 - `pip install .` installs the headless core
 - `pip install .[web]` installs the same core with the web extra declared
 - `pip install .[launchd]` declares the launchd boundary explicitly for packaging
@@ -98,7 +99,9 @@ ariaflow serve
 ## Homebrew
 
 The intended macOS installation path is a Homebrew tap. The formula's `url`
-points at a versioned upstream archive. When you publish a new version, update:
+points at a versioned upstream archive. The default formula covers the
+`ariaflow` backend/frontend only; `aria2` remains a separate optional service.
+When you publish a new version, update:
 
 - the formula `url`
 - the formula `sha256`

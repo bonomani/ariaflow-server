@@ -274,9 +274,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2_installed else "missing",
             detail=(
-                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}"
+                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; optional separate service"
                 if aria2_installed
-                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}"
+                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; optional separate service"
             ),
         ),
         "networkquality": ucc_record(
@@ -294,9 +294,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2["loaded"] else "missing",
             detail=(
-                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'})"
+                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'}); optional separate service"
                 if aria2["loaded"]
-                else "aria2 launchd absent"
+                else "aria2 launchd absent; optional separate service"
             ),
         ),
     }
