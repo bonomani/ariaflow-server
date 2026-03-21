@@ -192,14 +192,45 @@ INDEX_HTML = """<!doctype html>
       font-size: 0.88rem;
     }
     .chip strong { color: #fff; }
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 0 0 18px;
+    }
+    .nav a {
+      text-decoration: none;
+      color: var(--text);
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(8, 17, 31, 0.55);
+    }
+    .nav a.active {
+      background: linear-gradient(180deg, #7dd3fc, #38bdf8);
+      color: #082f49;
+      border-color: transparent;
+      font-weight: 700;
+    }
+    .page-only { display: none; }
+    body.page-dashboard .show-dashboard,
+    body.page-bandwidth .show-bandwidth,
+    body.page-lifecycle .show-lifecycle,
+    body.page-debug .show-debug { display: block; }
     @media (max-width: 980px) {
       .hero, .summary { grid-template-columns: 1fr; }
       .span-8, .span-7, .span-5, .span-4, .span-6 { grid-column: span 12; }
     }
   </style>
 </head>
-<body>
+<body data-page="dashboard">
   <div class="wrap">
+    <div class="nav">
+      <a href="/" data-page="dashboard">Dashboard</a>
+      <a href="/bandwidth" data-page="bandwidth">Bandwidth</a>
+      <a href="/lifecycle" data-page="lifecycle">Lifecycle</a>
+      <a href="/debug" data-page="debug">Debug</a>
+    </div>
     <div class="hero">
       <div class="title">
         <h1>ariaflow</h1>
@@ -235,7 +266,7 @@ INDEX_HTML = """<!doctype html>
       </div>
     </div>
     <div class="grid">
-      <div class="span-12">
+      <div class="span-12 show-dashboard page-only">
         <div class="panel toolbar">
           <div class="row">
             <input id="url" placeholder="Paste download URL">
@@ -248,7 +279,7 @@ INDEX_HTML = """<!doctype html>
           </div>
         </div>
       </div>
-      <div class="span-12">
+      <div class="span-12 show-dashboard page-only">
         <div class="panel">
           <div class="section-title">
             <h2>Queue</h2>
@@ -257,7 +288,7 @@ INDEX_HTML = """<!doctype html>
           <div id="queue" class="list">Loading...</div>
         </div>
       </div>
-      <div class="span-7">
+      <div class="span-7 show-dashboard page-only">
         <div class="panel">
           <div class="section-title">
             <h2>Active download</h2>
@@ -267,7 +298,7 @@ INDEX_HTML = """<!doctype html>
           <div id="active" style="margin-top:12px;">Idle</div>
         </div>
       </div>
-      <div class="span-5">
+      <div class="span-5 show-bandwidth page-only">
         <div class="panel">
           <div class="section-title">
             <h2>Bandwidth</h2>
@@ -289,7 +320,7 @@ INDEX_HTML = """<!doctype html>
           </div>
         </div>
       </div>
-      <div class="span-6">
+      <div class="span-6 show-lifecycle page-only">
         <div class="panel">
           <div class="section-title">
             <h2>Lifecycle</h2>
@@ -303,7 +334,7 @@ INDEX_HTML = """<!doctype html>
           <div id="lifecycle" class="list">Loading...</div>
         </div>
       </div>
-      <div class="span-6">
+      <div class="span-6 show-debug page-only">
         <div class="panel">
           <div class="section-title">
             <h2>Preflight</h2>
@@ -317,7 +348,7 @@ INDEX_HTML = """<!doctype html>
           </details>
         </div>
       </div>
-      <div class="span-6">
+      <div class="span-6 show-debug page-only">
         <div class="panel declaration">
           <div class="section-title">
             <h2>Declaration</h2>
@@ -340,6 +371,24 @@ INDEX_HTML = """<!doctype html>
     let lastLifecycle = null;
     let lastResult = null;
     let lastDeclaration = null;
+    const path = window.location.pathname.replace(/\/+$/, "");
+    const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/debug" ? "debug" : "dashboard";
+
+    function applyPage() {
+      document.body.classList.add(`page-${page}`);
+      document.querySelectorAll('.nav a').forEach((link) => {
+        link.classList.toggle('active', link.dataset.page === page);
+      });
+      if (page === 'dashboard') {
+        document.querySelectorAll('.show-dashboard').forEach((el) => el.style.display = '');
+      } else if (page === 'bandwidth') {
+        document.querySelectorAll('.show-bandwidth').forEach((el) => el.style.display = '');
+      } else if (page === 'lifecycle') {
+        document.querySelectorAll('.show-lifecycle').forEach((el) => el.style.display = '');
+      } else if (page === 'debug') {
+        document.querySelectorAll('.show-debug').forEach((el) => el.style.display = '');
+      }
+    }
 
     function badgeClass(status) {
       if (["done", "converged", "ok", "complete"].includes(status)) return "badge good";
@@ -580,6 +629,7 @@ INDEX_HTML = """<!doctype html>
     loadDeclaration();
     loadLifecycle();
     preflightRun();
+    applyPage();
   </script>
 </body>
 </html>
@@ -597,7 +647,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
-        if path in {"/", "/index.html"}:
+        if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/debug"}:
             body = INDEX_HTML.encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
