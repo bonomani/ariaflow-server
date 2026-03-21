@@ -137,6 +137,11 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
 
 def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]:
     cmd = shutil.which("networkquality")
+    if cmd is None:
+        for candidate in ("/usr/bin/networkquality", "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/networkquality"):
+            if Path(candidate).exists():
+                cmd = candidate
+                break
     if cmd:
         try:
             out = subprocess.check_output([cmd], text=True, stderr=subprocess.DEVNULL)
