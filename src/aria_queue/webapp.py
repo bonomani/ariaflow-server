@@ -913,7 +913,7 @@ INDEX_HTML = """<!doctype html>
     }
     async function refreshActionLog() {
       if (page !== 'log') return;
-      const r = await fetch('/api/log');
+      const r = await fetch('/api/log?limit=120');
       const data = await r.json();
       const actionLog = document.getElementById('action-log');
       if (actionLog) actionLog.innerHTML = renderActionLog(data.items || []);
@@ -922,9 +922,11 @@ INDEX_HTML = """<!doctype html>
     initTheme();
     refresh();
     setInterval(refresh, 2000);
-    loadDeclaration();
-    loadLifecycle();
-    if (page === 'log') refreshActionLog();
+    if (page === 'lifecycle') loadLifecycle();
+    if (page === 'log') {
+      loadDeclaration();
+      refreshActionLog();
+    }
     applyPage();
   </script>
 </body>
@@ -970,7 +972,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/log"}:
             body = INDEX_HTML.encode("utf-8")
             self.send_response(HTTPStatus.OK)
@@ -983,7 +986,13 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(self._status_payload())
             return
         if path == "/api/log":
-            self._send_json({"items": load_action_log()})
+            limit = 120
+            query = dict(part.split("=", 1) if "=" in part else (part, "") for part in parsed.query.split("&") if part)
+            try:
+                limit = max(1, min(500, int(query.get("limit", "120"))))
+            except ValueError:
+                limit = 120
+            self._send_json({"items": load_action_log(limit=limit)})
             return
         if path == "/api/declaration":
             self._send_json(load_declaration())
