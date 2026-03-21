@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from aria_queue.contracts import preflight, run_ucc
 from aria_queue.core import add_queue_item
-from aria_queue.install import install_all
+from aria_queue.install import install_all, status_all, uninstall_all
 
 
 class TicAriaFlowTests(unittest.TestCase):
@@ -52,6 +52,17 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("ariaflow", plan)
         self.assertIn("aria2-launchd", plan)
         self.assertIn("ariaflow-serve-launchd", plan)
+
+    def test_lifecycle_reports_status_shape(self) -> None:
+        status = status_all()
+        self.assertIn("ariaflow", status)
+        self.assertIn("aria2-launchd", status)
+        self.assertIn("ariaflow-serve-launchd", status)
+
+    def test_uninstall_dry_run_is_describable(self) -> None:
+        plan = uninstall_all(dry_run=True)
+        self.assertIn("ariaflow-serve-launchd", plan)
+        self.assertIn("aria2-launchd", plan)
 
 
 if __name__ == "__main__":

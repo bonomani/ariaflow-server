@@ -62,6 +62,35 @@ def aria2_session_dir() -> Path:
     return Path.home() / ".aria2"
 
 
+def _launchctl_list(label: str) -> bool:
+    if shutil.which("launchctl") is None:
+        return False
+    return subprocess.call(["launchctl", "list", label], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+
+
+def _launchctl_unload(plist: Path) -> None:
+    subprocess.run(["launchctl", "unload", str(plist)], check=False)
+
+
+def _launchctl_load(plist: Path) -> None:
+    subprocess.run(["launchctl", "load", str(plist)], check=True)
+
+
+def aria2_status() -> dict[str, bool]:
+    return {
+        "loaded": _launchctl_list(ARIA2_LABEL),
+        "plist_exists": aria2_plist_path().exists(),
+        "session_exists": (aria2_session_dir() / "session.txt").exists(),
+    }
+
+
+def ariaflow_status() -> dict[str, bool]:
+    return {
+        "loaded": _launchctl_list(ARIAFLOW_LABEL),
+        "plist_exists": ariaflow_plist_path().exists(),
+    }
+
+
 def install_aria2_launchd(dry_run: bool = False) -> list[str]:
     bin_path = shutil.which("aria2c") or "/opt/homebrew/bin/aria2c"
     plist = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -101,7 +130,7 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
     subprocess.run(["mkdir", "-p", str(aria2_session_dir()), str(Path.home() / "Downloads"), str(launch_agents_dir())], check=True)
     (aria2_session_dir() / "session.txt").touch(exist_ok=True)
     aria2_plist_path().write_text(plist, encoding="utf-8")
-    subprocess.run(["launchctl", "load", str(aria2_plist_path())], check=True)
+    _launchctl_load(aria2_plist_path())
     return commands
 
 
@@ -138,7 +167,29 @@ def install_ariaflow_launchd(dry_run: bool = False) -> list[str]:
         return commands
     subprocess.run(["mkdir", "-p", str(launch_agents_dir())], check=True)
     ariaflow_plist_path().write_text(plist, encoding="utf-8")
-    subprocess.run(["launchctl", "load", str(ariaflow_plist_path())], check=True)
+    _launchctl_load(ariaflow_plist_path())
+    return commands
+
+
+def uninstall_ariaflow_launchd(dry_run: bool = False) -> list[str]:
+    commands = [f"launchctl unload {ariaflow_plist_path()}", f"rm -f {ariaflow_plist_path()}"]
+    if dry_run:
+        return commands
+    _launchctl_unload(ariaflow_plist_path())
+    if ariaflow_plist_path().exists():
+        ariaflow_plist_path().unlink()
+    return commands
+
+
+def uninstall_aria2_launchd(dry_run: bool = False) -> list[str]:
+    commands = [f"launchctl unload {aria2_plist_path()}", f"rm -f {aria2_plist_path()}", f"rm -rf {aria2_session_dir()}"]
+    if dry_run:
+        return commands
+    _launchctl_unload(aria2_plist_path())
+    if aria2_plist_path().exists():
+        aria2_plist_path().unlink()
+    if aria2_session_dir().exists():
+        shutil.rmtree(aria2_session_dir(), ignore_errors=True)
     return commands
 
 
@@ -149,4 +200,21 @@ def install_all(dry_run: bool = False) -> dict[str, list[str]]:
         "ariaflow": homebrew_install_ariaflow(dry_run=dry_run),
         "aria2-launchd": install_aria2_launchd(dry_run=dry_run),
         "ariaflow-serve-launchd": install_ariaflow_launchd(dry_run=dry_run),
+    }
+
+
+def status_all() -> dict[str, dict[str, bool]]:
+    return {
+        "ariaflow": {"installed": brew_is_installed("ariaflow")},
+        "aria2-launchd": aria2_status(),
+        "ariaflow-serve-launchd": ariaflow_status(),
+    }
+
+
+def uninstall_all(dry_run: bool = False) -> dict[str, list[str]]:
+    if not dry_run and not is_macos():
+        raise RuntimeError("uninstall is only supported on macOS")
+    return {
+        "ariaflow-serve-launchd": uninstall_ariaflow_launchd(dry_run=dry_run),
+        "aria2-launchd": uninstall_aria2_launchd(dry_run=dry_run),
     }

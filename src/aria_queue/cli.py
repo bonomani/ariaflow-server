@@ -6,7 +6,7 @@ import json
 from . import __version__
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, load_queue
-from .install import install_all
+from .install import install_all, status_all, uninstall_all
 from .web import serve
 
 
@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     install = sub.add_parser("install", help="install ariaflow, aria2 launchd, and the web UI on macOS")
     install.add_argument("--dry-run", action="store_true")
+
+    uninstall = sub.add_parser("uninstall", help="remove ariaflow launchd services on macOS")
+    uninstall.add_argument("--dry-run", action="store_true")
+
+    lifecycle = sub.add_parser("lifecycle", help="show install and service status")
 
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
@@ -103,6 +108,15 @@ def main() -> int:
     if args.command == "install":
         result = install_all(dry_run=args.dry_run)
         print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "uninstall":
+        result = uninstall_all(dry_run=args.dry_run)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
+    if args.command == "lifecycle":
+        print(json.dumps(status_all(), indent=2, sort_keys=True))
         return 0
 
     return 1
