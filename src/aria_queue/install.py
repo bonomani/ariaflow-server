@@ -10,8 +10,9 @@ ARIA2_LABEL = "com.ariaflow.aria2"
 ARIAFLOW_LABEL = "com.ariaflow.serve"
 
 
-def ucc_record(
+def ucc_envelope(
     *,
+    target: str,
     observed: bool,
     outcome: str,
     completion: str | None = None,
@@ -19,18 +20,43 @@ def ucc_record(
     detail: str | None = None,
     commands: list[str] | None = None,
 ) -> dict[str, object]:
-    record: dict[str, object] = {
+    result: dict[str, object] = {
         "observation": "ok" if observed else "failed",
         "outcome": outcome,
         "reason": reason,
+        "target": target,
     }
     if completion is not None:
-        record["completion"] = completion
+        result["completion"] = completion
     if detail is not None:
-        record["message"] = detail
+        result["message"] = detail
     if commands is not None:
-        record["commands"] = commands
-    return record
+        result["commands"] = commands
+    return {
+        "meta": {"contract": "UCC", "version": "2.0", "target": target},
+        "result": result,
+    }
+
+
+def ucc_record(
+    *,
+    target: str,
+    observed: bool,
+    outcome: str,
+    completion: str | None = None,
+    reason: str = "aggregate",
+    detail: str | None = None,
+    commands: list[str] | None = None,
+) -> dict[str, object]:
+    return ucc_envelope(
+        target=target,
+        observed=observed,
+        outcome=outcome,
+        completion=completion,
+        reason=reason,
+        detail=detail,
+        commands=commands,
+    )
 
 
 def is_macos() -> bool:
@@ -224,6 +250,7 @@ def install_all(dry_run: bool = False) -> dict[str, dict[str, object]]:
     serve_cmds = install_ariaflow_launchd(dry_run=dry_run)
     return {
         "ariaflow": ucc_record(
+            target="ariaflow",
             observed=True,
             outcome="changed",
             completion="complete",
@@ -232,6 +259,7 @@ def install_all(dry_run: bool = False) -> dict[str, dict[str, object]]:
             commands=ariaflow_cmds,
         ),
         "aria2-launchd": ucc_record(
+            target="aria2-launchd",
             observed=True,
             outcome="changed",
             completion="complete",
@@ -240,6 +268,7 @@ def install_all(dry_run: bool = False) -> dict[str, dict[str, object]]:
             commands=aria2_cmds,
         ),
         "ariaflow-serve-launchd": ucc_record(
+            target="ariaflow-serve-launchd",
             observed=True,
             outcome="changed",
             completion="complete",
@@ -256,6 +285,7 @@ def status_all() -> dict[str, dict[str, object]]:
     serve = ariaflow_status()
     return {
         "ariaflow": ucc_record(
+            target="ariaflow",
             observed=True,
             outcome="converged" if ariaflow_installed else "unchanged",
             completion="complete",
@@ -263,6 +293,7 @@ def status_all() -> dict[str, dict[str, object]]:
             detail="ariaflow package installed" if ariaflow_installed else "ariaflow package absent",
         ),
         "aria2-launchd": ucc_record(
+            target="aria2-launchd",
             observed=True,
             outcome="converged" if aria2["loaded"] else "unchanged",
             completion="complete",
@@ -270,6 +301,7 @@ def status_all() -> dict[str, dict[str, object]]:
             detail="aria2 launchd loaded" if aria2["loaded"] else "aria2 launchd absent",
         ),
         "ariaflow-serve-launchd": ucc_record(
+            target="ariaflow-serve-launchd",
             observed=True,
             outcome="converged" if serve["loaded"] else "unchanged",
             completion="complete",
@@ -286,6 +318,7 @@ def uninstall_all(dry_run: bool = False) -> dict[str, dict[str, object]]:
     aria2_cmds = uninstall_aria2_launchd(dry_run=dry_run)
     return {
         "ariaflow-serve-launchd": ucc_record(
+            target="ariaflow-serve-launchd",
             observed=True,
             outcome="changed",
             completion="complete",
@@ -294,6 +327,7 @@ def uninstall_all(dry_run: bool = False) -> dict[str, dict[str, object]]:
             commands=serve_cmds,
         ),
         "aria2-launchd": ucc_record(
+            target="aria2-launchd",
             observed=True,
             outcome="changed",
             completion="complete",
