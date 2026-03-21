@@ -3,12 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 
+from . import __version__
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, load_queue
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aria-queue")
+    parser = argparse.ArgumentParser(
+        prog="ariaflow",
+        description="Sequential aria2 queue driver with adaptive bandwidth control.",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     add = sub.add_parser("add", help="enqueue a URL")
@@ -28,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     ucc = sub.add_parser("ucc", help="run a structured UCC execution cycle")
     ucc.add_argument("--port", type=int, default=6800)
     ucc.add_argument("--json", action="store_true")
+
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     return parser
 
