@@ -267,10 +267,8 @@ INDEX_HTML = """<!doctype html>
         </div>
         <div class="chips">
           <div class="chip">aria2 <strong id="chip-aria2">unknown</strong></div>
-          <div class="chip">Runner <strong id="chip-runner">idle</strong></div>
           <div class="chip">Cap <strong id="chip-cap">-</strong></div>
           <div class="chip">Speed <strong id="chip-speed">-</strong></div>
-          <div class="chip">Probe <strong id="chip-probe">-</strong></div>
           <div class="chip">Last error <strong id="chip-error">none</strong></div>
         </div>
         <div class="summary" style="margin-top:14px;">
@@ -332,6 +330,10 @@ INDEX_HTML = """<!doctype html>
             <div class="item">
               <div class="item-top"><div class="item-url">Live download</div><span class="badge" id="bw-live">idle</span></div>
               <div class="meta"><span id="bw-live-detail">No active transfer</span></div>
+            </div>
+            <div class="item">
+              <div class="item-top"><div class="item-url">Probe details</div><span class="badge" id="bw-probe-mode">-</span></div>
+              <div class="meta"><span id="bw-probe-detail">No probe yet</span></div>
             </div>
           </div>
         </div>
@@ -448,7 +450,7 @@ INDEX_HTML = """<!doctype html>
             <span class="${badgeClass(status)}">${status}</span>
           </div>
           <div class="meta">
-            <span>${item.url || ""}</span>
+            ${item.url ? `<span title="${item.url}">${item.url}</span>` : ""}
             ${detail ? `<span>${detail}</span>` : ""}
           </div>
         </div>
@@ -539,13 +541,9 @@ INDEX_HTML = """<!doctype html>
       const active = data.active || {status: 'idle'};
       const speed = active.downloadSpeed || data.state?.download_speed || "-";
       const state = data.state || {};
-      document.getElementById('chip-runner').textContent = state.running ? 'running' : 'idle';
       document.getElementById('chip-error').textContent = state.last_error || 'none';
       document.getElementById('chip-speed').textContent = formatRate(active.downloadSpeed || null);
       document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : (data.bandwidth?.limit || '-');
-      document.getElementById('chip-probe').textContent = data.bandwidth?.source === 'networkquality'
-        ? `${formatMbps(data.bandwidth.downlink_mbps)} → ${formatMbps(data.bandwidth.cap_mbps)}`
-        : 'default';
       document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
       document.getElementById('active').innerHTML = `
         <div class="item">
@@ -582,6 +580,10 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('bw-live-detail').textContent = active.downloadSpeed
         ? `Speed ${formatRate(active.downloadSpeed)}${active.completedLength ? ` · ${formatBytes(active.completedLength)}/${formatBytes(active.totalLength || 0)}` : ''}`
         : 'No active transfer';
+      document.getElementById('bw-probe-mode').textContent = data.bandwidth?.source || '-';
+      document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
+        ? `Measured ${formatMbps(data.bandwidth.downlink_mbps)} and capped at ${formatMbps(data.bandwidth.cap_mbps)}`
+        : 'Using default floor because no probe was available';
     }
     async function loadLifecycle() {
       const r = await fetch('/api/lifecycle');
