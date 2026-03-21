@@ -81,10 +81,12 @@ The web frontend is optional and intentionally local-only:
 - keeps `aria2` as the download engine
 - lives in a separate `webapp` module so the core stays headless
 
-The default install path is headless:
+Install options:
 
 - `ariaflow install` installs the core and `aria2` launchd support
 - `ariaflow install --with-web` also installs the optional web launchd service
+- `pip install .` installs the headless core
+- `pip install .[web]` installs the same core with the web extra declared
 
 Run it with:
 

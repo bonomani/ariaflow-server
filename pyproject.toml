@@ -9,6 +9,9 @@ description = "Sequential aria2 queue driver with adaptive bandwidth control"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+web = []
+
 [project.scripts]
 ariaflow = "aria_queue.cli:main"
 
