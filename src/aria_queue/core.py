@@ -265,6 +265,54 @@ def current_bandwidth(port: int = 6800) -> dict[str, Any]:
         return {"limit": None, "error": str(exc)}
 
 
+def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
+    state = load_state()
+    gid = state.get("active_gid")
+    if not gid:
+        return {"paused": False, "reason": "no_active_transfer"}
+    result = aria_rpc("aria2.pause", [gid], port=port)
+    state["paused"] = True
+    save_state(state)
+    return {"paused": True, "gid": gid, "result": result.get("result")}
+
+
+def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
+    state = load_state()
+    gid = state.get("active_gid")
+    if not gid:
+        return {"resumed": False, "reason": "no_active_transfer"}
+    result = aria_rpc("aria2.unpause", [gid], port=port)
+    state["paused"] = False
+    save_state(state)
+    return {"resumed": True, "gid": gid, "result": result.get("result")}
+
+
+def format_bytes(value: int | float | None) -> str:
+    if value is None:
+        return "-"
+    size = float(value)
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    for unit in units:
+        if abs(size) < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TiB"
+
+
+def format_rate(bytes_per_second: int | float | None) -> str:
+    if bytes_per_second is None:
+        return "-"
+    return f"{format_bytes(bytes_per_second)}/s"
+
+
+def format_mbps(value: int | float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value} Mbps"
+
+
 def post_action(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "success": True,

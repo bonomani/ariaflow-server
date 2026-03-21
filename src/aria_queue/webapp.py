@@ -6,7 +6,23 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from .contracts import load_declaration, preflight, run_ucc, save_declaration
-from .core import add_queue_item, active_status, aria_status, current_bandwidth, get_active_progress, load_queue, load_state, save_state, start_background_process, summarize_queue
+from .core import (
+    add_queue_item,
+    active_status,
+    aria_status,
+    current_bandwidth,
+    format_bytes,
+    format_mbps,
+    format_rate,
+    get_active_progress,
+    load_queue,
+    load_state,
+    pause_active_transfer,
+    resume_active_transfer,
+    save_state,
+    start_background_process,
+    summarize_queue,
+)
 from .install import install_all, status_all, uninstall_all
 
 
@@ -396,6 +412,26 @@ INDEX_HTML = """<!doctype html>
       if (["paused", "queued", "unchanged", "skipped"].includes(status)) return "badge warn";
       return "badge";
     }
+    function formatBytes(value) {
+      if (value == null) return "-";
+      let size = Number(value);
+      const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+      for (const unit of units) {
+        if (Math.abs(size) < 1024 || unit === units[units.length - 1]) {
+          return unit === "B" ? `${Math.round(size)} ${unit}` : `${size.toFixed(1)} ${unit}`;
+        }
+        size /= 1024;
+      }
+      return `${size.toFixed(1)} TiB`;
+    }
+    function formatRate(value) {
+      if (value == null) return "-";
+      return `${formatBytes(value)}/s`;
+    }
+    function formatMbps(value) {
+      if (value == null) return "-";
+      return `${value} Mbps`;
+    }
     function renderQueueItem(item) {
       const status = item.status || "unknown";
       const detail = [
@@ -404,13 +440,15 @@ INDEX_HTML = """<!doctype html>
         item.gid ? `GID ${item.gid}` : null,
         item.error_message ? item.error_message : null,
       ].filter(Boolean).join(" · ");
+      const shortUrl = item.output || (item.url ? item.url.split('/').pop() : '(no url)');
       return `
         <div class="item">
           <div class="item-top">
-            <div class="item-url">${item.url || "(no url)"}</div>
+            <div class="item-url">${shortUrl}</div>
             <span class="${badgeClass(status)}">${status}</span>
           </div>
           <div class="meta">
+            <span>${item.url || ""}</span>
             ${detail ? `<span>${detail}</span>` : ""}
           </div>
         </div>
@@ -503,10 +541,10 @@ INDEX_HTML = """<!doctype html>
       const state = data.state || {};
       document.getElementById('chip-runner').textContent = state.running ? 'running' : 'idle';
       document.getElementById('chip-error').textContent = state.last_error || 'none';
-      document.getElementById('chip-speed').textContent = speed || '-';
-      document.getElementById('chip-cap').textContent = data.bandwidth?.limit || '-';
+      document.getElementById('chip-speed').textContent = formatRate(active.downloadSpeed || null);
+      document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : (data.bandwidth?.limit || '-');
       document.getElementById('chip-probe').textContent = data.bandwidth?.source === 'networkquality'
-        ? `${data.bandwidth.downlink_mbps} Mbps → ${data.bandwidth.cap_mbps} Mbps`
+        ? `${formatMbps(data.bandwidth.downlink_mbps)} → ${formatMbps(data.bandwidth.cap_mbps)}`
         : 'default';
       document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
       document.getElementById('active').innerHTML = `
@@ -517,9 +555,9 @@ INDEX_HTML = """<!doctype html>
           </div>
           <div class="meta">
             <span>Progress ${Math.round(Number(active.percent || 0))}%</span>
-            ${active.downloadSpeed ? `<span>Speed ${active.downloadSpeed}</span>` : ""}
-            ${active.totalLength ? `<span>Total ${active.totalLength}</span>` : ""}
-            ${active.completedLength ? `<span>Done ${active.completedLength}</span>` : ""}
+            ${active.downloadSpeed ? `<span>Speed ${formatRate(active.downloadSpeed)}</span>` : ""}
+            ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
+            ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
           </div>
           <div class="statusline">
             <span>GID <strong>${active.gid || "none"}</strong></span>
@@ -536,13 +574,13 @@ INDEX_HTML = """<!doctype html>
       renderQueueSummary(data.summary);
       document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
       document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
-        ? `Downlink ${data.bandwidth.downlink_mbps} Mbps`
+        ? `Downlink ${formatMbps(data.bandwidth.downlink_mbps)}`
         : 'No networkquality probe available';
-      document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? `${data.bandwidth.cap_mbps} Mbps` : '-';
+      document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : '-';
       document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
       document.getElementById('bw-live').textContent = active.status || 'idle';
       document.getElementById('bw-live-detail').textContent = active.downloadSpeed
-        ? `Speed ${active.downloadSpeed}${active.completedLength ? ` · ${active.completedLength}/${active.totalLength || '?'}` : ''}`
+        ? `Speed ${formatRate(active.downloadSpeed)}${active.completedLength ? ` · ${formatBytes(active.completedLength)}/${formatBytes(active.totalLength || 0)}` : ''}`
         : 'No active transfer';
     }
     async function loadLifecycle() {
@@ -555,7 +593,7 @@ INDEX_HTML = """<!doctype html>
       const r = await fetch('/api/pause', { method: 'POST' });
       const data = await r.json();
       lastResult = data;
-      document.getElementById('result').textContent = data.paused ? "Queue paused" : "Queue not paused";
+      document.getElementById('result').textContent = data.paused ? "Queue paused" : "Pause requested";
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
@@ -563,7 +601,7 @@ INDEX_HTML = """<!doctype html>
       const r = await fetch('/api/resume', { method: 'POST' });
       const data = await r.json();
       lastResult = data;
-      document.getElementById('result').textContent = data.paused ? "Queue paused" : "Queue resumed";
+      document.getElementById('result').textContent = data.resumed ? "Queue resumed" : "Resume requested";
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
@@ -724,17 +762,13 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/pause":
-            state = load_state()
-            state["paused"] = True
-            save_state(state)
-            self._send_json({"paused": True})
+            result = pause_active_transfer()
+            self._send_json(result)
             return
 
         if path == "/api/resume":
-            state = load_state()
-            state["paused"] = False
-            save_state(state)
-            self._send_json({"paused": False})
+            result = resume_active_transfer()
+            self._send_json(result)
             return
 
         self._send_json({"error": "not_found"}, status=404)
