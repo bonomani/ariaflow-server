@@ -17,7 +17,7 @@ Release workflow:
   - `python3 scripts/release.py --next-alpha --push`
 - Use `--dry-run` first if you want to preview the exact release plan.
 - If you need to do it manually, bump the package version in `pyproject.toml`
-  and `src/aria_queue/__init__.py`, commit on `master`, create and push the tag,
+  and `src/aria_queue/__init__.py`, commit on `main`, create and push the tag,
   and let the release workflow publish the prerelease.
 - Verify the release is `isDraft: false` and `isPrerelease: true` for alpha releases.
 - The release workflow automatically dispatches a `sync-formula` event to `bonomani/homebrew-ariaflow` via `repository_dispatch` after publishing the release. The tap formula is updated automatically.
