@@ -593,7 +593,7 @@ INDEX_HTML = """<!doctype html>
     let refreshTimer = null;
     let refreshInterval = Number(localStorage.getItem('ariaflow.refresh_interval') || '2000');
     let lastDeclaration = null;
-    const path = window.location.pathname.replace(/\/+$/, "");
+    const path = window.location.pathname.replace(/[/]+$/, "");
     const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/log" ? "log" : "dashboard";
 
     function applyPage() {
@@ -1207,7 +1207,7 @@ INDEX_HTML = """<!doctype html>
     }
     async function add() {
       const raw = document.getElementById('url').value.trim();
-      const urls = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const urls = raw.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
       const payload = urls.length > 1 ? { urls } : { url: urls[0] || "" };
       const r = await fetch('/api/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       const data = await r.json();
