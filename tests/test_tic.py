@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from aria_queue.contracts import preflight, run_ucc
-from aria_queue.core import add_queue_item
+from aria_queue.core import add_queue_item, load_action_log
 from aria_queue.install import install_all, status_all, uninstall_all
 
 
@@ -32,6 +32,8 @@ class TicAriaFlowTests(unittest.TestCase):
         item = add_queue_item("https://example.com/model.gguf")
         self.assertTrue(item.id)
         self.assertEqual(item.status, "queued")
+        log = load_action_log()
+        self.assertTrue(any(entry.get("action") == "add" for entry in log))
 
     def test_preflight_emits_gate_results(self) -> None:
         result = preflight()

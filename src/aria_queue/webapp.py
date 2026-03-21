@@ -9,6 +9,7 @@ from .contracts import load_declaration, preflight, run_ucc, save_declaration
 from .core import (
     add_queue_item,
     active_status,
+    load_action_log,
     aria_status,
     current_bandwidth,
     format_bytes,
@@ -271,7 +272,7 @@ INDEX_HTML = """<!doctype html>
     body.page-dashboard .show-dashboard,
     body.page-bandwidth .show-bandwidth,
     body.page-lifecycle .show-lifecycle,
-    body.page-debug .show-debug { display: block; }
+    body.page-log .show-log { display: block; }
     @media (max-width: 980px) {
       .hero, .summary { grid-template-columns: 1fr; }
       .span-8, .span-7, .span-5, .span-4, .span-6 { grid-column: span 12; }
@@ -284,7 +285,7 @@ INDEX_HTML = """<!doctype html>
       <a href="/" data-page="dashboard">Dashboard</a>
       <a href="/bandwidth" data-page="bandwidth">Bandwidth</a>
       <a href="/lifecycle" data-page="lifecycle">Lifecycle</a>
-      <a href="/debug" data-page="debug">Debug</a>
+      <a href="/log" data-page="log">Log</a>
     </div>
     <div class="hero">
       <div class="title">
@@ -389,11 +390,11 @@ INDEX_HTML = """<!doctype html>
           <div id="lifecycle" class="list">Loading...</div>
         </div>
       </div>
-      <div class="span-6 show-debug page-only">
+      <div class="span-6 show-log page-only">
         <div class="panel">
           <div class="section-title">
-            <h2>Contract</h2>
-            <div class="hint">UCC trace and formal result</div>
+            <h2>Log</h2>
+            <div class="hint">Action history and UCC trace</div>
           </div>
           <div class="row" style="margin-bottom:12px;">
             <button class="secondary" onclick="uccRun()">Run contract</button>
@@ -412,7 +413,16 @@ INDEX_HTML = """<!doctype html>
           </details>
         </div>
       </div>
-      <div class="span-6 show-debug page-only">
+      <div class="span-6 show-log page-only">
+        <div class="panel">
+          <div class="section-title">
+            <h2>Action history</h2>
+            <div class="hint">Normalized event log</div>
+          </div>
+          <div id="action-log" class="list">Loading...</div>
+        </div>
+      </div>
+      <div class="span-6 show-log page-only">
         <div class="panel declaration">
           <div class="section-title">
             <h2>Declaration</h2>
@@ -436,7 +446,7 @@ INDEX_HTML = """<!doctype html>
     let lastResult = null;
     let lastDeclaration = null;
     const path = window.location.pathname.replace(/\/+$/, "");
-    const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/debug" ? "debug" : "dashboard";
+    const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : (path === "/log" || path === "/debug") ? "log" : "dashboard";
 
     function applyPage() {
       document.body.classList.add(`page-${page}`);
@@ -449,8 +459,8 @@ INDEX_HTML = """<!doctype html>
         document.querySelectorAll('.show-bandwidth').forEach((el) => el.style.display = '');
       } else if (page === 'lifecycle') {
         document.querySelectorAll('.show-lifecycle').forEach((el) => el.style.display = '');
-      } else if (page === 'debug') {
-        document.querySelectorAll('.show-debug').forEach((el) => el.style.display = '');
+      } else if (page === 'log') {
+        document.querySelectorAll('.show-log').forEach((el) => el.style.display = '');
       }
     }
 
@@ -612,10 +622,32 @@ INDEX_HTML = """<!doctype html>
         </div>
       `;
     }
+    function renderActionLog(entries) {
+      if (!entries || !entries.length) return "<div class='item'>No action log yet.</div>";
+      return entries.slice().reverse().map((entry) => {
+        const status = entry.outcome || entry.status || "unknown";
+        const lines = [
+          entry.timestamp ? `At ${entry.timestamp}` : null,
+          entry.action ? `Action: ${entry.action}` : null,
+          entry.target ? `Target: ${entry.target}` : null,
+          entry.reason ? `Reason: ${entry.reason}` : null,
+          entry.message ? `Message: ${entry.message}` : null,
+        ].filter(Boolean).join(" · ");
+        return `
+          <div class="item">
+            <div class="item-top">
+              <div class="item-url">${entry.action || "event"}</div>
+              <span class="${badgeClass(status)}">${status}</span>
+            </div>
+            <div class="meta"><span>${lines || "No details"}</span></div>
+          </div>
+        `;
+      }).join("");
+    }
     async function refresh() {
       const r = await fetch('/api/status');
-      const data = await r.json();
-      lastStatus = data;
+        const data = await r.json();
+        lastStatus = data;
       document.getElementById('queue').innerHTML = (data.items || []).length ? data.items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
       const active = data.active || {status: 'idle'};
       const speed = active.downloadSpeed || data.state?.download_speed || "-";
@@ -638,7 +670,6 @@ INDEX_HTML = """<!doctype html>
             ${activePauseButton}
             <button class="secondary icon-btn" onclick="preflightRun()" title="Preflight">✓</button>
             <button class="secondary icon-btn" onclick="runQueue()" title="Run">⟳</button>
-            <button class="secondary icon-btn" onclick="uccRun()" title="UCC">⋯</button>
           </div>
         </div>
         <div class="meter"><div id="bar"></div></div>
@@ -674,6 +705,8 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
         ? `Measured ${formatMbps(data.bandwidth.downlink_mbps)} and capped at ${formatMbps(data.bandwidth.cap_mbps)}${data.bandwidth.partial ? ' from partial output' : ''}`
         : 'Using default floor because no probe was available';
+      const actionLog = document.getElementById('action-log');
+      if (actionLog) actionLog.innerHTML = renderActionLog(data.action_log || []);
     }
     async function loadLifecycle() {
       const r = await fetch('/api/lifecycle');
@@ -713,6 +746,7 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result').textContent = data.status === 'pass' ? "Preflight passed" : "Preflight needs attention";
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       document.getElementById('preflight').innerHTML = renderPreflight(data);
+      await refresh();
     }
     async function runQueue() {
       const r = await fetch('/api/run', { method: 'POST' });
@@ -730,6 +764,8 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       const trace = document.getElementById('contract-trace');
       if (trace) trace.innerHTML = renderContractTrace(data);
+      const actionLog = document.getElementById('action-log');
+      if (actionLog && lastStatus) actionLog.innerHTML = renderActionLog(lastStatus.action_log || []);
       await refresh();
     }
     async function previewInstall() {
@@ -779,7 +815,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
-        if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/debug"}:
+        if path in {"/", "/index.html", "/bandwidth", "/lifecycle", "/debug", "/log"}:
             body = INDEX_HTML.encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -797,6 +833,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 "aria2": aria_status(),
                 "bandwidth": current_bandwidth(),
                 "bandwidth_global": current_bandwidth(),
+                "action_log": load_action_log(),
             }
             active = active_status()
             if active:
@@ -830,15 +867,45 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             result = preflight()
             result["aria2"] = aria_status()
             result["bandwidth"] = current_bandwidth()
+            result["action_log"] = load_action_log()
+            from .core import append_action_log
+            append_action_log({
+                "action": "preflight",
+                "target": "system",
+                "outcome": "converged" if result.get("status") == "pass" else "blocked",
+                "observation": "ok",
+                "reason": result.get("status", "unknown"),
+                "result": result,
+            })
             self._send_json(result)
             return
 
         if path == "/api/run":
-            self._send_json(start_background_process())
+            result = start_background_process()
+            from .core import append_action_log
+            append_action_log({
+                "action": "run",
+                "target": "queue",
+                "outcome": "changed" if result.get("started") else "unchanged",
+                "observation": "ok",
+                "reason": result.get("reason", "unknown"),
+                "result": result,
+            })
+            self._send_json(result)
             return
 
         if path == "/api/ucc":
-            self._send_json(run_ucc())
+            result = run_ucc()
+            from .core import append_action_log
+            append_action_log({
+                "action": "ucc",
+                "target": "queue",
+                "outcome": result.get("result", {}).get("outcome", "unknown"),
+                "observation": result.get("result", {}).get("observation", "unknown"),
+                "reason": result.get("result", {}).get("reason", "unknown"),
+                "result": result,
+            })
+            self._send_json(result)
             return
 
         if path == "/api/declaration":
@@ -848,11 +915,31 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/lifecycle/install":
-            self._send_json(install_all(dry_run=True, include_web=False))
+            result = install_all(dry_run=True, include_web=False)
+            from .core import append_action_log
+            append_action_log({
+                "action": "lifecycle_install_preview",
+                "target": "system",
+                "outcome": "converged",
+                "observation": "ok",
+                "reason": "preview",
+                "result": result,
+            })
+            self._send_json(result)
             return
 
         if path == "/api/lifecycle/uninstall":
-            self._send_json(uninstall_all(dry_run=True, include_web=False))
+            result = uninstall_all(dry_run=True, include_web=False)
+            from .core import append_action_log
+            append_action_log({
+                "action": "lifecycle_uninstall_preview",
+                "target": "system",
+                "outcome": "converged",
+                "observation": "ok",
+                "reason": "preview",
+                "result": result,
+            })
+            self._send_json(result)
             return
 
         if path == "/api/pause":

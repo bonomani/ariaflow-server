@@ -30,6 +30,10 @@ def log_path() -> Path:
     return config_dir() / "aria2.log"
 
 
+def action_log_path() -> Path:
+    return config_dir() / "actions.jsonl"
+
+
 def ensure_storage() -> None:
     config_dir().mkdir(parents=True, exist_ok=True)
 
@@ -43,6 +47,30 @@ def read_json(path: Path, default: Any) -> Any:
 def write_json(path: Path, value: Any) -> None:
     ensure_storage()
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def append_action_log(entry: dict[str, Any]) -> None:
+    ensure_storage()
+    payload = dict(entry)
+    payload.setdefault("timestamp", time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+    with action_log_path().open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def load_action_log(limit: int = 200) -> list[dict[str, Any]]:
+    path = action_log_path()
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    entries: list[dict[str, Any]] = []
+    for line in lines[-limit:]:
+        if not line.strip():
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            entries.append({"error": "invalid_log_entry", "raw": line})
+    return entries
 
 
 def load_state() -> dict[str, Any]:
@@ -132,6 +160,17 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
     items = load_queue()
     items.append(asdict(item))
     save_queue(items)
+    append_action_log({
+        "action": "add",
+        "target": "queue",
+        "outcome": "changed",
+        "observation": "ok",
+        "reason": "queue_item_created",
+        "item_id": item.id,
+        "url": url,
+        "output": output,
+        "post_action_rule": item.post_action_rule,
+    })
     return item
 
 
@@ -286,7 +325,17 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
     result = aria_rpc("aria2.pause", [gid], port=port)
     state["paused"] = True
     save_state(state)
-    return {"paused": True, "gid": gid, "result": result.get("result")}
+    payload = {"paused": True, "gid": gid, "result": result.get("result")}
+    append_action_log({
+        "action": "pause",
+        "target": "active_transfer",
+        "outcome": "changed",
+        "observation": "ok",
+        "reason": "user_pause",
+        "gid": gid,
+        "result": payload,
+    })
+    return payload
 
 
 def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
@@ -297,7 +346,17 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
     result = aria_rpc("aria2.unpause", [gid], port=port)
     state["paused"] = False
     save_state(state)
-    return {"resumed": True, "gid": gid, "result": result.get("result")}
+    payload = {"resumed": True, "gid": gid, "result": result.get("result")}
+    append_action_log({
+        "action": "resume",
+        "target": "active_transfer",
+        "outcome": "changed",
+        "observation": "ok",
+        "reason": "user_resume",
+        "gid": gid,
+        "result": payload,
+    })
+    return payload
 
 
 def format_bytes(value: int | float | None) -> str:
@@ -340,6 +399,14 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     ensure_aria_daemon(port=port)
     probe = probe_bandwidth()
     cap = int(probe["cap_mbps"])
+    append_action_log({
+        "action": "probe",
+        "target": "bandwidth",
+        "outcome": "changed" if probe.get("source") == "networkquality" else "unchanged",
+        "observation": "ok",
+        "reason": probe.get("source", "default"),
+        "result": probe,
+    })
     items = load_queue()
     state = load_state()
 
@@ -351,6 +418,17 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         item["status"] = "downloading"
         gid = add_download(item, cap_mbps=cap, port=port)
         item["gid"] = gid
+        append_action_log({
+            "action": "run",
+            "target": "queue_item",
+            "outcome": "changed",
+            "observation": "ok",
+            "reason": "download_started",
+            "item_id": item.get("id"),
+            "gid": gid,
+            "url": item.get("url"),
+            "cap_mbps": cap,
+        })
         state["active_gid"] = gid
         state["active_url"] = item.get("url")
         save_state(state)
@@ -366,11 +444,34 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             if info.get("status") == "complete":
                 item["status"] = "done"
                 item["post_action"] = post_action(item)
+                append_action_log({
+                    "action": "complete",
+                    "target": "queue_item",
+                    "outcome": "converged",
+                    "observation": "ok",
+                    "reason": "download_complete",
+                    "item_id": item.get("id"),
+                    "gid": gid,
+                    "url": item.get("url"),
+                    "result": item.get("post_action"),
+                })
                 break
             if info.get("status") == "error":
                 item["status"] = "error"
                 item["error_code"] = info.get("errorCode")
                 item["error_message"] = info.get("errorMessage")
+                append_action_log({
+                    "action": "error",
+                    "target": "queue_item",
+                    "outcome": "failed",
+                    "observation": "ok",
+                    "reason": "download_error",
+                    "item_id": item.get("id"),
+                    "gid": gid,
+                    "url": item.get("url"),
+                    "error_code": item.get("error_code"),
+                    "error_message": item.get("error_message"),
+                })
                 break
         state["active_gid"] = None
         state["active_url"] = None
