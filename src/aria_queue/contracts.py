@@ -42,6 +42,13 @@ def load_declaration() -> dict[str, Any]:
     return ensure_declaration()
 
 
+def save_declaration(declaration: dict[str, Any]) -> dict[str, Any]:
+    path = declaration_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(declaration, indent=2) + "\n", encoding="utf-8")
+    return declaration
+
+
 def preflight() -> dict[str, Any]:
     decl = load_declaration()
     gates = []

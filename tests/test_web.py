@@ -41,6 +41,14 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("items", status)
                 self.assertIn("state", status)
                 self.assertIn("summary", status)
+                declaration = request_json("http://127.0.0.1:8765/api/declaration")
+                self.assertIn("uic", declaration)
+                saved = request_json(
+                    "http://127.0.0.1:8765/api/declaration",
+                    method="POST",
+                    payload=declaration,
+                )
+                self.assertTrue(saved["saved"])
                 added = request_json(
                     "http://127.0.0.1:8765/api/add",
                     method="POST",

@@ -117,12 +117,16 @@ def save_queue(items: list[dict[str, Any]]) -> None:
 
 
 def add_queue_item(url: str, output: str | None = None, post_action_rule: str = "pending") -> QueueItem:
+    from .contracts import load_declaration
+
     ensure_storage()
+    decl = load_declaration()
+    default_rule = decl.get("uic", {}).get("preferences", [{}])[0].get("value", "pending")
     item = QueueItem(
         id=str(uuid4()),
         url=url,
         output=output,
-        post_action_rule=post_action_rule,
+        post_action_rule=post_action_rule or default_rule,
         created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     )
     items = load_queue()
@@ -208,7 +212,7 @@ def set_bandwidth(cap_mbps: int, port: int = 6800) -> None:
 def post_action(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "success": True,
-        "reason": "pending",
+        "reason": item.get("post_action_rule", "pending"),
         "detail": "post action policy not defined yet",
         "item_id": item["id"],
     }

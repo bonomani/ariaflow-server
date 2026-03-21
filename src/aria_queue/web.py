@@ -5,7 +5,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-from .contracts import preflight, run_ucc
+from .contracts import load_declaration, preflight, run_ucc, save_declaration
 from .core import add_queue_item, aria_rpc, get_active_progress, load_queue, load_state, save_state, start_background_process, summarize_queue
 
 
@@ -58,6 +58,14 @@ INDEX_HTML = """<!doctype html>
       <h2>Result</h2>
       <pre id="result">Idle</pre>
     </div>
+    <div class="card">
+      <h2>Declaration</h2>
+      <textarea id="declaration" style="width:100%;min-height:240px;background:#0b1220;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:12px;font:inherit;"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button class="secondary" onclick="loadDeclaration()">Load</button>
+        <button class="secondary" onclick="saveDeclaration()">Save</button>
+      </div>
+    </div>
   </div>
   <script>
     async function refresh() {
@@ -97,8 +105,19 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
       await refresh();
     }
+    async function loadDeclaration() {
+      const r = await fetch('/api/declaration');
+      document.getElementById('declaration').value = JSON.stringify(await r.json(), null, 2);
+    }
+    async function saveDeclaration() {
+      const value = document.getElementById('declaration').value;
+      const parsed = JSON.parse(value);
+      const r = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(parsed) });
+      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+    }
     refresh();
     setInterval(refresh, 2000);
+    loadDeclaration();
   </script>
 </body>
 </html>
@@ -134,6 +153,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 payload["active"] = active
             self._send_json(payload)
             return
+        if path == "/api/declaration":
+            self._send_json(load_declaration())
+            return
         self._send_json({"error": "not_found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -161,6 +183,12 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
         if path == "/api/ucc":
             self._send_json(run_ucc())
+            return
+
+        if path == "/api/declaration":
+            declaration = payload if isinstance(payload, dict) else {}
+            saved = save_declaration(declaration)
+            self._send_json({"saved": True, "declaration": saved})
             return
 
         if path == "/api/pause":
