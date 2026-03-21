@@ -98,7 +98,7 @@ def main() -> int:
         return 0 if result["result"].get("failure_class") is None else 1
 
     if args.command == "serve":
-        from .web import serve
+        from .webapp import serve
 
         server = serve(host=args.host, port=args.port)
         print(f"Serving on http://{args.host}:{args.port}")

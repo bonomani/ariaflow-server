@@ -10,7 +10,7 @@ Cross-platform queue driver for `aria2c` with:
 - UIC pre-flight checks
 - UCC structured execution output
 - TIC-style tests
-- optional local web UI
+- optional local web frontend
 
 Targets:
 
@@ -71,7 +71,7 @@ Define rules later in `config/post-actions.json`.
 
 This is still a minimal compliance layer, not a full framework implementation.
 
-## Web UI
+## Web Frontend
 
 The web frontend is optional and intentionally local-only:
 
@@ -79,6 +79,7 @@ The web frontend is optional and intentionally local-only:
 - serves one page
 - exposes JSON endpoints under `/api/*`
 - keeps `aria2` as the download engine
+- lives in a separate `webapp` module so the core stays headless
 
 The default install path is headless:
 
