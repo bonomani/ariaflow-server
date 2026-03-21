@@ -1665,5 +1665,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         return
 
 
-def serve(host: str = "127.0.0.1", port: int = 8000) -> ThreadingHTTPServer:
+def serve(host: str = "127.0.0.1", port: int = 8000, connect_headless: bool = True) -> ThreadingHTTPServer:
+    if connect_headless:
+        try:
+            start_background_process()
+        except Exception:
+            pass
     return ThreadingHTTPServer((host, port), AriaFlowHandler)

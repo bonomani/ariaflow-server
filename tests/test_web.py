@@ -31,7 +31,9 @@ class WebSmokeTests(unittest.TestCase):
     def test_local_web_server_smoke(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["ARIA_QUEUE_DIR"] = tmp
-            server = serve(host="127.0.0.1", port=8765)
+            with patch("aria_queue.webapp.start_background_process", return_value={"started": False, "reason": "already_running"}) as start_bg:
+                server = serve(host="127.0.0.1", port=8765)
+            start_bg.assert_called_once()
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             time.sleep(0.2)
