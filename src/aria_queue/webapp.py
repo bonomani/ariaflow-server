@@ -78,13 +78,13 @@ INDEX_HTML = """<!doctype html>
     .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 42px; }
     .hero {
       display: grid;
-      grid-template-columns: 1.5fr 1fr;
-      gap: 18px;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 12px;
       align-items: end;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
     }
-    .title h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.6rem); letter-spacing: -0.04em; }
-    .title p { margin: 10px 0 0; color: var(--muted); max-width: 70ch; line-height: 1.5; }
+    .title h1 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.6rem); letter-spacing: -0.04em; }
+    .title p { margin: 6px 0 0; color: var(--muted); max-width: 60ch; line-height: 1.4; font-size: 0.96rem; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -115,6 +115,15 @@ INDEX_HTML = """<!doctype html>
     .metric .label { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
     .metric .value { font-size: 1.75rem; font-weight: 700; margin-top: 8px; letter-spacing: -0.03em; }
     .metric .sub { color: var(--muted); font-size: 0.92rem; margin-top: 6px; }
+    .topline {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .topline strong { color: var(--text); }
     .toolbar { display: grid; gap: 12px; }
     .row { display: flex; gap: 10px; flex-wrap: wrap; }
     .row > * { flex: 1 1 160px; }
@@ -321,20 +330,13 @@ INDEX_HTML = """<!doctype html>
     <div class="hero">
       <div class="title">
         <h1>ariaflow</h1>
-        <p>Headless queue engine with an optional local dashboard. Add a URL, run one download at a time, and keep the control surface focused on what matters.</p>
+        <p>Headless queue engine with a local dashboard.</p>
       </div>
       <div class="panel">
-        <div class="statusline">
-          <span>Mode</span>
-          <strong id="mode-label">idle</strong>
-        </div>
-        <div class="statusline">
-          <span>Current transfer</span>
-          <strong id="active-label" class="mono">none</strong>
-        </div>
-        <div class="statusline">
-          <span>Queue</span>
-          <strong id="queue-label">0 items</strong>
+        <div class="topline">
+          <span>Mode: <strong id="mode-label">idle</strong></span>
+          <span>Item: <strong id="active-label" class="mono">none</strong></span>
+          <span>Queue: <strong id="queue-label">0 items</strong></span>
         </div>
         <div class="chips">
           <div class="chip">aria2 <strong id="chip-aria2">unknown</strong></div>
@@ -342,7 +344,7 @@ INDEX_HTML = """<!doctype html>
           <div class="chip">State <strong id="chip-state">idle</strong></div>
           <div class="chip">Last issue <strong id="chip-error">none</strong></div>
         </div>
-        <div class="summary" style="margin-top:14px;">
+        <div class="summary" style="margin-top:10px;">
           <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
           <div class="metric"><div class="label">Done</div><div class="value" id="sum-done">0</div><div class="sub">completed</div></div>
           <div class="metric"><div class="label">Errors</div><div class="value" id="sum-error">0</div><div class="sub">failed items</div></div>
@@ -574,17 +576,17 @@ INDEX_HTML = """<!doctype html>
       return text;
     }
     function activeStateLabel(active, state) {
-      if (state?.paused && active?.recovered) return "paused · recovered";
+      if (state?.paused && active?.recovered) return "paused";
       if (state?.paused) return "paused";
-      if (active?.recovered) return active.status ? `recovered · ${active.status}` : "recovered";
+      if (active?.recovered) return active.status ? active.status : "recovered";
       if (active?.status) return active.status;
       if (state?.running) return "running";
       return "idle";
     }
     function summarizeActiveItem(active, state) {
       const name = shortName(active?.url || active?.gid || "none");
-      if (state?.paused && active?.recovered) return `paused · recovered · ${name}`;
-      if (active?.recovered) return `recovered · ${name}`;
+      if (state?.paused && active?.recovered) return name;
+      if (active?.recovered) return name;
       if (active?.status && active?.status !== "idle") return `${active.status} · ${name}`;
       if (state?.running) return name;
       return "none";
