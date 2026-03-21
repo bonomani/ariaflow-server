@@ -101,6 +101,40 @@ def record_action(
     return entry
 
 
+def log_transfer_poll(
+    *,
+    gid: str,
+    item: dict[str, Any],
+    info: dict[str, Any],
+    cap_mbps: int | None = None,
+) -> None:
+    record_action(
+        action="poll",
+        target="queue_item",
+        outcome=info.get("status", "unknown"),
+        reason="aria2_poll",
+        before={"item": dict(item)},
+        after={
+            "status": info.get("status"),
+            "downloadSpeed": info.get("downloadSpeed"),
+            "completedLength": info.get("completedLength"),
+            "totalLength": info.get("totalLength"),
+            "errorCode": info.get("errorCode"),
+            "errorMessage": info.get("errorMessage"),
+            "cap_mbps": cap_mbps,
+        },
+        detail={
+            "item_id": item.get("id"),
+            "gid": gid,
+            "url": item.get("url"),
+            "downloadSpeed": info.get("downloadSpeed"),
+            "completedLength": info.get("completedLength"),
+            "totalLength": info.get("totalLength"),
+            "status": info.get("status"),
+        },
+    )
+
+
 def load_state() -> dict[str, Any]:
     return read_json(state_path(), {"paused": False, "active_gid": None, "active_url": None})
 
@@ -471,6 +505,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["status"] = "paused"
                 break
             info = status(gid, port=port)
+            log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
             if info.get("errorCode") and info["errorCode"] != "0":
                 cap = max(1, int(cap * 0.75))
                 set_bandwidth(cap, port=port)

@@ -420,6 +420,22 @@ INDEX_HTML = """<!doctype html>
             <h2>Action history</h2>
             <div class="hint">Normalized event log</div>
           </div>
+          <div class="row" style="margin-bottom:12px;">
+            <select id="action-filter" onchange="refreshActionLog()">
+              <option value="all">All actions</option>
+              <option value="add">Add</option>
+              <option value="preflight">Preflight</option>
+              <option value="run">Run</option>
+              <option value="ucc">UCC</option>
+              <option value="pause">Pause</option>
+              <option value="resume">Resume</option>
+              <option value="poll">Poll</option>
+              <option value="complete">Complete</option>
+              <option value="error">Error</option>
+              <option value="lifecycle_install_preview">Install preview</option>
+              <option value="lifecycle_uninstall_preview">Uninstall preview</option>
+            </select>
+          </div>
           <div id="action-log" class="list">Loading...</div>
         </div>
       </div>
@@ -625,7 +641,12 @@ INDEX_HTML = """<!doctype html>
     }
     function renderActionLog(entries) {
       if (!entries || !entries.length) return "<div class='item'>No action log yet.</div>";
-      return entries.slice().reverse().map((entry) => {
+      const currentFilter = document.getElementById('action-filter')?.value || 'all';
+      return entries
+        .filter((entry) => currentFilter === 'all' ? true : (entry.action || 'unknown') === currentFilter)
+        .slice()
+        .reverse()
+        .map((entry) => {
         const status = entry.outcome || entry.status || "unknown";
         const lines = [
           entry.timestamp ? `At ${entry.timestamp}` : null,
@@ -801,6 +822,7 @@ INDEX_HTML = """<!doctype html>
       const actionLog = document.getElementById('action-log');
       if (actionLog) actionLog.innerHTML = renderActionLog(data.action_log || []);
     }
+    document.getElementById('action-filter')?.addEventListener('change', refreshActionLog);
     refresh();
     setInterval(refresh, 2000);
     loadDeclaration();
