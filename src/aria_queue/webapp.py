@@ -1348,6 +1348,29 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         STATUS_CACHE["ts"] = 0.0
         STATUS_CACHE["payload"] = None
 
+    @staticmethod
+    def _derive_active_item(items: list[dict]) -> dict | None:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status") or "").lower()
+            live_status = str(item.get("live_status") or "").lower()
+            if status in {"downloading", "paused", "recovered"} or live_status in {"active", "paused"}:
+                active = {
+                    "gid": item.get("gid"),
+                    "url": item.get("url"),
+                    "status": item.get("status") or item.get("live_status") or "active",
+                    "errorCode": item.get("error_code"),
+                    "errorMessage": item.get("error_message"),
+                    "downloadSpeed": item.get("downloadSpeed") or item.get("download_speed"),
+                    "completedLength": item.get("completedLength") or item.get("completed_length"),
+                    "totalLength": item.get("totalLength") or item.get("total_length"),
+                    "files": item.get("files"),
+                    "percent": item.get("percent"),
+                }
+                return active
+        return None
+
     def _status_payload(self, force: bool = False) -> dict:
         now = time.time()
         cached = STATUS_CACHE.get("payload")
@@ -1367,9 +1390,13 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "aria2_global_options": current_global_options(timeout=3),
         }
         active = active_status(timeout=3)
+        if not active:
+            active = self._derive_active_item(items)
         if active:
             payload["active"] = active
         actives = active_gids(timeout=3)
+        if not actives and active:
+            actives = [active]
         if actives:
             payload["actives"] = actives
         STATUS_CACHE["ts"] = now
