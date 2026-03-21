@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import re
 import subprocess
 from pathlib import Path
-import glob
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +18,14 @@ def read_version() -> str:
     match = re.search(r'^version = "([^"]+)"$', text, re.MULTILINE)
     if not match:
         raise SystemExit("Could not find project version in pyproject.toml")
+    return match.group(1)
+
+
+def read_package_version() -> str:
+    text = PACKAGE_INIT.read_text(encoding="utf-8")
+    match = re.search(r'^__version__ = "([^"]+)"$', text, re.MULTILINE)
+    if not match:
+        raise SystemExit("Could not find package version in src/aria_queue/__init__.py")
     return match.group(1)
 
 
@@ -51,8 +59,29 @@ def run(cmd: list[str]) -> None:
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
+def git_output(*args: str) -> str:
+    completed = subprocess.run(["git", *args], cwd=ROOT, check=True, stdout=subprocess.PIPE, text=True)
+    return completed.stdout.strip()
+
+
+def ensure_clean_tree(allow_dirty: bool) -> None:
+    if allow_dirty:
+        return
+    status = git_output("status", "--porcelain")
+    if status:
+        raise SystemExit("Working tree is dirty. Commit or stash changes, or pass --allow-dirty.")
+
+
+def tag_exists(tag: str) -> bool:
+    local = subprocess.run(["git", "rev-parse", "-q", "--verify", f"refs/tags/{tag}"], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if local.returncode == 0:
+        return True
+    remote = subprocess.run(["git", "ls-remote", "--tags", "origin", tag], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    return bool(remote.stdout.strip())
+
+
 def run_py_compile() -> None:
-    files = sorted(glob.glob(str(ROOT / "src" / "aria_queue" / "*.py"))) + sorted(glob.glob(str(ROOT / "tests" / "*.py")))
+    files = sorted(glob.glob(str(ROOT / "src" / "aria_queue" / "*.py"))) + sorted(glob.glob(str(ROOT / "tests" / "*.py"))) + [str(ROOT / "scripts" / "release.py")]
     run(["python3", "-m", "py_compile", *files])
 
 
@@ -61,10 +90,14 @@ def main() -> int:
     parser.add_argument("--version", help="Set an explicit package version like 0.1.1a24.")
     parser.add_argument("--next-alpha", action="store_true", help="Auto-bump the current alpha version by one.")
     parser.add_argument("--no-tests", action="store_true", help="Skip local tests before committing.")
+    parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes before releasing.")
     parser.add_argument("--push", action="store_true", help="Push master and tags after committing.")
     args = parser.parse_args()
 
     current = read_version()
+    package_version = read_package_version()
+    if current != package_version:
+        raise SystemExit(f"Version files disagree: pyproject.toml={current!r}, __init__.py={package_version!r}")
     if args.version and args.next_alpha:
         raise SystemExit("Use either --version or --next-alpha, not both.")
 
@@ -73,6 +106,9 @@ def main() -> int:
         raise SystemExit("Provide --version or --next-alpha.")
 
     tag = alpha_to_tag(next_version)
+    if tag_exists(tag):
+        raise SystemExit(f"Tag already exists: {tag}")
+    ensure_clean_tree(args.allow_dirty)
 
     if not args.no_tests:
         run_py_compile()
@@ -89,7 +125,7 @@ def main() -> int:
     else:
         print(f"Tagged {tag}. Push with: git push origin master --tags")
 
-    print(f"Next release tag: {tag}")
+    print(f"Prepared release tag: {tag}")
     return 0
 
 
