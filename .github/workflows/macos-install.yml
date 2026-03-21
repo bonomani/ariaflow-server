@@ -1,0 +1,23 @@
+name: macos-install
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  brew-install:
+    runs-on: macos-latest
+
+    steps:
+      - name: Install ariaflow via Homebrew tap
+        run: |
+          brew tap bonomani/ariaflow
+          brew install ariaflow
+
+      - name: Verify CLI
+        run: |
+          ariaflow --version
+          ariaflow --help
+
