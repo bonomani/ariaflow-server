@@ -106,3 +106,27 @@ points at a versioned upstream archive. When you publish a new version, update:
 
 If the download location changes, you do not patch Homebrew globally; you update
 the tap formula for the new asset.
+
+## Release Tooling
+
+The repo's release flow currently expects a recent `gh` (GitHub CLI). The Ubuntu
+`jammy` archive ships an older `gh` that is not suitable for the prerelease flow
+used here.
+
+If you are on Ubuntu and need a newer `gh`, install it from GitHub's official
+apt repository:
+
+```bash
+type -p curl >/dev/null || sudo apt install curl -y
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt update
+sudo apt install gh
+```
+
+Verify with:
+
+```bash
+gh --version
+```
