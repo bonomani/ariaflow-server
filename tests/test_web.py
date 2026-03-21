@@ -12,7 +12,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from aria_queue.web import serve  # noqa: E402
+from aria_queue.webapp import serve  # noqa: E402
 
 
 def request_json(url: str, method: str = "GET", payload: dict | None = None) -> dict:
