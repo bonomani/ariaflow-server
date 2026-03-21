@@ -13,12 +13,13 @@ Release workflow:
 
 - Make the code change in `ariaflow`.
 - Run the local test suite before tagging.
-- Bump the package version in `pyproject.toml` and `src/aria_queue/__init__.py`.
-- Commit the version bump on `master`.
-- Create and push the tag, for example `v0.1.1-alpha.13`.
-- Publish a GitHub release from that tag.
+- Prefer the helper script:
+  - `python3 scripts/release.py --next-alpha --push`
+- If you need to do it manually, bump the package version in `pyproject.toml`
+  and `src/aria_queue/__init__.py`, commit on `master`, create and push the tag,
+  and let the release workflow publish the prerelease.
 - Verify the release is `isDraft: false` and `isPrerelease: true` for alpha releases.
-- The release workflow automatically dispatches a `sync-formula` event to `bonomani/homebrew-ariaflow` via `repository_dispatch` after publishing the release. The tap formula is updated automatically — no manual tap update needed.
+- The release workflow automatically dispatches a `sync-formula` event to `bonomani/homebrew-ariaflow` via `repository_dispatch` after publishing the release. The tap formula is updated automatically.
 
 Homebrew notes:
 

@@ -109,9 +109,24 @@ the tap formula for the new asset.
 
 ## Release Tooling
 
-The repo's release flow currently expects a recent `gh` (GitHub CLI). The Ubuntu
-`jammy` archive ships an older `gh` that is not suitable for the prerelease flow
-used here.
+The repo ships a small release helper:
+
+```bash
+python3 scripts/release.py --next-alpha --push
+```
+
+That script will:
+
+- run the local test suite
+- bump `pyproject.toml` and `src/aria_queue/__init__.py`
+- commit the version bump
+- create and push the `v0.1.1-alpha.N` tag
+
+After the tag push, the GitHub release workflow publishes the prerelease and
+dispatches the Homebrew tap sync.
+
+The flow still expects a recent `gh` (GitHub CLI). The Ubuntu `jammy` archive
+ships an older `gh` that is not suitable for the prerelease flow used here.
 
 If you are on Ubuntu and need a newer `gh`, install it from GitHub's official
 apt repository:
@@ -130,3 +145,6 @@ Verify with:
 ```bash
 gh --version
 ```
+
+If you prefer to do the steps manually, the release helper is just a thin
+wrapper around the same version bump, commit, tag, and push sequence.
