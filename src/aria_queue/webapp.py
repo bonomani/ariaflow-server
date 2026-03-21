@@ -489,7 +489,7 @@ INDEX_HTML = """<!doctype html>
           </div>
           <div class="meta">
             ${item.url ? `<span title="${item.url}">${item.url}</span>` : ""}
-            ${detail ? `<span>${detail}</span>` : ""}
+            ${detail ? `<span class="mono">${detail}</span>` : ""}
           </div>
         </div>
       `;
@@ -620,7 +620,7 @@ INDEX_HTML = """<!doctype html>
           ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
           ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
           ${active.gid ? `<span>GID ${active.gid}</span>` : ""}
-          ${active.errorMessage ? `<span>${active.errorMessage}</span>` : ""}
+          ${active.errorMessage ? `<span class="mono">${active.errorMessage}</span>` : ""}
         </div>
       `;
       const percent = active && active.percent != null ? active.percent : 0;
