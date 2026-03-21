@@ -44,6 +44,14 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def load_state() -> dict[str, Any]:
+    return read_json(state_path(), {"paused": False, "active_gid": None, "active_url": None})
+
+
+def save_state(state: dict[str, Any]) -> None:
+    write_json(state_path(), state)
+
+
 @dataclass
 class QueueItem:
     id: str
@@ -170,15 +178,24 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     probe = probe_bandwidth()
     cap = int(probe["cap_mbps"])
     items = load_queue()
+    state = load_state()
 
     for item in items:
+        if load_state().get("paused"):
+            break
         if item.get("status") == "done":
             continue
         item["status"] = "downloading"
         gid = add_download(item, cap_mbps=cap, port=port)
         item["gid"] = gid
+        state["active_gid"] = gid
+        state["active_url"] = item.get("url")
+        save_state(state)
         while True:
             time.sleep(2)
+            if load_state().get("paused"):
+                item["status"] = "paused"
+                break
             info = status(gid, port=port)
             if info.get("errorCode") and info["errorCode"] != "0":
                 cap = max(1, int(cap * 0.75))
@@ -192,5 +209,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["error_code"] = info.get("errorCode")
                 item["error_message"] = info.get("errorMessage")
                 break
+        state["active_gid"] = None
+        state["active_url"] = None
+        save_state(state)
     save_queue(items)
     return items

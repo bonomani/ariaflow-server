@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from .contracts import preflight, run_ucc
-from .core import add_queue_item, load_queue
+from .core import add_queue_item, aria_rpc, load_queue, load_state, save_state
 
 
 INDEX_HTML = """<!doctype html>
@@ -38,6 +38,8 @@ INDEX_HTML = """<!doctype html>
         <button onclick="add()">Add</button>
         <button class="secondary" onclick="preflightRun()">Preflight</button>
         <button class="secondary" onclick="runQueue()">Run</button>
+        <button class="secondary" onclick="pauseQueue()">Pause</button>
+        <button class="secondary" onclick="resumeQueue()">Resume</button>
       </div>
     </div>
     <div class="card">
@@ -53,6 +55,16 @@ INDEX_HTML = """<!doctype html>
     async function refresh() {
       const r = await fetch('/api/status');
       document.getElementById('queue').textContent = JSON.stringify(await r.json(), null, 2);
+    }
+    async function pauseQueue() {
+      const r = await fetch('/api/pause', { method: 'POST' });
+      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      await refresh();
+    }
+    async function resumeQueue() {
+      const r = await fetch('/api/resume', { method: 'POST' });
+      document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
+      await refresh();
     }
     async function add() {
       const url = document.getElementById('url').value.trim();
@@ -96,7 +108,18 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         if path == "/api/status":
-            self._send_json({"items": load_queue()})
+            state = load_state()
+            payload = {"items": load_queue(), "state": state}
+            gid = state.get("active_gid")
+            if gid:
+                try:
+                    payload["active"] = aria_rpc(
+                        "aria2.tellStatus",
+                        [gid, ["status", "downloadSpeed", "completedLength", "totalLength", "errorCode", "errorMessage"]],
+                    )["result"]
+                except Exception as exc:
+                    payload["active_error"] = str(exc)
+            self._send_json(payload)
             return
         self._send_json({"error": "not_found"}, status=404)
 
@@ -123,6 +146,20 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(run_ucc())
             return
 
+        if path == "/api/pause":
+            state = load_state()
+            state["paused"] = True
+            save_state(state)
+            self._send_json({"paused": True})
+            return
+
+        if path == "/api/resume":
+            state = load_state()
+            state["paused"] = False
+            save_state(state)
+            self._send_json({"paused": False})
+            return
+
         self._send_json({"error": "not_found"}, status=404)
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A003
@@ -131,4 +168,3 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
 def serve(host: str = "127.0.0.1", port: int = 8000) -> ThreadingHTTPServer:
     return ThreadingHTTPServer((host, port), AriaFlowHandler)
-

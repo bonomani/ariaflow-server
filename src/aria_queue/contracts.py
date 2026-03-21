@@ -5,7 +5,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
-from .core import config_dir, queue_path
+from .core import aria_rpc, config_dir, load_state, queue_path
 
 
 DEFAULT_DECLARATION = {
@@ -49,12 +49,13 @@ def preflight() -> dict[str, Any]:
 
     aria_ok = True
     try:
-        from .core import aria_rpc
         aria_rpc("aria2.getVersion")
     except Exception:
         aria_ok = False
 
     queue_ok = queue_path().parent.exists()
+    state = load_state()
+    warnings = []
 
     for gate in decl.get("uic", {}).get("gates", []):
         name = gate["name"]
@@ -63,6 +64,10 @@ def preflight() -> dict[str, Any]:
             satisfied = aria_ok
         elif name == "queue_readable":
             satisfied = queue_ok
+        elif name == "paused":
+            satisfied = not state.get("paused", False)
+            if not satisfied:
+                warnings.append({"name": name, "message": "queue is paused"})
         gates.append({"name": name, "satisfied": satisfied, "blocking": gate.get("blocking", "hard"), "class": gate.get("class", "readiness")})
         if not satisfied and gate.get("blocking", "hard") == "hard":
             failures.append(name)
@@ -73,8 +78,9 @@ def preflight() -> dict[str, Any]:
         "gates": gates,
         "preferences": decl.get("uic", {}).get("preferences", []),
         "policies": decl.get("uic", {}).get("policies", []),
+        "warnings": warnings,
+        "hard_failures": failures,
         "status": "pass" if not failures else "fail",
-        "failures": failures,
         "exit_code": 0 if not failures else 1,
     }
 
@@ -113,7 +119,7 @@ def run_ucc(port: int = 6800) -> dict[str, Any]:
                 message="preflight failed",
                 reason="gate_failed",
                 observed_before={"gates": pf["gates"]},
-                diff={"failures": pf["failures"]},
+                diff={"failures": pf["hard_failures"]},
             ).to_dict(),
             "preflight": pf,
         }

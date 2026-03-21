@@ -39,12 +39,17 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("ariaflow", page)
                 status = request_json("http://127.0.0.1:8765/api/status")
                 self.assertIn("items", status)
+                self.assertIn("state", status)
                 added = request_json(
                     "http://127.0.0.1:8765/api/add",
                     method="POST",
                     payload={"url": "https://example.com/file.gguf"},
                 )
                 self.assertEqual(added["added"]["url"], "https://example.com/file.gguf")
+                paused = request_json("http://127.0.0.1:8765/api/pause", method="POST")
+                self.assertTrue(paused["paused"])
+                resumed = request_json("http://127.0.0.1:8765/api/resume", method="POST")
+                self.assertFalse(resumed["paused"])
             finally:
                 server.shutdown()
                 server.server_close()
