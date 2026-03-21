@@ -206,8 +206,63 @@ def status(gid: str, port: int = 6800) -> dict[str, Any]:
     return result["result"]
 
 
+def aria_status(port: int = 6800) -> dict[str, Any]:
+    try:
+        version = aria_rpc("aria2.getVersion", port=port)["result"]["version"]
+    except Exception as exc:
+        return {"reachable": False, "version": None, "error": str(exc)}
+    return {"reachable": True, "version": version, "error": None}
+
+
+def active_status(port: int = 6800) -> dict[str, Any] | None:
+    state = load_state()
+    gid = state.get("active_gid")
+    if not gid:
+        return None
+    try:
+        info = status(gid, port=port)
+    except Exception as exc:
+        return {
+            "gid": gid,
+            "url": state.get("active_url"),
+            "status": "unknown",
+            "errorMessage": str(exc),
+            "downloadSpeed": None,
+            "completedLength": None,
+            "totalLength": None,
+            "percent": 0,
+        }
+    total = float(info.get("totalLength") or 0)
+    done = float(info.get("completedLength") or 0)
+    percent = round((done / total) * 100, 1) if total else 0
+    return {
+        "gid": gid,
+        "url": state.get("active_url"),
+        "status": info.get("status"),
+        "errorCode": info.get("errorCode"),
+        "errorMessage": info.get("errorMessage"),
+        "downloadSpeed": info.get("downloadSpeed"),
+        "completedLength": info.get("completedLength"),
+        "totalLength": info.get("totalLength"),
+        "files": info.get("files"),
+        "percent": percent,
+    }
+
+
 def set_bandwidth(cap_mbps: int, port: int = 6800) -> None:
     aria_rpc("aria2.changeGlobalOption", [{"max-overall-download-limit": f"{cap_mbps}M"}], port=port)
+
+
+def current_bandwidth(port: int = 6800) -> dict[str, Any]:
+    try:
+        result = aria_rpc("aria2.getGlobalOption", port=port)["result"]
+        return {
+            "limit": result.get("max-overall-download-limit"),
+            "dir": result.get("dir"),
+            "seed-ratio": result.get("seed-ratio"),
+        }
+    except Exception as exc:
+        return {"limit": None, "error": str(exc)}
 
 
 def post_action(item: dict[str, Any]) -> dict[str, Any]:

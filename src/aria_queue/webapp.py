@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
 from .contracts import load_declaration, preflight, run_ucc, save_declaration
-from .core import add_queue_item, get_active_progress, load_queue, load_state, save_state, start_background_process, summarize_queue
+from .core import add_queue_item, active_status, aria_status, current_bandwidth, get_active_progress, load_queue, load_state, save_state, start_background_process, summarize_queue
 from .install import install_all, status_all, uninstall_all
 
 
@@ -182,6 +182,16 @@ INDEX_HTML = """<!doctype html>
       font-size: 0.9rem;
     }
     .footer { color: var(--muted); font-size: 0.88rem; margin-top: 10px; }
+    .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .chip {
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(8, 17, 31, 0.7);
+      color: var(--text);
+      font-size: 0.88rem;
+    }
+    .chip strong { color: #fff; }
     @media (max-width: 980px) {
       .hero, .summary { grid-template-columns: 1fr; }
       .span-8, .span-7, .span-5, .span-4, .span-6 { grid-column: span 12; }
@@ -207,6 +217,14 @@ INDEX_HTML = """<!doctype html>
         <div class="statusline">
           <span>Queue</span>
           <strong id="queue-label">0 items</strong>
+        </div>
+        <div class="chips">
+          <div class="chip">aria2 <strong id="chip-aria2">unknown</strong></div>
+          <div class="chip">Runner <strong id="chip-runner">idle</strong></div>
+          <div class="chip">Cap <strong id="chip-cap">-</strong></div>
+          <div class="chip">Speed <strong id="chip-speed">-</strong></div>
+          <div class="chip">Probe <strong id="chip-probe">-</strong></div>
+          <div class="chip">Last error <strong id="chip-error">none</strong></div>
         </div>
         <div class="summary" style="margin-top:14px;">
           <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
@@ -252,6 +270,28 @@ INDEX_HTML = """<!doctype html>
       <div class="span-5">
         <div class="panel">
           <div class="section-title">
+            <h2>Bandwidth</h2>
+            <div class="hint">Probe and cap</div>
+          </div>
+          <div class="list" style="margin-bottom:12px;">
+            <div class="item">
+              <div class="item-top"><div class="item-url">Probe result</div><span class="badge" id="bw-source">-</span></div>
+              <div class="meta"><span id="bw-down">No probe yet</span></div>
+            </div>
+            <div class="item">
+              <div class="item-top"><div class="item-url">Current cap</div><span class="badge" id="bw-cap">-</span></div>
+              <div class="meta"><span id="bw-global">Global option not loaded</span></div>
+            </div>
+            <div class="item">
+              <div class="item-top"><div class="item-url">Live download</div><span class="badge" id="bw-live">idle</span></div>
+              <div class="meta"><span id="bw-live-detail">No active transfer</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="span-6">
+        <div class="panel">
+          <div class="section-title">
             <h2>Lifecycle</h2>
             <div class="hint">Install state and services</div>
           </div>
@@ -266,12 +306,13 @@ INDEX_HTML = """<!doctype html>
       <div class="span-6">
         <div class="panel">
           <div class="section-title">
-            <h2>Result</h2>
-            <div class="hint">Latest action output</div>
+            <h2>Preflight</h2>
+            <div class="hint">Pass, warnings, and failures</div>
           </div>
-          <div id="result" class="mono" style="white-space:pre-wrap;word-break:break-word;color:var(--text)">Idle</div>
+          <div id="preflight" class="list">Idle</div>
+          <div id="result" class="mono" style="white-space:pre-wrap;word-break:break-word;color:var(--text);margin-top:12px;">Idle</div>
           <details class="debug">
-            <summary>Debug JSON</summary>
+            <summary>Action JSON</summary>
             <div id="result-json" class="debug-box">Idle</div>
           </details>
         </div>
@@ -370,6 +411,39 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('sum-done').textContent = summary?.done ?? 0;
       document.getElementById('sum-error').textContent = summary?.error ?? 0;
     }
+    function renderPreflight(data) {
+      const gates = (data.gates || []).map((gate) => `
+        <div class="item">
+          <div class="item-top">
+            <div class="item-url">${gate.name}</div>
+            <span class="${gate.satisfied ? 'badge good' : 'badge bad'}">${gate.satisfied ? 'ready' : 'blocked'}</span>
+          </div>
+          <div class="meta"><span>${gate.class || 'gate'} · ${gate.blocking || 'unknown'}</span></div>
+        </div>
+      `).join("");
+      const warnings = (data.warnings || []).map((warning) => `
+        <div class="item">
+          <div class="item-top">
+            <div class="item-url">${warning.name}</div>
+            <span class="badge warn">warning</span>
+          </div>
+          <div class="meta"><span>${warning.message}</span></div>
+        </div>
+      `).join("");
+      const failures = (data.hard_failures || []).map((failure) => `
+        <div class="item">
+          <div class="item-top">
+            <div class="item-url">${failure}</div>
+            <span class="badge bad">blocked</span>
+          </div>
+        </div>
+      `).join("");
+      return `
+        ${gates || "<div class='item'>No gates defined.</div>"}
+        ${warnings ? `<div class='item'><div class='item-url' style='margin-bottom:8px;'>Warnings</div>${warnings}</div>` : ""}
+        ${failures ? `<div class='item'><div class='item-url' style='margin-bottom:8px;'>Hard failures</div>${failures}</div>` : ""}
+      `;
+    }
     async function refresh() {
       const r = await fetch('/api/status');
       const data = await r.json();
@@ -377,6 +451,15 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('queue').innerHTML = (data.items || []).length ? data.items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
       const active = data.active || {status: 'idle'};
       const speed = active.downloadSpeed || data.state?.download_speed || "-";
+      const state = data.state || {};
+      document.getElementById('chip-runner').textContent = state.running ? 'running' : 'idle';
+      document.getElementById('chip-error').textContent = state.last_error || 'none';
+      document.getElementById('chip-speed').textContent = speed || '-';
+      document.getElementById('chip-cap').textContent = data.bandwidth?.limit || '-';
+      document.getElementById('chip-probe').textContent = data.bandwidth?.source === 'networkquality'
+        ? `${data.bandwidth.downlink_mbps} Mbps → ${data.bandwidth.cap_mbps} Mbps`
+        : 'default';
+      document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
       document.getElementById('active').innerHTML = `
         <div class="item">
           <div class="item-top">
@@ -402,6 +485,16 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('queue-label').textContent = `${(data.summary && data.summary.total) || 0} item(s)`;
       document.getElementById('sum-speed').textContent = speed && speed !== "-" ? speed : "-";
       renderQueueSummary(data.summary);
+      document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
+      document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
+        ? `Downlink ${data.bandwidth.downlink_mbps} Mbps`
+        : 'No networkquality probe available';
+      document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? `${data.bandwidth.cap_mbps} Mbps` : '-';
+      document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
+      document.getElementById('bw-live').textContent = active.status || 'idle';
+      document.getElementById('bw-live-detail').textContent = active.downloadSpeed
+        ? `Speed ${active.downloadSpeed}${active.completedLength ? ` · ${active.completedLength}/${active.totalLength || '?'}` : ''}`
+        : 'No active transfer';
     }
     async function loadLifecycle() {
       const r = await fetch('/api/lifecycle');
@@ -440,6 +533,7 @@ INDEX_HTML = """<!doctype html>
       lastResult = data;
       document.getElementById('result').textContent = data.status === 'pass' ? "Preflight passed" : "Preflight needs attention";
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('preflight').innerHTML = renderPreflight(data);
     }
     async function runQueue() {
       const r = await fetch('/api/run', { method: 'POST' });
@@ -485,6 +579,7 @@ INDEX_HTML = """<!doctype html>
     setInterval(refresh, 2000);
     loadDeclaration();
     loadLifecycle();
+    preflightRun();
   </script>
 </body>
 </html>
@@ -513,8 +608,15 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/status":
             state = load_state()
             items = load_queue()
-            payload = {"items": items, "state": state, "summary": summarize_queue(items)}
-            active = get_active_progress()
+            payload = {
+                "items": items,
+                "state": state,
+                "summary": summarize_queue(items),
+                "aria2": aria_status(),
+                "bandwidth": current_bandwidth(),
+                "bandwidth_global": current_bandwidth(),
+            }
+            active = active_status()
             if active:
                 payload["active"] = active
             self._send_json(payload)
@@ -543,7 +645,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/preflight":
-            self._send_json(preflight())
+            result = preflight()
+            result["aria2"] = aria_status()
+            result["bandwidth"] = current_bandwidth()
+            self._send_json(result)
             return
 
         if path == "/api/run":
