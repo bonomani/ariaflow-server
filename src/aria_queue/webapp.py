@@ -390,6 +390,16 @@ INDEX_HTML = """<!doctype html>
           <div class="row">
             <input id="url" placeholder="Paste download URL">
             <button onclick="add()">Add to queue</button>
+          </div>
+        </div>
+      </div>
+      <div class="span-12 show-dashboard page-only">
+        <div class="panel toolbar">
+          <div class="section-title" style="margin-bottom:0;">
+            <h2>Controls</h2>
+            <div class="hint">Global engine actions</div>
+          </div>
+          <div class="row">
             <button class="secondary" onclick="preflightRun()">Preflight</button>
             <button class="secondary" id="runner-btn" onclick="toggleRunner()">Run</button>
             <button class="secondary" id="toggle-btn" onclick="toggleQueue()">Pause</button>
