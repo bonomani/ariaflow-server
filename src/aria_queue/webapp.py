@@ -326,7 +326,6 @@ INDEX_HTML = """<!doctype html>
             <button onclick="add()">Add to queue</button>
             <button class="secondary" onclick="preflightRun()">Preflight</button>
             <button class="secondary" onclick="runQueue()">Run</button>
-            <button class="secondary" onclick="uccRun()">UCC</button>
             <button class="secondary" onclick="pauseQueue()">Pause</button>
             <button class="secondary" onclick="resumeQueue()">Resume</button>
           </div>
@@ -393,6 +392,15 @@ INDEX_HTML = """<!doctype html>
       <div class="span-6 show-debug page-only">
         <div class="panel">
           <div class="section-title">
+            <h2>Contract</h2>
+            <div class="hint">UCC trace and formal result</div>
+          </div>
+          <div class="row" style="margin-bottom:12px;">
+            <button class="secondary" onclick="uccRun()">Run contract</button>
+            <button class="secondary" onclick="preflightRun()">Preflight</button>
+          </div>
+          <div id="contract-trace" class="list">Idle</div>
+          <div class="section-title" style="margin-top:14px;">
             <h2>Preflight</h2>
             <div class="hint">Pass, warnings, and failures</div>
           </div>
@@ -582,6 +590,28 @@ INDEX_HTML = """<!doctype html>
         ${failures ? `<div class='item'><div class='item-url' style='margin-bottom:8px;'>Hard failures</div>${failures}</div>` : ""}
       `;
     }
+    function renderContractTrace(data) {
+      if (!data) return "Idle";
+      const result = data.result || {};
+      const preflight = data.preflight || {};
+      const lines = [
+        `Contract: ${data.meta?.contract || "unknown"} v${data.meta?.version || "-"}`,
+        `Outcome: ${result.outcome || "unknown"}`,
+        `Observation: ${result.observation || "unknown"}`,
+        result.message ? `Message: ${result.message}` : null,
+        result.reason ? `Reason: ${result.reason}` : null,
+        preflight.status ? `Preflight: ${preflight.status}` : null,
+      ].filter(Boolean);
+      return `
+        <div class="item">
+          <div class="item-top">
+            <div class="item-url">UCC execution</div>
+            <span class="${badgeClass(result.outcome)}">${result.outcome || "unknown"}</span>
+          </div>
+          <div class="meta"><span>${lines.join(" · ")}</span></div>
+        </div>
+      `;
+    }
     async function refresh() {
       const r = await fetch('/api/status');
       const data = await r.json();
@@ -698,6 +728,8 @@ INDEX_HTML = """<!doctype html>
       const outcome = data.result && data.result.outcome ? data.result.outcome : "unknown";
       document.getElementById('result').textContent = `UCC result: ${outcome}`;
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
+      const trace = document.getElementById('contract-trace');
+      if (trace) trace.innerHTML = renderContractTrace(data);
       await refresh();
     }
     async function previewInstall() {
