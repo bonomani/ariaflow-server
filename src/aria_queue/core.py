@@ -255,17 +255,18 @@ def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]
             if match:
                 downlink = float(match.group(1))
                 cap = max(floor_mbps, int(downlink * percent))
-                return {"source": "networkquality", "downlink_mbps": downlink, "cap_mbps": cap}
+                return {"source": "networkquality", "reason": "probe_complete", "downlink_mbps": downlink, "cap_mbps": cap}
         except subprocess.TimeoutExpired as exc:
             out = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
             match = re.search(r"Downlink:\s+([\d.]+)\s+Mbps", out)
             if match:
                 downlink = float(match.group(1))
                 cap = max(floor_mbps, int(downlink * percent))
-                return {"source": "networkquality", "downlink_mbps": downlink, "cap_mbps": cap, "partial": True}
+                return {"source": "networkquality", "reason": "probe_timeout_partial_capture", "downlink_mbps": downlink, "cap_mbps": cap, "partial": True}
+            return {"source": "networkquality", "reason": "probe_timeout_no_parse", "downlink_mbps": None, "cap_mbps": floor_mbps, "partial": True}
         except Exception:
-            pass
-    return {"source": "default", "downlink_mbps": None, "cap_mbps": floor_mbps}
+            return {"source": "networkquality", "reason": "probe_error", "downlink_mbps": None, "cap_mbps": floor_mbps}
+    return {"source": "default", "reason": "probe_unavailable", "downlink_mbps": None, "cap_mbps": floor_mbps}
 
 
 def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800) -> dict[str, Any]:
@@ -471,7 +472,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         action="probe",
         target="bandwidth",
         outcome="changed" if probe.get("source") == "networkquality" else "unchanged",
-        reason=probe.get("source", "default"),
+        reason=probe.get("reason", probe.get("source", "default")),
         before={"cap": current_bandwidth(port=port)},
         after={"probe": probe, "cap_mbps": cap},
         detail=probe,

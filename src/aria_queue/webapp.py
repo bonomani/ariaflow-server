@@ -427,6 +427,7 @@ INDEX_HTML = """<!doctype html>
               <option value="preflight">Preflight</option>
               <option value="run">Run</option>
               <option value="ucc">UCC</option>
+              <option value="probe">Probe</option>
               <option value="pause">Pause</option>
               <option value="resume">Resume</option>
               <option value="poll">Poll</option>
@@ -434,6 +435,14 @@ INDEX_HTML = """<!doctype html>
               <option value="error">Error</option>
               <option value="lifecycle_install_preview">Install preview</option>
               <option value="lifecycle_uninstall_preview">Uninstall preview</option>
+            </select>
+            <select id="target-filter" onchange="refreshActionLog()">
+              <option value="all">All targets</option>
+              <option value="bandwidth">Bandwidth</option>
+              <option value="queue">Queue</option>
+              <option value="queue_item">Queue item</option>
+              <option value="active_transfer">Active transfer</option>
+              <option value="system">System</option>
             </select>
           </div>
           <div id="action-log" class="list">Loading...</div>
@@ -642,8 +651,10 @@ INDEX_HTML = """<!doctype html>
     function renderActionLog(entries) {
       if (!entries || !entries.length) return "<div class='item'>No action log yet.</div>";
       const currentFilter = document.getElementById('action-filter')?.value || 'all';
+      const currentTarget = document.getElementById('target-filter')?.value || 'all';
       return entries
         .filter((entry) => currentFilter === 'all' ? true : (entry.action || 'unknown') === currentFilter)
+        .filter((entry) => currentTarget === 'all' ? true : (entry.target || 'unknown') === currentTarget)
         .slice()
         .reverse()
         .map((entry) => {
@@ -653,6 +664,7 @@ INDEX_HTML = """<!doctype html>
           entry.action ? `Action: ${entry.action}` : null,
           entry.target ? `Target: ${entry.target}` : null,
           entry.reason ? `Reason: ${entry.reason}` : null,
+          entry.detail ? `Detail: ${JSON.stringify(entry.detail)}` : null,
           entry.observed_before ? `Before: ${JSON.stringify(entry.observed_before)}` : null,
           entry.observed_after ? `After: ${JSON.stringify(entry.observed_after)}` : null,
           entry.message ? `Message: ${entry.message}` : null,
