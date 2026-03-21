@@ -10,7 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from aria_queue.contracts import preflight, run_ucc
-from aria_queue.core import add_queue_item, deduplicate_active_transfers, discover_active_transfer, load_action_log, probe_bandwidth, start_new_state_session, load_state
+from aria_queue.core import add_queue_item, deduplicate_active_transfers, discover_active_transfer, load_action_log, probe_bandwidth, reconcile_live_queue, start_new_state_session, load_state
 from aria_queue.install import install_all, status_all, uninstall_all
 
 
@@ -106,6 +106,18 @@ class TicAriaFlowTests(unittest.TestCase):
             active = discover_active_transfer()
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["url"], "https://example.com/recovered.gguf")
+
+    def test_reconcile_live_queue_adopts_unmatched_active_job(self) -> None:
+        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}), \
+             patch("aria_queue.core.active_gids", return_value=[{"gid": "gid-9", "status": "active", "completedLength": "5", "totalLength": "100", "downloadSpeed": "10", "files": [{"uris": [{"uri": "https://example.com/new.gguf"}]}]}]), \
+             patch("aria_queue.core.load_queue", return_value=[]), \
+             patch("aria_queue.core.save_queue") as save_queue, \
+             patch("aria_queue.core.record_action") as record_action:
+            result = reconcile_live_queue()
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["recovered"], 1)
+        save_queue.assert_called_once()
+        record_action.assert_called_once()
 
     def test_deduplicate_active_transfers_pauses_less_advanced_duplicates(self) -> None:
         active = [

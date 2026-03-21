@@ -307,6 +307,9 @@ class QueueItem:
     created_at: str = ""
     gid: str | None = None
     session_id: str | None = None
+    recovery_session_id: str | None = None
+    recovered_at: str | None = None
+    live_status: str | None = None
     error_code: str | None = None
     error_message: str | None = None
 
@@ -410,6 +413,91 @@ def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]
                 if current and (current == url or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail):
                     return item
     return None
+
+
+def _merge_active_status(status: str | None) -> str:
+    if status == "active":
+        return "downloading"
+    if status in {"paused", "waiting", "complete", "error"}:
+        return str(status)
+    return str(status or "downloading")
+
+
+def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool = True) -> dict[str, Any]:
+    ensure_storage()
+    state = ensure_state_session()
+    items = load_queue()
+    active_infos = active_gids(port=port, timeout=timeout)
+    now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    changed = False
+    recovered = 0
+
+    for info in active_infos:
+        gid = str(info.get("gid") or "")
+        if not gid:
+            continue
+        url = _active_item_url(info)
+        item = _queue_item_for_active_info(info, items)
+        if item is None and adopt_missing:
+            item = asdict(
+                QueueItem(
+                    id=str(uuid4()),
+                    url=url or gid,
+                    status=_merge_active_status(info.get("status")),
+                    created_at=now,
+                    gid=gid,
+                    session_id=state.get("session_id"),
+                    recovery_session_id=state.get("session_id"),
+                    recovered_at=now,
+                    live_status=str(info.get("status") or "active"),
+                )
+            )
+            if url and item.get("url") != url:
+                item["url"] = url
+            items.append(item)
+            changed = True
+            recovered += 1
+            continue
+        if item is None:
+            continue
+        if item.get("gid") != gid:
+            item["gid"] = gid
+            changed = True
+        live_status = str(info.get("status") or "")
+        merged_status = _merge_active_status(live_status)
+        if item.get("status") != merged_status:
+            item["status"] = merged_status
+            changed = True
+        if url and not item.get("url"):
+            item["url"] = url
+            changed = True
+        if live_status:
+            item["live_status"] = live_status
+        if state.get("session_id") and item.get("session_id") != state.get("session_id"):
+            item["recovered"] = True
+            item["recovery_session_id"] = state.get("session_id")
+            item["recovered_at"] = now
+            changed = True
+            recovered += 1
+        elif live_status == "active" and item.get("status") in {"paused", "queued"}:
+            item["recovered"] = True
+            item["recovery_session_id"] = state.get("session_id")
+            item["recovered_at"] = now
+            changed = True
+            recovered += 1
+
+    if changed:
+        save_queue(items)
+        record_action(
+            action="reconcile",
+            target="queue",
+            outcome="changed",
+            reason="live_state_merged",
+            before={"summary": summarize_queue(load_queue())},
+            after={"summary": summarize_queue(items), "recovered": recovered, "active": [str(info.get("gid") or "") for info in active_infos if info.get("gid")]},
+            detail={"recovered": recovered, "active_count": len(active_infos), "adopt_missing": adopt_missing},
+        )
+    return {"changed": changed, "recovered": recovered, "active_count": len(active_infos), "items": items}
 
 
 def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
@@ -639,6 +727,7 @@ def queued_gids(port: int = 6800, offset: int = 0, num: int = 100, timeout: int 
 
 
 def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
+    reconcile_live_queue(port=port, timeout=timeout, adopt_missing=True)
     state = load_state()
     if state.get("active_gid"):
         try:
@@ -839,6 +928,10 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     ensure_aria_daemon(port=port)
     try:
         deduplicate_active_transfers(port=port)
+    except Exception:
+        pass
+    try:
+        reconcile_live_queue(port=port, timeout=5, adopt_missing=True)
     except Exception:
         pass
     probe = probe_bandwidth()

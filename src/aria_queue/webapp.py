@@ -852,6 +852,8 @@ INDEX_HTML = """<!doctype html>
           completedLength: matches.completedLength,
           errorMessage: matches.errorMessage,
           recovered: matches.recovered,
+          recovery_session_id: matches.recovery_session_id,
+          recovered_at: matches.recovered_at,
           url: matches.url,
           status: matches.status,
           gid: matches.gid,
@@ -877,6 +879,7 @@ INDEX_HTML = """<!doctype html>
       const completedLength = live.completedLength || item.completedLength;
       const displayUrl = item.url || live.url || "";
       const recoveredBadge = item.recovered ? `<span class="badge warn">recovered</span>` : "";
+      const recoveryBadge = item.recovery_session_id ? `<span class="badge">recovery batch</span>` : "";
       const sourceBadge = item.recovered && item.url ? `<span class="badge">queue source</span>` : "";
       const ariaBadge = liveStatus ? `<span class="badge ${badgeClass(liveStatus)}">aria2: ${liveStatus}</span>` : "";
       const pauseButton = activeish
@@ -900,7 +903,9 @@ INDEX_HTML = """<!doctype html>
           ${completedLength ? `<span>Done ${formatBytes(completedLength)}</span>` : ""}
           ${item.gid ? `<span>GID ${item.gid}</span>` : ""}
           ${recoveredBadge}
+          ${recoveryBadge}
           ${sourceBadge}
+          ${item.recovered_at ? `<span>Recovered ${item.recovered_at}</span>` : ""}
           ${item.error_message ? `<span class="mono">${item.error_message}</span>` : ""}
         </div>
       ` : "";
