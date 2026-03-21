@@ -378,7 +378,7 @@ INDEX_HTML = """<!doctype html>
     <div class="nav">
       <a href="/" data-page="dashboard">Dashboard</a>
       <a href="/bandwidth" data-page="bandwidth">Bandwidth</a>
-      <a href="/lifecycle" data-page="lifecycle">Lifecycle</a>
+      <a href="/lifecycle" data-page="lifecycle">Service Status</a>
       <a href="/options" data-page="options">Options</a>
       <a href="/log" data-page="log">Log</a>
       <div class="spacer"></div>
@@ -403,19 +403,19 @@ INDEX_HTML = """<!doctype html>
       <div class="panel">
         <div class="topline">
           <span>Mode: <strong id="mode-label">idle</strong></span>
-          <span>Item: <strong id="active-label" class="mono">none</strong></span>
+          <span>Job: <strong id="active-label" class="mono">none</strong></span>
           <span>Speed: <strong id="sum-speed">-</strong></span>
         </div>
         <div class="chips">
           <div class="chip">Runner <strong id="chip-runner">idle</strong></div>
           <div class="chip">Cap <strong id="chip-cap">-</strong></div>
           <div class="chip">Last issue <strong id="chip-error">none</strong></div>
-        <div class="chip">Batch <strong id="chip-session">-</strong></div>
+        <div class="chip">Run <strong id="chip-session">-</strong></div>
         </div>
         <div class="summary" style="margin-top:10px;">
-          <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
+          <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued jobs</div></div>
           <div class="metric"><div class="label">Done</div><div class="value" id="sum-done">0</div><div class="sub">completed</div></div>
-          <div class="metric"><div class="label">Errors</div><div class="value" id="sum-error">0</div><div class="sub">failed items</div></div>
+          <div class="metric"><div class="label">Errors</div><div class="value" id="sum-error">0</div><div class="sub">failed jobs</div></div>
         </div>
       </div>
     </div>
@@ -438,6 +438,7 @@ INDEX_HTML = """<!doctype html>
             <button class="secondary" onclick="preflightRun()">Preflight</button>
             <button class="secondary" id="runner-btn" onclick="toggleRunner()">Run</button>
             <button class="secondary" id="toggle-btn" onclick="toggleQueue()">Pause</button>
+            <button class="secondary" onclick="newSession()">Start new run</button>
           </div>
           <label class="refresh-control" style="justify-self:start; margin-top:-2px;">
             <input type="checkbox" id="auto-preflight" onchange="setAutoPreflightPreference(this.checked)">
@@ -449,7 +450,7 @@ INDEX_HTML = """<!doctype html>
         <div class="panel">
           <div class="section-title">
             <h2>Queue</h2>
-            <div class="hint">Multiple items supported; live transfer shown in the row</div>
+            <div class="hint">Multiple jobs supported; live transfer shown in the row</div>
           </div>
           <div id="queue" class="list">Loading...</div>
         </div>
@@ -483,12 +484,11 @@ INDEX_HTML = """<!doctype html>
       <div class="span-6 show-lifecycle page-only">
         <div class="panel">
           <div class="section-title">
-            <h2>Lifecycle</h2>
+            <h2>Service Status</h2>
             <div class="hint">Installed, current, autostart, and updater state</div>
           </div>
           <div class="row" style="margin-bottom:12px;">
-            <button class="secondary" onclick="loadLifecycle()">Refresh lifecycle</button>
-            <button class="secondary" onclick="newSession()">Start new batch</button>
+            <button class="secondary" onclick="loadLifecycle()">Refresh service status</button>
           </div>
           <div class="item" style="margin-bottom:12px;">
             <div class="item-top">
@@ -557,13 +557,13 @@ INDEX_HTML = """<!doctype html>
               <option value="all">All targets</option>
               <option value="bandwidth">Bandwidth</option>
               <option value="queue">Queue</option>
-              <option value="queue_item">Queue item</option>
+              <option value="queue_item">Queue job</option>
               <option value="active_transfer">Active transfer</option>
               <option value="system">System</option>
             </select>
             <select id="session-filter" onchange="refreshActionLog()">
               <option value="all">All sessions</option>
-              <option value="current" selected>Current batch</option>
+              <option value="current" selected>Current run</option>
             </select>
           </div>
           <div id="action-log" class="list">Loading...</div>
@@ -908,7 +908,7 @@ INDEX_HTML = """<!doctype html>
           ${totalLength ? `<span>Total ${formatBytes(totalLength)}</span>` : ""}
           ${completedLength ? `<span>Done ${formatBytes(completedLength)}</span>` : ""}
           ${item.gid ? `<span>GID ${item.gid}</span>` : ""}
-          ${item.recovered ? `<span class="badge warn">${item.recovery_session_id ? 'recovered · recovery batch' : 'recovered'}</span>` : ""}
+          ${item.recovered ? `<span class="badge warn">${item.recovery_session_id ? 'recovered · recovery run' : 'recovered'}</span>` : ""}
           ${item.recovered_at ? `<span>Recovered ${item.recovered_at}</span>` : ""}
           ${item.error_message ? `<span class="mono">${item.error_message}</span>` : ""}
         </div>
@@ -1030,7 +1030,7 @@ INDEX_HTML = """<!doctype html>
       const session = data?.session_id ? `
         <div class="item" style="margin-bottom:12px;">
           <div class="item-top">
-            <div class="item-url">Batch</div>
+            <div class="item-url">Run</div>
             <span class="badge ${data.session_closed_at ? 'warn' : 'good'}">${data.session_closed_at ? 'closed' : 'current'}</span>
           </div>
           <div class="meta"><span class="mono">${data.session_id}</span></div>
