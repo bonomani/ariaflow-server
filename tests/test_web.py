@@ -40,6 +40,7 @@ class WebSmokeTests(unittest.TestCase):
                 status = request_json("http://127.0.0.1:8765/api/status")
                 self.assertIn("items", status)
                 self.assertIn("state", status)
+                self.assertIn("summary", status)
                 added = request_json(
                     "http://127.0.0.1:8765/api/add",
                     method="POST",
@@ -50,6 +51,8 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertTrue(paused["paused"])
                 resumed = request_json("http://127.0.0.1:8765/api/resume", method="POST")
                 self.assertFalse(resumed["paused"])
+                run = request_json("http://127.0.0.1:8765/api/run", method="POST")
+                self.assertTrue(run["started"])
             finally:
                 server.shutdown()
                 server.server_close()

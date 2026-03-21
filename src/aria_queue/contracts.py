@@ -5,7 +5,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
-from .core import aria_rpc, config_dir, load_state, queue_path
+from .core import aria_rpc, config_dir, get_active_progress, load_state, queue_path, summarize_queue
 
 
 DEFAULT_DECLARATION = {
@@ -128,6 +128,7 @@ def run_ucc(port: int = 6800) -> dict[str, Any]:
     after = process_queue(port=port)
     changed = before != after
     failed = any(item.get("status") == "error" for item in after)
+    active = get_active_progress(port=port)
     return {
         "meta": {"contract": "UCC", "version": "2.0"},
         "result": UCCResult(
@@ -139,7 +140,7 @@ def run_ucc(port: int = 6800) -> dict[str, Any]:
             reason="changed" if changed else "converged",
             observed_before={"items": before},
             observed_after={"items": after},
-            diff={"count": len(after) - len(before)},
+            diff={"count_delta": len(after) - len(before), "summary": summarize_queue(after), "active": active},
         ).to_dict(),
         "preflight": pf,
     }

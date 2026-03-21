@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import time
+import threading
 import urllib.request
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -52,6 +53,36 @@ def save_state(state: dict[str, Any]) -> None:
     write_json(state_path(), state)
 
 
+def start_background_process(port: int = 6800) -> dict[str, Any]:
+    state = load_state()
+    if state.get("running"):
+        return {"started": False, "reason": "already_running"}
+
+    state["running"] = True
+    save_state(state)
+
+    def _runner() -> None:
+        try:
+            process_queue(port=port)
+        except Exception as exc:
+            current = load_state()
+            current["last_error"] = str(exc)
+            current["running"] = False
+            current["active_gid"] = None
+            current["active_url"] = None
+            save_state(current)
+        finally:
+            current = load_state()
+            current["running"] = False
+            current["active_gid"] = None
+            current["active_url"] = None
+            save_state(current)
+
+    thread = threading.Thread(target=_runner, daemon=True)
+    thread.start()
+    return {"started": True, "reason": "background"}
+
+
 @dataclass
 class QueueItem:
     id: str
@@ -68,6 +99,17 @@ class QueueItem:
 def load_queue() -> list[dict[str, Any]]:
     data = read_json(queue_path(), {"items": []})
     return list(data.get("items", []))
+
+
+def summarize_queue(items: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "total": len(items),
+        "queued": sum(1 for item in items if item.get("status") == "queued"),
+        "downloading": sum(1 for item in items if item.get("status") == "downloading"),
+        "paused": sum(1 for item in items if item.get("status") == "paused"),
+        "done": sum(1 for item in items if item.get("status") == "done"),
+        "error": sum(1 for item in items if item.get("status") == "error"),
+    }
 
 
 def save_queue(items: list[dict[str, Any]]) -> None:
@@ -214,3 +256,30 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         save_state(state)
     save_queue(items)
     return items
+
+
+def get_active_progress(port: int = 6800) -> dict[str, Any] | None:
+    state = load_state()
+    gid = state.get("active_gid")
+    if not gid:
+        return None
+    try:
+        info = status(gid, port=port)
+    except Exception as exc:
+        return {"gid": gid, "error": str(exc), "url": state.get("active_url")}
+
+    total = int(info.get("totalLength") or 0)
+    completed = int(info.get("completedLength") or 0)
+    speed = int(info.get("downloadSpeed") or 0)
+    percent = round((completed / total) * 100, 2) if total else None
+    return {
+        "gid": gid,
+        "url": state.get("active_url"),
+        "status": info.get("status"),
+        "download_speed": speed,
+        "completed_length": completed,
+        "total_length": total,
+        "percent": percent,
+        "error_code": info.get("errorCode"),
+        "error_message": info.get("errorMessage"),
+    }
