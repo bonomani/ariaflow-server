@@ -169,6 +169,40 @@ INDEX_HTML = """<!doctype html>
     .badge.bad { border-color: rgba(251, 113, 133, 0.35); color: #fda4af; }
     .meter { height: 11px; background: rgba(15, 23, 42, 0.95); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
     .meter > div { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); transition: width 180ms ease; }
+    .transfer {
+      display: grid;
+      gap: 12px;
+    }
+    .transfer-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .transfer-name {
+      font-size: 1.08rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      word-break: break-all;
+    }
+    .transfer-sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+      word-break: break-all;
+    }
+    .action-strip {
+      display: inline-flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .icon-btn {
+      padding: 8px 10px;
+      min-width: 38px;
+      border-radius: 999px;
+      line-height: 1;
+    }
     .statusline { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 0.92rem; margin-top: 10px; }
     .statusline strong { color: var(--text); }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
@@ -308,8 +342,7 @@ INDEX_HTML = """<!doctype html>
             <h2>Active download</h2>
             <div class="hint">Live progress</div>
           </div>
-          <div class="meter"><div id="bar"></div></div>
-          <div id="active" style="margin-top:12px;">Idle</div>
+          <div id="active" class="transfer">Idle</div>
         </div>
       </div>
       <div class="span-5 show-bandwidth page-only">
@@ -456,6 +489,17 @@ INDEX_HTML = """<!doctype html>
         </div>
       `;
     }
+    function shortName(value) {
+      if (!value) return "(no name)";
+      try {
+        const url = new URL(value);
+        const parts = url.pathname.split("/").filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : url.hostname;
+      } catch (err) {
+        const parts = value.split("/").filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : value;
+      }
+    }
     function renderLifecycleItem(name, record) {
       const result = record && record.result ? record.result : {};
       const lines = [];
@@ -545,22 +589,33 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('chip-speed').textContent = formatRate(active.downloadSpeed || null);
       document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : (data.bandwidth?.limit || '-');
       document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
+      const activeName = shortName(active.url || active.gid || "No active download");
+      const activePauseButton = state.paused
+        ? `<button class="secondary icon-btn" onclick="resumeQueue()" title="Resume">▶</button>`
+        : `<button class="secondary icon-btn" onclick="pauseQueue()" title="Pause">⏸</button>`;
       document.getElementById('active').innerHTML = `
-        <div class="item">
-          <div class="item-top">
-            <div class="item-url">${active.url || "No active download"}</div>
-            <span class="${badgeClass(active.status)}">${active.status || "idle"}</span>
+        <div class="transfer-head">
+          <div>
+            <div class="transfer-name">${activeName}</div>
+            <div class="transfer-sub">${active.url || "No active download"}</div>
           </div>
-          <div class="meta">
-            <span>Progress ${Math.round(Number(active.percent || 0))}%</span>
-            ${active.downloadSpeed ? `<span>Speed ${formatRate(active.downloadSpeed)}</span>` : ""}
-            ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
-            ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
+          <div class="action-strip">
+            ${activePauseButton}
+            <button class="secondary icon-btn" onclick="preflightRun()" title="Preflight">✓</button>
+            <button class="secondary icon-btn" onclick="runQueue()" title="Run">⟳</button>
+            <button class="secondary icon-btn" onclick="uccRun()" title="UCC">⋯</button>
           </div>
-          <div class="statusline">
-            <span>GID <strong>${active.gid || "none"}</strong></span>
-            <span>${active.errorMessage || ""}</span>
-          </div>
+        </div>
+        <div class="meter"><div id="bar"></div></div>
+        <div class="statusline">
+          <span>${Math.round(Number(active.percent || 0))}% done</span>
+          <span>${active.downloadSpeed ? formatRate(active.downloadSpeed) : "waiting"}</span>
+        </div>
+        <div class="meta">
+          ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
+          ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
+          ${active.gid ? `<span>GID ${active.gid}</span>` : ""}
+          ${active.errorMessage ? `<span>${active.errorMessage}</span>` : ""}
         </div>
       `;
       const percent = active && active.percent != null ? active.percent : 0;
