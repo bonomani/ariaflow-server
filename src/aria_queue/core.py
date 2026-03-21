@@ -844,6 +844,13 @@ def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
         return {"limit": None, "error": str(exc)}
 
 
+def current_global_options(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+    try:
+        return aria_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
     state = load_state()
     active_jobs = active_gids(port=port, timeout=5)

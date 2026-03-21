@@ -14,6 +14,7 @@ from .core import (
     load_action_log,
     aria_status,
     current_bandwidth,
+    current_global_options,
     format_bytes,
     format_mbps,
     format_rate,
@@ -591,7 +592,8 @@ INDEX_HTML = """<!doctype html>
     let lastLifecycle = null;
     let lastResult = null;
     let refreshTimer = null;
-    let refreshInterval = Number(localStorage.getItem('ariaflow.refresh_interval') || '10000');
+    let refreshInterval = 10000;
+    let backendGlobalOptions = {};
     let lastDeclaration = null;
     const path = window.location.pathname.replace(/[/]+$/, "");
     const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/log" ? "log" : "dashboard";
@@ -645,7 +647,8 @@ INDEX_HTML = """<!doctype html>
     function syncRefreshControl() {
       const el = document.getElementById('refresh-interval');
       if (!el) return;
-      const value = String(refreshInterval || 0);
+      const backendValue = backendGlobalOptions["ariaflow-refresh-interval"];
+      const value = String(Number(backendValue || refreshInterval || 10000) || 10000);
       if (el.value !== value) el.value = value;
     }
     function getDeclarationPreference(name) {
@@ -1144,6 +1147,7 @@ INDEX_HTML = """<!doctype html>
         const r = await fetch('/api/status');
         const data = await r.json();
         lastStatus = data;
+        backendGlobalOptions = data.aria2_global_options || {};
         const active = data.active || {status: 'idle'};
         const actives = Array.isArray(data.actives) ? data.actives : (data.active ? [data.active] : []);
         const speed = active.downloadSpeed || data.state?.download_speed || null;
@@ -1176,6 +1180,7 @@ INDEX_HTML = """<!doctype html>
         document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
           ? `Measured ${formatMbps(data.bandwidth.downlink_mbps)} and capped at ${formatMbps(data.bandwidth.cap_mbps)}${data.bandwidth.partial ? ' from partial output' : ''}`
           : 'Using default floor because no probe was available';
+        syncRefreshControl();
       } finally {
         refreshInFlight = false;
       }
@@ -1314,9 +1319,8 @@ INDEX_HTML = """<!doctype html>
     document.getElementById('action-filter')?.addEventListener('change', refreshActionLog);
     document.getElementById('session-filter')?.addEventListener('change', refreshActionLog);
     initTheme();
-    syncRefreshControl();
     refresh();
-    setRefreshInterval(refreshInterval || 10000);
+    setRefreshInterval(10000);
     if (page === 'lifecycle') loadLifecycle();
     if (page === 'options') loadDeclaration();
     if (page === 'log') {
@@ -1354,6 +1358,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "aria2": aria_status(timeout=3),
             "bandwidth": bandwidth,
             "bandwidth_global": bandwidth,
+            "aria2_global_options": current_global_options(timeout=3),
         }
         active = active_status(timeout=3)
         if active:
