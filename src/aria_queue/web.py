@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from .contracts import load_declaration, preflight, run_ucc, save_declaration
 from .core import add_queue_item, aria_rpc, get_active_progress, load_queue, load_state, save_state, start_background_process, summarize_queue
+from .install import install_all, status_all, uninstall_all
 
 
 INDEX_HTML = """<!doctype html>
@@ -59,6 +60,15 @@ INDEX_HTML = """<!doctype html>
       <pre id="result">Idle</pre>
     </div>
     <div class="card">
+      <h2>Lifecycle</h2>
+      <div class="row">
+        <button class="secondary" onclick="loadLifecycle()">Refresh lifecycle</button>
+        <button class="secondary" onclick="previewInstall()">Install preview</button>
+        <button class="secondary" onclick="previewUninstall()">Uninstall preview</button>
+      </div>
+      <pre id="lifecycle">Loading...</pre>
+    </div>
+    <div class="card">
       <h2>Declaration</h2>
       <textarea id="declaration" style="width:100%;min-height:240px;background:#0b1220;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:12px;font:inherit;"></textarea>
       <div class="row" style="margin-top:10px;">
@@ -75,6 +85,10 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('active').textContent = JSON.stringify(data.active || {status: 'idle'}, null, 2);
       const percent = data.active && data.active.percent != null ? data.active.percent : 0;
       document.getElementById('bar').style.width = percent + '%';
+    }
+    async function loadLifecycle() {
+      const r = await fetch('/api/lifecycle');
+      document.getElementById('lifecycle').textContent = JSON.stringify(await r.json(), null, 2);
     }
     async function pauseQueue() {
       const r = await fetch('/api/pause', { method: 'POST' });
@@ -105,6 +119,14 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result').textContent = JSON.stringify(await r.json(), null, 2);
       await refresh();
     }
+    async function previewInstall() {
+      const r = await fetch('/api/lifecycle/install', { method: 'POST' });
+      document.getElementById('lifecycle').textContent = JSON.stringify(await r.json(), null, 2);
+    }
+    async function previewUninstall() {
+      const r = await fetch('/api/lifecycle/uninstall', { method: 'POST' });
+      document.getElementById('lifecycle').textContent = JSON.stringify(await r.json(), null, 2);
+    }
     async function loadDeclaration() {
       const r = await fetch('/api/declaration');
       document.getElementById('declaration').value = JSON.stringify(await r.json(), null, 2);
@@ -118,6 +140,7 @@ INDEX_HTML = """<!doctype html>
     refresh();
     setInterval(refresh, 2000);
     loadDeclaration();
+    loadLifecycle();
   </script>
 </body>
 </html>
@@ -156,6 +179,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/declaration":
             self._send_json(load_declaration())
             return
+        if path == "/api/lifecycle":
+            self._send_json(status_all())
+            return
         self._send_json({"error": "not_found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -189,6 +215,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             declaration = payload if isinstance(payload, dict) else {}
             saved = save_declaration(declaration)
             self._send_json({"saved": True, "declaration": saved})
+            return
+
+        if path == "/api/lifecycle/install":
+            self._send_json(install_all(dry_run=True))
+            return
+
+        if path == "/api/lifecycle/uninstall":
+            self._send_json(uninstall_all(dry_run=True))
             return
 
         if path == "/api/pause":
