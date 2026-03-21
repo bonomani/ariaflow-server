@@ -161,6 +161,11 @@ INDEX_HTML = """<!doctype html>
       display: grid;
       gap: 8px;
     }
+    .item.compact.active-item {
+      border-color: rgba(125, 211, 252, 0.35);
+      box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.12);
+      background: rgba(8, 17, 31, 0.82);
+    }
     .item-top {
       display: flex;
       justify-content: space-between;
@@ -341,7 +346,7 @@ INDEX_HTML = """<!doctype html>
           <div class="metric"><div class="label">Waiting</div><div class="value" id="sum-queued">0</div><div class="sub">queued items</div></div>
           <div class="metric"><div class="label">Done</div><div class="value" id="sum-done">0</div><div class="sub">completed</div></div>
           <div class="metric"><div class="label">Errors</div><div class="value" id="sum-error">0</div><div class="sub">failed items</div></div>
-          <div class="metric"><div class="label">Bandwidth</div><div class="value" id="sum-speed">-</div><div class="sub">active transfer</div></div>
+          <div class="metric"><div class="label">Current speed</div><div class="value" id="sum-speed">-</div><div class="sub">live transfer</div></div>
         </div>
       </div>
     </div>
@@ -364,15 +369,6 @@ INDEX_HTML = """<!doctype html>
             <div class="hint">One download at a time</div>
           </div>
           <div id="queue" class="list">Loading...</div>
-        </div>
-      </div>
-      <div class="span-7 show-dashboard page-only">
-        <div class="panel">
-          <div class="section-title">
-            <h2>Active download</h2>
-            <div class="hint">Live progress</div>
-          </div>
-          <div id="active" class="transfer">Idle</div>
         </div>
       </div>
       <div class="span-5 show-bandwidth page-only">
@@ -585,6 +581,29 @@ INDEX_HTML = """<!doctype html>
       if (state?.running) return "running";
       return "idle";
     }
+    function summarizeActiveItem(active, state) {
+      const name = shortName(active?.url || active?.gid || "none");
+      if (state?.paused && active?.recovered) return `paused · recovered · ${name}`;
+      if (active?.recovered) return `recovered · ${name}`;
+      if (active?.status && active?.status !== "idle") return `${active.status} · ${name}`;
+      if (state?.running) return name;
+      return "none";
+    }
+    function enrichQueueItems(items, active, state) {
+      const live = active && active.gid ? {
+        percent: active.percent,
+        downloadSpeed: active.downloadSpeed,
+        totalLength: active.totalLength,
+        completedLength: active.completedLength,
+        errorMessage: active.errorMessage,
+        recovered: active.recovered,
+      } : null;
+      return (items || []).map((item) => {
+        const matchesActive = live && (item.gid === active.gid || (state?.active_gid && item.gid === state.active_gid));
+        if (!matchesActive) return item;
+        return { ...item, live };
+      });
+    }
     function renderQueueItem(item) {
       const status = item.status || "unknown";
       const detail = [
@@ -594,16 +613,54 @@ INDEX_HTML = """<!doctype html>
         item.error_message ? item.error_message : null,
       ].filter(Boolean).join(" · ");
       const shortUrl = item.output || (item.url ? item.url.split('/').pop() : '(no url)');
+      const live = item.live || {};
+      const activeish = ["downloading", "paused", "recovered"].includes(status) || item.recovered;
+      const progress = live.percent != null ? live.percent : item.percent;
+      const speed = live.downloadSpeed || item.downloadSpeed;
+      const totalLength = live.totalLength || item.totalLength;
+      const completedLength = live.completedLength || item.completedLength;
+      const recoveredBadge = item.recovered ? `<span class="badge warn">recovered</span>` : "";
+      const sourceBadge = item.recovered && item.url ? `<span class="badge">queue source</span>` : "";
+      const pauseButton = status === "paused"
+        ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">▶</button>`
+        : activeish
+          ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Pause">⏸</button>`
+          : "";
+      const actionButtons = activeish ? `
+        <div class="action-strip">
+          ${pauseButton}
+          <button class="secondary icon-btn" onclick="preflightRun()" title="Preflight">✓</button>
+          <button class="secondary icon-btn" onclick="runQueue()" title="Run">⟳</button>
+        </div>
+      ` : "";
+      const activePanel = activeish ? `
+        <div class="meter"><div style="width:${Math.round(Number(progress || 0))}%"></div></div>
+        <div class="statusline">
+          <span>${Math.round(Number(progress || 0))}% done</span>
+          <span>${speed ? formatRate(speed) : "waiting"}</span>
+        </div>
+        <div class="meta">
+          ${totalLength ? `<span>Total ${formatBytes(totalLength)}</span>` : ""}
+          ${completedLength ? `<span>Done ${formatBytes(completedLength)}</span>` : ""}
+          ${item.gid ? `<span>GID ${item.gid}</span>` : ""}
+          ${recoveredBadge}
+          ${sourceBadge}
+          ${item.error_message ? `<span class="mono">${item.error_message}</span>` : ""}
+        </div>
+      ` : "";
+      const stateLabel = item.recovered ? `${status} · recovered` : status;
       return `
-        <div class="item compact">
+        <div class="item compact ${activeish ? 'active-item' : ''}">
           <div class="item-top">
             <div class="item-url">${shortUrl}</div>
-            <span class="${badgeClass(status)}">${status}</span>
+            <span class="${badgeClass(status)}">${stateLabel}</span>
           </div>
           <div class="meta">
             ${item.url ? `<span title="${item.url}">${item.url}</span>` : ""}
             ${detail ? `<span class="mono">${detail}</span>` : ""}
           </div>
+          ${actionButtons}
+          ${activePanel}
         </div>
       `;
     }
@@ -757,53 +814,21 @@ INDEX_HTML = """<!doctype html>
         const r = await fetch('/api/status');
         const data = await r.json();
         lastStatus = data;
-        document.getElementById('queue').innerHTML = (data.items || []).length ? data.items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         const active = data.active || {status: 'idle'};
         const speed = active.downloadSpeed || data.state?.download_speed || null;
         const state = data.state || {};
+        const items = enrichQueueItems(data.items || [], active, state);
+        document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
         document.getElementById('chip-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
         document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || data.bandwidth_global?.limit || '-');
         document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
         document.getElementById('chip-state').textContent = activeStateLabel(active, state);
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume' : 'Pause';
-        const activeName = shortName(active.url || active.gid || "No active download");
-        const activePauseButton = state.paused
-          ? `<button class="secondary icon-btn" onclick="toggleQueue()" title="Resume">▶</button>`
-          : `<button class="secondary icon-btn" onclick="toggleQueue()" title="Pause">⏸</button>`;
-        const activeRecoveryBadge = active.recovered ? `<span class="badge warn">recovered</span>` : "";
-        const activeSourceBadge = active.recovered && active.url ? `<span class="badge">queue source</span>` : "";
-        document.getElementById('active').innerHTML = `
-          <div class="transfer-head">
-            <div>
-              <div class="transfer-name">${activeName} ${activeRecoveryBadge} ${activeSourceBadge}</div>
-              <div class="transfer-sub">${active.url || "No active download"}</div>
-            </div>
-            <div class="action-strip">
-              ${activePauseButton}
-              <button class="secondary icon-btn" onclick="preflightRun()" title="Preflight">✓</button>
-              <button class="secondary icon-btn" onclick="runQueue()" title="Run">⟳</button>
-            </div>
-          </div>
-          <div class="meter"><div id="bar"></div></div>
-          <div class="statusline">
-            <span>${Math.round(Number(active.percent || 0))}% done</span>
-            <span>${active.downloadSpeed ? formatRate(active.downloadSpeed) : "waiting"}</span>
-          </div>
-          <div class="meta">
-            ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
-            ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
-            ${active.gid ? `<span>GID ${active.gid}</span>` : ""}
-            ${active.recovered ? `<span>Recovered from aria2</span>` : ""}
-            ${active.errorMessage ? `<span class="mono">${active.errorMessage}</span>` : ""}
-          </div>
-        `;
-        const percent = active && active.percent != null ? active.percent : 0;
-        document.getElementById('bar').style.width = percent + '%';
         document.getElementById('mode-label').textContent = activeStateLabel(active, state);
-        document.getElementById('active-label').textContent = active.url || active.gid || 'none';
+        document.getElementById('active-label').textContent = summarizeActiveItem(active, state);
         document.getElementById('queue-label').textContent = `${(data.summary && data.summary.total) || 0} item(s)`;
-        document.getElementById('sum-speed').textContent = speed ? formatRate(speed) : "-";
+        document.getElementById('sum-speed').textContent = speed ? formatRate(speed) : "idle";
         renderQueueSummary(data.summary);
         document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
         document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
@@ -811,7 +836,7 @@ INDEX_HTML = """<!doctype html>
           : `No networkquality probe available${data.bandwidth?.reason ? ` · ${data.bandwidth.reason}` : ''}`;
         document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
         document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
-        document.getElementById('bw-live').textContent = active.status || 'idle';
+        document.getElementById('bw-live').textContent = activeStateLabel(active, state);
         document.getElementById('bw-live-detail').textContent = active.downloadSpeed
           ? `Speed ${formatRate(active.downloadSpeed)}${active.completedLength ? ` · ${formatBytes(active.completedLength)}/${formatBytes(active.totalLength || 0)}` : ''}`
           : 'No active transfer';
