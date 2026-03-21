@@ -269,7 +269,7 @@ def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]
     return {"source": "default", "reason": "probe_unavailable", "downlink_mbps": None, "cap_mbps": floor_mbps}
 
 
-def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800) -> dict[str, Any]:
+def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800, timeout: int = 15) -> dict[str, Any]:
     payload = {
         "jsonrpc": "2.0",
         "id": "aria-queue",
@@ -282,7 +282,7 @@ def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800) -> 
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -319,27 +319,27 @@ def add_download(item: dict[str, Any], cap_mbps: int, port: int = 6800) -> str:
     return result["result"]
 
 
-def status(gid: str, port: int = 6800) -> dict[str, Any]:
+def status(gid: str, port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     fields = ["status", "errorCode", "errorMessage", "downloadSpeed", "completedLength", "totalLength", "files"]
-    result = aria_rpc("aria2.tellStatus", [gid, fields], port=port)
+    result = aria_rpc("aria2.tellStatus", [gid, fields], port=port, timeout=timeout)
     return result["result"]
 
 
-def aria_status(port: int = 6800) -> dict[str, Any]:
+def aria_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
-        version = aria_rpc("aria2.getVersion", port=port)["result"]["version"]
+        version = aria_rpc("aria2.getVersion", port=port, timeout=timeout)["result"]["version"]
     except Exception as exc:
         return {"reachable": False, "version": None, "error": str(exc)}
     return {"reachable": True, "version": version, "error": None}
 
 
-def active_status(port: int = 6800) -> dict[str, Any] | None:
+def active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
     state = load_state()
     gid = state.get("active_gid")
     if not gid:
         return None
     try:
-        info = status(gid, port=port)
+        info = status(gid, port=port, timeout=timeout)
     except Exception as exc:
         return {
             "gid": gid,
@@ -368,13 +368,13 @@ def active_status(port: int = 6800) -> dict[str, Any] | None:
     }
 
 
-def set_bandwidth(cap_mbps: int, port: int = 6800) -> None:
-    aria_rpc("aria2.changeGlobalOption", [{"max-overall-download-limit": f"{cap_mbps}M"}], port=port)
+def set_bandwidth(cap_mbps: int, port: int = 6800, timeout: int = 5) -> None:
+    aria_rpc("aria2.changeGlobalOption", [{"max-overall-download-limit": f"{cap_mbps}M"}], port=port, timeout=timeout)
 
 
-def current_bandwidth(port: int = 6800) -> dict[str, Any]:
+def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
-        result = aria_rpc("aria2.getGlobalOption", port=port)["result"]
+        result = aria_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
         return {
             "limit": result.get("max-overall-download-limit"),
             "dir": result.get("dir"),
@@ -389,8 +389,8 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
     gid = state.get("active_gid")
     if not gid:
         return {"paused": False, "reason": "no_active_transfer"}
-    before = {"state": state, "active": active_status(port=port)}
-    result = aria_rpc("aria2.pause", [gid], port=port)
+    before = {"state": state, "active": active_status(port=port, timeout=5)}
+    result = aria_rpc("aria2.pause", [gid], port=port, timeout=5)
     state["paused"] = True
     save_state(state)
     payload = {"paused": True, "gid": gid, "result": result.get("result")}
@@ -400,7 +400,7 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
         outcome="changed",
         reason="user_pause",
         before=before,
-        after={"state": load_state(), "active": active_status(port=port)},
+        after={"state": load_state(), "active": active_status(port=port, timeout=5)},
         detail={"gid": gid, "result": payload},
     )
     return payload
@@ -411,8 +411,8 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
     gid = state.get("active_gid")
     if not gid:
         return {"resumed": False, "reason": "no_active_transfer"}
-    before = {"state": state, "active": active_status(port=port)}
-    result = aria_rpc("aria2.unpause", [gid], port=port)
+    before = {"state": state, "active": active_status(port=port, timeout=5)}
+    result = aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
     state["paused"] = False
     save_state(state)
     payload = {"resumed": True, "gid": gid, "result": result.get("result")}
@@ -422,7 +422,7 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         outcome="changed",
         reason="user_resume",
         before=before,
-        after={"state": load_state(), "active": active_status(port=port)},
+        after={"state": load_state(), "active": active_status(port=port, timeout=5)},
         detail={"gid": gid, "result": payload},
     )
     return payload

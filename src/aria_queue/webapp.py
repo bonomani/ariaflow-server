@@ -680,69 +680,74 @@ INDEX_HTML = """<!doctype html>
         `;
       }).join("");
     }
+    let refreshInFlight = false;
     async function refresh() {
-      const r = await fetch('/api/status');
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        const r = await fetch('/api/status');
         const data = await r.json();
         lastStatus = data;
-      document.getElementById('queue').innerHTML = (data.items || []).length ? data.items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
-      const active = data.active || {status: 'idle'};
-      const speed = active.downloadSpeed || data.state?.download_speed || "-";
-      const state = data.state || {};
-      document.getElementById('chip-error').textContent = state.last_error || 'none';
-      document.getElementById('chip-speed').textContent = formatRate(active.downloadSpeed || null);
-      document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : (data.bandwidth?.limit || '-');
-      document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
-      const activeName = shortName(active.url || active.gid || "No active download");
-      const activePauseButton = state.paused
-        ? `<button class="secondary icon-btn" onclick="resumeQueue()" title="Resume">▶</button>`
-        : `<button class="secondary icon-btn" onclick="pauseQueue()" title="Pause">⏸</button>`;
-      document.getElementById('active').innerHTML = `
-        <div class="transfer-head">
-          <div>
-            <div class="transfer-name">${activeName}</div>
-            <div class="transfer-sub">${active.url || "No active download"}</div>
+        document.getElementById('queue').innerHTML = (data.items || []).length ? data.items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
+        const active = data.active || {status: 'idle'};
+        const speed = active.downloadSpeed || data.state?.download_speed || "-";
+        const state = data.state || {};
+        document.getElementById('chip-error').textContent = state.last_error || 'none';
+        document.getElementById('chip-speed').textContent = formatRate(active.downloadSpeed || null);
+        document.getElementById('chip-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : (data.bandwidth?.limit || '-');
+        document.getElementById('chip-aria2').textContent = data.aria2?.reachable ? `v${data.aria2.version}` : 'offline';
+        const activeName = shortName(active.url || active.gid || "No active download");
+        const activePauseButton = state.paused
+          ? `<button class="secondary icon-btn" onclick="resumeQueue()" title="Resume">▶</button>`
+          : `<button class="secondary icon-btn" onclick="pauseQueue()" title="Pause">⏸</button>`;
+        document.getElementById('active').innerHTML = `
+          <div class="transfer-head">
+            <div>
+              <div class="transfer-name">${activeName}</div>
+              <div class="transfer-sub">${active.url || "No active download"}</div>
+            </div>
+            <div class="action-strip">
+              ${activePauseButton}
+              <button class="secondary icon-btn" onclick="preflightRun()" title="Preflight">✓</button>
+              <button class="secondary icon-btn" onclick="runQueue()" title="Run">⟳</button>
+            </div>
           </div>
-          <div class="action-strip">
-            ${activePauseButton}
-            <button class="secondary icon-btn" onclick="preflightRun()" title="Preflight">✓</button>
-            <button class="secondary icon-btn" onclick="runQueue()" title="Run">⟳</button>
+          <div class="meter"><div id="bar"></div></div>
+          <div class="statusline">
+            <span>${Math.round(Number(active.percent || 0))}% done</span>
+            <span>${active.downloadSpeed ? formatRate(active.downloadSpeed) : "waiting"}</span>
           </div>
-        </div>
-        <div class="meter"><div id="bar"></div></div>
-        <div class="statusline">
-          <span>${Math.round(Number(active.percent || 0))}% done</span>
-          <span>${active.downloadSpeed ? formatRate(active.downloadSpeed) : "waiting"}</span>
-        </div>
-        <div class="meta">
-          ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
-          ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
-          ${active.gid ? `<span>GID ${active.gid}</span>` : ""}
-          ${active.errorMessage ? `<span class="mono">${active.errorMessage}</span>` : ""}
-        </div>
-      `;
-      const percent = active && active.percent != null ? active.percent : 0;
-      document.getElementById('bar').style.width = percent + '%';
-      document.getElementById('mode-label').textContent = data.state && data.state.paused ? 'paused' : (data.state && data.state.running ? 'running' : 'idle');
-      document.getElementById('active-label').textContent = active.url || 'none';
-      document.getElementById('queue-label').textContent = `${(data.summary && data.summary.total) || 0} item(s)`;
-      document.getElementById('sum-speed').textContent = speed && speed !== "-" ? speed : "-";
-      renderQueueSummary(data.summary);
-      document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
-      document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
-        ? `Downlink ${formatMbps(data.bandwidth.downlink_mbps)}${data.bandwidth.partial ? ' (partial capture)' : ''}`
-        : 'No networkquality probe available';
-      document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : '-';
-      document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
-      document.getElementById('bw-live').textContent = active.status || 'idle';
-      document.getElementById('bw-live-detail').textContent = active.downloadSpeed
-        ? `Speed ${formatRate(active.downloadSpeed)}${active.completedLength ? ` · ${formatBytes(active.completedLength)}/${formatBytes(active.totalLength || 0)}` : ''}`
-        : 'No active transfer';
-      document.getElementById('bw-probe-mode').textContent = data.bandwidth?.source || '-';
-      document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
-        ? `Measured ${formatMbps(data.bandwidth.downlink_mbps)} and capped at ${formatMbps(data.bandwidth.cap_mbps)}${data.bandwidth.partial ? ' from partial output' : ''}`
-        : 'Using default floor because no probe was available';
-      const actionLog = document.getElementById('action-log');
-      if (actionLog) actionLog.innerHTML = renderActionLog(data.action_log || []);
+          <div class="meta">
+            ${active.totalLength ? `<span>Total ${formatBytes(active.totalLength)}</span>` : ""}
+            ${active.completedLength ? `<span>Done ${formatBytes(active.completedLength)}</span>` : ""}
+            ${active.gid ? `<span>GID ${active.gid}</span>` : ""}
+            ${active.errorMessage ? `<span class="mono">${active.errorMessage}</span>` : ""}
+          </div>
+        `;
+        const percent = active && active.percent != null ? active.percent : 0;
+        document.getElementById('bar').style.width = percent + '%';
+        document.getElementById('mode-label').textContent = data.state && data.state.paused ? 'paused' : (data.state && data.state.running ? 'running' : 'idle');
+        document.getElementById('active-label').textContent = active.url || 'none';
+        document.getElementById('queue-label').textContent = `${(data.summary && data.summary.total) || 0} item(s)`;
+        document.getElementById('sum-speed').textContent = speed && speed !== "-" ? speed : "-";
+        renderQueueSummary(data.summary);
+        document.getElementById('bw-source').textContent = data.bandwidth?.source || '-';
+        document.getElementById('bw-down').textContent = data.bandwidth?.source === 'networkquality'
+          ? `Downlink ${formatMbps(data.bandwidth.downlink_mbps)}${data.bandwidth.partial ? ' (partial capture)' : ''}`
+          : 'No networkquality probe available';
+        document.getElementById('bw-cap').textContent = data.bandwidth?.cap_mbps ? formatMbps(data.bandwidth.cap_mbps) : '-';
+        document.getElementById('bw-global').textContent = data.bandwidth_global?.limit ? `Global limit ${data.bandwidth_global.limit}` : 'Global option unavailable';
+        document.getElementById('bw-live').textContent = active.status || 'idle';
+        document.getElementById('bw-live-detail').textContent = active.downloadSpeed
+          ? `Speed ${formatRate(active.downloadSpeed)}${active.completedLength ? ` · ${formatBytes(active.completedLength)}/${formatBytes(active.totalLength || 0)}` : ''}`
+          : 'No active transfer';
+        document.getElementById('bw-probe-mode').textContent = data.bandwidth?.source || '-';
+        document.getElementById('bw-probe-detail').textContent = data.bandwidth?.source === 'networkquality'
+          ? `Measured ${formatMbps(data.bandwidth.downlink_mbps)} and capped at ${formatMbps(data.bandwidth.cap_mbps)}${data.bandwidth.partial ? ' from partial output' : ''}`
+          : 'Using default floor because no probe was available';
+      } finally {
+        refreshInFlight = false;
+      }
     }
     async function loadLifecycle() {
       const r = await fetch('/api/lifecycle');
@@ -829,18 +834,18 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
     async function refreshActionLog() {
-      const r = await fetch('/api/status');
+      if (page !== 'log') return;
+      const r = await fetch('/api/log');
       const data = await r.json();
       const actionLog = document.getElementById('action-log');
-      if (actionLog) actionLog.innerHTML = renderActionLog(data.action_log || []);
+      if (actionLog) actionLog.innerHTML = renderActionLog(data.items || []);
     }
     document.getElementById('action-filter')?.addEventListener('change', refreshActionLog);
     refresh();
     setInterval(refresh, 2000);
     loadDeclaration();
     loadLifecycle();
-    preflightRun();
-    refreshActionLog();
+    if (page === 'log') refreshActionLog();
     applyPage();
   </script>
 </body>
@@ -877,12 +882,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 "aria2": aria_status(),
                 "bandwidth": current_bandwidth(),
                 "bandwidth_global": current_bandwidth(),
-                "action_log": load_action_log(),
             }
             active = active_status()
             if active:
                 payload["active"] = active
             self._send_json(payload)
+            return
+        if path == "/api/log":
+            self._send_json({"items": load_action_log()})
             return
         if path == "/api/declaration":
             self._send_json(load_declaration())
