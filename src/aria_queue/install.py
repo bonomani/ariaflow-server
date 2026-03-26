@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .core import _find_networkquality
 from .platform.launchd import (
     aria2_status,
     install_aria2_launchd,
@@ -109,19 +110,6 @@ def brew_package_version(package: str) -> str | None:
     return parts[1] if len(parts) > 1 else None
 
 
-def _find_networkquality() -> str | None:
-    cmd = shutil.which("networkquality")
-    if cmd is not None:
-        return cmd
-    for candidate in (
-        "/usr/bin/networkquality",
-        "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/networkquality",
-    ):
-        if Path(candidate).exists():
-            return candidate
-    return None
-
-
 def networkquality_status() -> dict[str, object]:
     cmd = _find_networkquality()
     if cmd is None:
@@ -132,52 +120,14 @@ def networkquality_status() -> dict[str, object]:
             "reason": "missing",
             "message": "networkquality tool not found",
         }
-    try:
-        completed = subprocess.run(
-            [cmd],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=6,
-        )
-        output = completed.stdout or ""
-        for line in output.splitlines():
-            if line.strip().startswith("Downlink:"):
-                return {
-                    "installed": True,
-                    "usable": True,
-                    "version": None,
-                    "reason": "ready",
-                    "message": f"networkquality available at {cmd}; {line.strip()}",
-                    "command": cmd,
-                }
-        return {
-            "installed": True,
-            "usable": False,
-            "version": None,
-            "reason": "no_output",
-            "message": f"networkquality available at {cmd}; no downlink line parsed",
-            "command": cmd,
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "installed": True,
-            "usable": False,
-            "version": None,
-            "reason": "timeout",
-            "message": f"networkquality available at {cmd}; probe timed out",
-            "command": cmd,
-        }
-    except Exception as exc:
-        return {
-            "installed": True,
-            "usable": False,
-            "version": None,
-            "reason": "error",
-            "message": f"networkquality available at {cmd}; probe failed: {exc}",
-            "command": cmd,
-        }
+    return {
+        "installed": True,
+        "usable": True,
+        "version": None,
+        "reason": "ready",
+        "message": f"networkquality available at {cmd}; ariaflow uses a bounded -u -c bootstrap probe during runs",
+        "command": cmd,
+    }
 
 
 def homebrew_install_ariaflow(dry_run: bool = False) -> list[str]:

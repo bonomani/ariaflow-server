@@ -18,6 +18,16 @@ from uuid import uuid4
 
 _STORAGE_LOCK = threading.RLock()
 _STORAGE_LOCK_STATE = threading.local()
+_BITS_PER_MEGABIT = 1_000_000.0
+_BYTES_PER_MEGABIT = 125_000.0
+_NETWORKQUALITY_MAX_RUNTIME = 8
+_NETWORKQUALITY_TIMEOUT = 10
+_NETWORKQUALITY_CANDIDATES = (
+    "/usr/bin/networkQuality",
+    "/usr/bin/networkquality",
+    "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/networkQuality",
+    "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/networkquality",
+)
 
 
 def config_dir() -> Path:
@@ -167,7 +177,7 @@ def log_transfer_poll(
     gid: str,
     item: dict[str, Any],
     info: dict[str, Any],
-    cap_mbps: int | None = None,
+    cap_mbps: float | None = None,
 ) -> None:
     record_action(
         action="poll",
@@ -708,33 +718,142 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str | 
     return item
 
 
+def _find_networkquality() -> str | None:
+    for binary in ("networkQuality", "networkquality"):
+        cmd = shutil.which(binary)
+        if cmd is not None:
+            return cmd
+    for candidate in _NETWORKQUALITY_CANDIDATES:
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
+def _coerce_float(value: object) -> float | None:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _cap_bytes_per_sec_from_mbps(downlink_mbps: float, percent: float, floor_mbps: int) -> int:
+    floor_bytes = int(floor_mbps * _BYTES_PER_MEGABIT)
+    return max(floor_bytes, int(downlink_mbps * percent * _BYTES_PER_MEGABIT))
+
+
+def _cap_mbps_from_bytes_per_sec(cap_bytes_per_sec: int) -> float:
+    return round((float(cap_bytes_per_sec) * 8.0) / _BITS_PER_MEGABIT, 1)
+
+
+def _aria_speed_value(cap_bytes_per_sec: int) -> str:
+    return str(max(0, int(cap_bytes_per_sec)))
+
+
+def _default_bandwidth_probe(
+    *,
+    floor_mbps: int,
+    reason: str,
+    partial: bool = False,
+    command: str | None = None,
+) -> dict[str, Any]:
+    cap_bytes_per_sec = int(floor_mbps * _BYTES_PER_MEGABIT)
+    probe = {
+        "source": "default",
+        "reason": reason,
+        "downlink_mbps": None,
+        "cap_mbps": round(float(floor_mbps), 1),
+        "cap_bytes_per_sec": cap_bytes_per_sec,
+    }
+    if partial:
+        probe["partial"] = True
+    if command:
+        probe["command"] = command
+    return probe
+
+
+def _parse_networkquality_output(output: str, *, percent: float, floor_mbps: int) -> dict[str, Any] | None:
+    text = (output or "").strip()
+    if not text:
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+    if isinstance(payload, dict):
+        throughput_bps = _coerce_float(payload.get("dl_throughput"))
+        if throughput_bps and throughput_bps > 0:
+            downlink_mbps = round(throughput_bps / _BITS_PER_MEGABIT, 1)
+            cap_bytes_per_sec = _cap_bytes_per_sec_from_mbps(downlink_mbps, percent, floor_mbps)
+            probe: dict[str, Any] = {
+                "source": "networkquality",
+                "reason": "probe_complete",
+                "downlink_mbps": downlink_mbps,
+                "cap_mbps": _cap_mbps_from_bytes_per_sec(cap_bytes_per_sec),
+                "cap_bytes_per_sec": cap_bytes_per_sec,
+            }
+            responsiveness = _coerce_float(payload.get("dl_responsiveness"))
+            if responsiveness is None:
+                responsiveness = _coerce_float(payload.get("responsiveness"))
+            if responsiveness is not None:
+                probe["responsiveness_rpm"] = round(responsiveness, 1)
+            interface_name = payload.get("interface_name")
+            if isinstance(interface_name, str) and interface_name:
+                probe["interface_name"] = interface_name
+            return probe
+    match = re.search(r"Downlink(?:\s+capacity)?:\s+([\d.]+)\s+Mbps", text, re.IGNORECASE)
+    if match:
+        downlink_mbps = float(match.group(1))
+        cap_bytes_per_sec = _cap_bytes_per_sec_from_mbps(downlink_mbps, percent, floor_mbps)
+        return {
+            "source": "networkquality",
+            "reason": "probe_complete",
+            "downlink_mbps": round(downlink_mbps, 1),
+            "cap_mbps": _cap_mbps_from_bytes_per_sec(cap_bytes_per_sec),
+            "cap_bytes_per_sec": cap_bytes_per_sec,
+            "command_mode": "text_fallback",
+        }
+    return None
+
+
 def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]:
-    cmd = shutil.which("networkquality")
-    if cmd is None:
-        for candidate in ("/usr/bin/networkquality", "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/networkquality"):
-            if Path(candidate).exists():
-                cmd = candidate
-                break
-    if cmd:
-        try:
-            completed = subprocess.run([cmd], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=12)
-            out = completed.stdout
-            match = re.search(r"Downlink:\s+([\d.]+)\s+Mbps", out)
-            if match:
-                downlink = float(match.group(1))
-                cap = max(floor_mbps, int(downlink * percent))
-                return {"source": "networkquality", "reason": "probe_complete", "downlink_mbps": downlink, "cap_mbps": cap}
-        except subprocess.TimeoutExpired as exc:
-            out = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
-            match = re.search(r"Downlink:\s+([\d.]+)\s+Mbps", out)
-            if match:
-                downlink = float(match.group(1))
-                cap = max(floor_mbps, int(downlink * percent))
-                return {"source": "networkquality", "reason": "probe_timeout_partial_capture", "downlink_mbps": downlink, "cap_mbps": cap, "partial": True}
-            return {"source": "networkquality", "reason": "probe_timeout_no_parse", "downlink_mbps": None, "cap_mbps": floor_mbps, "partial": True}
-        except Exception:
-            return {"source": "networkquality", "reason": "probe_error", "downlink_mbps": None, "cap_mbps": floor_mbps}
-    return {"source": "default", "reason": "probe_unavailable", "downlink_mbps": None, "cap_mbps": floor_mbps}
+    cmd = _find_networkquality()
+    if not cmd:
+        return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_unavailable")
+
+    probe_cmd = [cmd, "-u", "-c", "-M", str(_NETWORKQUALITY_MAX_RUNTIME)]
+    command = " ".join(probe_cmd)
+    try:
+        completed = subprocess.run(
+            probe_cmd,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=_NETWORKQUALITY_TIMEOUT,
+        )
+        parsed = _parse_networkquality_output(completed.stdout or "", percent=percent, floor_mbps=floor_mbps)
+        if parsed:
+            parsed["command"] = command
+            return parsed
+        return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_no_parse", command=command)
+    except subprocess.TimeoutExpired as exc:
+        out = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
+        parsed = _parse_networkquality_output(out, percent=percent, floor_mbps=floor_mbps)
+        if parsed:
+            parsed["reason"] = "probe_timeout_partial_capture"
+            parsed["partial"] = True
+            parsed["command"] = command
+            return parsed
+        return _default_bandwidth_probe(
+            floor_mbps=floor_mbps,
+            reason="probe_timeout_no_parse",
+            partial=True,
+            command=command,
+        )
+    except Exception:
+        return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_error", command=command)
 
 
 def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800, timeout: int = 15) -> dict[str, Any]:
@@ -776,9 +895,9 @@ def ensure_aria_daemon(port: int = 6800) -> None:
     time.sleep(2)
 
 
-def add_download(item: dict[str, Any], cap_mbps: int, port: int = 6800) -> str:
+def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
     options = {
-        "max-download-limit": f"{cap_mbps}M",
+        "max-download-limit": _aria_speed_value(cap_bytes_per_sec),
         "allow-overwrite": "true",
         "continue": "true",
     }
@@ -889,20 +1008,55 @@ def active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
     return discover_active_transfer(port=port, timeout=timeout)
 
 
-def set_bandwidth(cap_mbps: int, port: int = 6800, timeout: int = 5) -> None:
-    aria_rpc("aria2.changeGlobalOption", [{"max-overall-download-limit": f"{cap_mbps}M"}], port=port, timeout=timeout)
+def set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
+    aria_rpc(
+        "aria2.changeGlobalOption",
+        [{"max-overall-download-limit": _aria_speed_value(cap_bytes_per_sec)}],
+        port=port,
+        timeout=timeout,
+    )
+
+
+def set_download_bandwidth(gid: str, cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
+    aria_rpc(
+        "aria2.changeOption",
+        [gid, {"max-download-limit": _aria_speed_value(cap_bytes_per_sec)}],
+        port=port,
+        timeout=timeout,
+    )
 
 
 def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
         result = aria_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
-        return {
+        payload: dict[str, Any] = {
             "limit": result.get("max-overall-download-limit"),
             "dir": result.get("dir"),
             "seed-ratio": result.get("seed-ratio"),
         }
     except Exception as exc:
-        return {"limit": None, "error": str(exc)}
+        payload = {"limit": None, "error": str(exc)}
+    try:
+        state = load_state()
+    except Exception:
+        state = {}
+    probe = state.get("last_bandwidth_probe")
+    if isinstance(probe, dict):
+        for key in (
+            "source",
+            "reason",
+            "downlink_mbps",
+            "cap_mbps",
+            "cap_bytes_per_sec",
+            "partial",
+            "command",
+            "command_mode",
+            "responsiveness_rpm",
+            "interface_name",
+        ):
+            if key in probe:
+                payload[key] = probe[key]
+    return payload
 
 
 def current_global_options(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
@@ -1045,22 +1199,41 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     except Exception:
         pass
     probe = probe_bandwidth()
-    cap = int(probe["cap_mbps"])
+    cap_mbps = float(probe.get("cap_mbps") or 0)
+    cap_bytes_per_sec = int(
+        probe.get("cap_bytes_per_sec")
+        or _cap_bytes_per_sec_from_mbps(cap_mbps if cap_mbps > 0 else 2.0, 1.0, 2)
+    )
+    before_bandwidth = current_bandwidth(port=port)
+    try:
+        set_bandwidth(cap_bytes_per_sec, port=port)
+    except Exception:
+        pass
     record_action(
         action="probe",
         target="bandwidth",
         outcome="changed" if probe.get("source") == "networkquality" else "unchanged",
         reason=probe.get("reason", probe.get("source", "default")),
-        before={"cap": current_bandwidth(port=port)},
-        after={"probe": probe, "cap_mbps": cap},
+        before={"cap": before_bandwidth},
+        after={"probe": probe, "cap_mbps": cap_mbps, "cap_bytes_per_sec": cap_bytes_per_sec},
         detail=probe,
     )
     with storage_locked():
+        items = load_queue()
         state = load_state()
         state["running"] = True
         state["stop_requested"] = False
         state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        state["last_bandwidth_probe"] = probe
         save_state(state)
+    for item in items:
+        gid = str(item.get("gid") or "")
+        if not gid:
+            continue
+        try:
+            set_download_bandwidth(gid, cap_bytes_per_sec, port=port)
+        except Exception:
+            continue
 
     limit = max_simultaneous_downloads()
 
@@ -1125,9 +1298,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["error_code"] = info.get("errorCode")
                 item["error_message"] = info.get("errorMessage")
                 running_infos.append(info)
-                log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap)
+                log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap_mbps)
                 if info.get("errorCode") and info["errorCode"] != "0":
-                    cap_local = max(1, int(cap * 0.75))
+                    cap_local = max(int(_BYTES_PER_MEGABIT), int(cap_bytes_per_sec * 0.75))
                     set_bandwidth(cap_local, port=port)
                 continue
             if remote_status == "waiting":
@@ -1228,6 +1401,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         if item.get("status") == "paused":
                             before_item = dict(item)
                             try:
+                                set_download_bandwidth(gid, cap_bytes_per_sec, port=port, timeout=5)
                                 aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
                                 item["status"] = "queued"
                                 item["live_status"] = "waiting"
@@ -1237,8 +1411,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                                     outcome="changed",
                                     reason="download_resumed",
                                     before={"item": before_item},
-                                    after={"item": dict(item), "gid": gid, "cap_mbps": cap},
-                                    detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
+                                    after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
+                                    detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap_mbps},
                                 )
                                 current_running_infos.append(_queued_info(item, gid, "waiting"))
                                 allocated += 1
@@ -1249,7 +1423,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     before_item = dict(item)
                     item["status"] = "downloading"
                     item.pop("live_status", None)
-                    gid = add_download(item, cap_mbps=cap, port=port)
+                    gid = add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
                     item["gid"] = gid
                     record_action(
                         action="run",
@@ -1257,8 +1431,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         outcome="changed",
                         reason="download_started",
                         before={"item": before_item},
-                        after={"item": dict(item), "gid": gid, "cap_mbps": cap},
-                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap},
+                        after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
+                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap_mbps},
                     )
                     current_running_infos.append(_queued_info(item, gid, "waiting"))
                     allocated += 1

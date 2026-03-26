@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,7 +26,7 @@ from aria_queue.core import (
     save_state,
     start_new_state_session,
 )
-from aria_queue.install import install_all, status_all, uninstall_all
+from aria_queue.install import install_all, networkquality_status, status_all, uninstall_all
 
 
 class TicAriaFlowTests(unittest.TestCase):
@@ -98,11 +100,47 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(limit.get("value", 0), 1)
 
     def test_probe_fallback_reports_reason(self) -> None:
-        with patch("aria_queue.core.shutil.which", return_value=None):
+        with patch("aria_queue.core._find_networkquality", return_value=None):
             result = probe_bandwidth()
         self.assertEqual(result["source"], "default")
         self.assertEqual(result["reason"], "probe_unavailable")
         self.assertIn("cap_mbps", result)
+        self.assertEqual(result["cap_bytes_per_sec"], 250000)
+
+    def test_probe_uses_machine_readable_networkquality_output(self) -> None:
+        output = json.dumps({"dl_throughput": 80_000_000, "dl_responsiveness": 1200, "interface_name": "en0"})
+        with patch("aria_queue.core._find_networkquality", return_value="/usr/bin/networkQuality"), \
+             patch("aria_queue.core.subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output)) as run:
+            result = probe_bandwidth()
+        run.assert_called_once_with(
+            ["/usr/bin/networkQuality", "-u", "-c", "-M", "8"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        self.assertEqual(result["source"], "networkquality")
+        self.assertEqual(result["reason"], "probe_complete")
+        self.assertEqual(result["downlink_mbps"], 80.0)
+        self.assertEqual(result["cap_mbps"], 64.0)
+        self.assertEqual(result["cap_bytes_per_sec"], 8000000)
+        self.assertEqual(result["responsiveness_rpm"], 1200.0)
+        self.assertEqual(result["interface_name"], "en0")
+
+    def test_probe_timeout_without_parse_uses_default_floor(self) -> None:
+        timeout = subprocess.TimeoutExpired(
+            cmd=["/usr/bin/networkQuality", "-u", "-c", "-M", "8"],
+            timeout=10,
+            output="",
+        )
+        with patch("aria_queue.core._find_networkquality", return_value="/usr/bin/networkQuality"), \
+             patch("aria_queue.core.subprocess.run", side_effect=timeout):
+            result = probe_bandwidth()
+        self.assertEqual(result["source"], "default")
+        self.assertEqual(result["reason"], "probe_timeout_no_parse")
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["cap_bytes_per_sec"], 250000)
 
     def test_discover_active_transfer_prefers_state_gid(self) -> None:
         with patch("aria_queue.core.load_state", return_value={"active_gid": "gid-1", "active_url": "https://example.com/a.gguf"}), \
@@ -185,13 +223,15 @@ class TicAriaFlowTests(unittest.TestCase):
         with patch("aria_queue.core.ensure_aria_daemon"), \
              patch("aria_queue.core.deduplicate_active_transfers"), \
              patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2}), \
+             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
              patch("aria_queue.core.current_bandwidth", return_value={}), \
+             patch("aria_queue.core.set_bandwidth") as set_bandwidth, \
              patch("aria_queue.core.active_gids", return_value=[]), \
              patch("aria_queue.core.add_download", return_value="gid-1"), \
              patch("aria_queue.core.status", return_value=complete), \
              patch("aria_queue.core.time.sleep", return_value=None):
             result = process_queue()
+        set_bandwidth.assert_called_once_with(250000, port=6800)
         self.assertEqual(result[0]["status"], "done")
         self.assertEqual(result[0]["gid"], "gid-1")
         self.assertIn("post_action", result[0])
@@ -236,7 +276,7 @@ class TicAriaFlowTests(unittest.TestCase):
         with patch("aria_queue.core.ensure_aria_daemon"), \
              patch("aria_queue.core.deduplicate_active_transfers"), \
              patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2}), \
+             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
              patch("aria_queue.core.current_bandwidth", return_value={}), \
              patch("aria_queue.core.active_gids", return_value=[]), \
              patch("aria_queue.core.add_download") as add_download, \
@@ -245,6 +285,7 @@ class TicAriaFlowTests(unittest.TestCase):
              patch("aria_queue.core.time.sleep", return_value=None):
             result = process_queue()
         self.assertFalse(add_download.called)
+        rpc.assert_any_call("aria2.changeOption", ["gid-1", {"max-download-limit": "250000"}], port=6800, timeout=5)
         rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
         self.assertEqual(result[0]["status"], "done")
 
@@ -289,6 +330,16 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("0.8.2", status["aria2"]["result"]["message"])
         self.assertIn("networkquality available", status["networkquality"]["result"]["message"])
         self.assertIn("1.37.0", status["aria2-launchd"]["result"]["message"])
+
+    def test_networkquality_status_reports_availability_without_probe(self) -> None:
+        with patch("aria_queue.install._find_networkquality", return_value="/usr/bin/networkQuality"), \
+             patch("aria_queue.install.subprocess.run") as run:
+            status = networkquality_status()
+        self.assertFalse(run.called)
+        self.assertTrue(status["installed"])
+        self.assertTrue(status["usable"])
+        self.assertEqual(status["reason"], "ready")
+        self.assertIn("bounded -u -c bootstrap probe", str(status["message"]))
 
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
