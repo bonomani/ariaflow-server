@@ -40,6 +40,58 @@ STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 STATUS_CACHE_TTL = 2.0
 
 
+def _error_payload(error: str, message: str, **detail: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "ok": False,
+        "error": error,
+        "message": message,
+    }
+    payload.update(detail)
+    return payload
+
+
+def _parse_add_items(payload: object) -> tuple[list[dict[str, str | None]] | None, dict[str, object] | None]:
+    if not isinstance(payload, dict):
+        return None, _error_payload("invalid_payload", "expected a JSON object")
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        return None, _error_payload("invalid_items", "items must be a non-empty list")
+
+    items: list[dict[str, str | None]] = []
+    for index, raw_item in enumerate(raw_items):
+        if not isinstance(raw_item, dict):
+            return None, _error_payload("invalid_item", f"items[{index}] must be an object", index=index)
+        url = str(raw_item.get("url", "")).strip()
+        if not url:
+            return None, _error_payload("invalid_item", f"items[{index}].url must be a non-empty string", index=index)
+        output = raw_item.get("output")
+        output_value = str(output).strip() if output is not None else ""
+        post_action_rule = raw_item.get("post_action_rule")
+        post_action_value = str(post_action_rule).strip() if post_action_rule is not None else ""
+        items.append(
+            {
+                "url": url,
+                "output": output_value or None,
+                "post_action_rule": post_action_value or None,
+            }
+        )
+    return items, None
+
+
+def _resolve_auto_preflight_override(payload: object) -> tuple[bool | None, dict[str, object] | None]:
+    if not isinstance(payload, dict):
+        return None, _error_payload("invalid_payload", "expected a JSON object")
+    raw_value = payload.get("auto_preflight_on_run")
+    if raw_value is None:
+        return None, None
+    if isinstance(raw_value, bool):
+        return raw_value, None
+    return None, _error_payload(
+        "invalid_auto_preflight_on_run",
+        "auto_preflight_on_run must be a boolean when provided",
+    )
+
+
 def _session_fields() -> dict[str, object]:
     state = load_state()
     return {
@@ -1648,21 +1700,27 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length).decode("utf-8") if length else "{}"
-        payload = json.loads(raw or "{}")
+        try:
+            payload = json.loads(raw or "{}")
+        except json.JSONDecodeError:
+            self._send_json(_error_payload("invalid_json", "request body must be valid JSON"), status=400)
+            return
 
         if path == "/api/add":
-            raw_urls = payload.get("urls")
-            if isinstance(raw_urls, list):
-                urls = [str(url).strip() for url in raw_urls if str(url).strip()]
-            else:
-                raw_url = str(payload.get("url", "")).strip()
-                urls = [line.strip() for line in raw_url.splitlines() if line.strip()]
-            if not urls:
-                self._send_json({"error": "missing_url"}, status=400)
+            items, error = _parse_add_items(payload)
+            if error is not None:
+                self._send_json(error, status=400)
                 return
-            added = [add_queue_item(url).__dict__ for url in urls]
+            added = [
+                add_queue_item(
+                    item["url"],
+                    output=item["output"],
+                    post_action_rule=item["post_action_rule"],
+                ).__dict__
+                for item in items
+            ]
             self._invalidate_status_cache()
-            self._send_json({"added": added[0] if len(added) == 1 else added})
+            self._send_json({"ok": True, "count": len(added), "added": added})
             return
 
         if path == "/api/preflight":
@@ -1684,12 +1742,32 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/run":
+            if not isinstance(payload, dict):
+                self._send_json(_error_payload("invalid_payload", "expected a JSON object"), status=400)
+                return
+            action = str(payload.get("action", "")).strip().lower()
+            if action not in {"start", "stop"}:
+                self._send_json(
+                    _error_payload("invalid_action", "action must be 'start' or 'stop'", action=action or None),
+                    status=400,
+                )
+                return
             before = {"state": load_state(), "queue": summarize_queue(load_queue())}
-            state = load_state()
-            if state.get("running"):
+            effective_auto_preflight: bool | None = None
+            if action == "stop":
                 result = stop_background_process()
+                response: dict[str, object] = {
+                    "ok": True,
+                    "action": "stop",
+                    "result": result,
+                }
             else:
-                if auto_preflight_on_run():
+                override, override_error = _resolve_auto_preflight_override(payload)
+                if override_error is not None:
+                    self._send_json(override_error, status=400)
+                    return
+                effective_auto_preflight = auto_preflight_on_run() if override is None else override
+                if effective_auto_preflight:
                     preflight_result = preflight()
                     record_action(
                         action="preflight",
@@ -1701,27 +1779,44 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                         detail=preflight_result,
                     )
                     if preflight_result.get("exit_code") != 0:
-                        self._invalidate_status_cache()
-                        self._send_json({
-                            "started": False,
-                            "stopped": False,
-                            "reason": "preflight_blocked",
+                        blocked = {
+                            "ok": False,
+                            "action": "start",
+                            "error": "preflight_blocked",
+                            "message": "preflight failed before start",
+                            "effective_auto_preflight_on_run": True,
                             "preflight": preflight_result,
-                            "auto_preflight_on_run": True,
-                        })
+                        }
+                        record_action(
+                            action="run",
+                            target="queue",
+                            outcome="blocked",
+                            reason="preflight_blocked",
+                            before=before,
+                            after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": blocked},
+                            detail=blocked,
+                        )
+                        self._invalidate_status_cache()
+                        self._send_json(blocked, status=409)
                         return
                 result = start_background_process()
+                response = {
+                    "ok": True,
+                    "action": "start",
+                    "effective_auto_preflight_on_run": effective_auto_preflight,
+                    "result": result,
+                }
             record_action(
                 action="run",
                 target="queue",
                 outcome="changed" if result.get("started") or result.get("stopped") else "unchanged",
                 reason=result.get("reason", "unknown"),
                 before=before,
-                after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": result},
-                detail=result,
+                after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": response},
+                detail=response,
             )
             self._invalidate_status_cache()
-            self._send_json(result)
+            self._send_json(response)
             return
 
         if path == "/api/ucc":

@@ -632,7 +632,7 @@ def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str
     return {"changed": changed, "kept": kept, "paused": paused, "action": action}
 
 
-def add_queue_item(url: str, output: str | None = None, post_action_rule: str = "pending") -> QueueItem:
+def add_queue_item(url: str, output: str | None = None, post_action_rule: str | None = None) -> QueueItem:
     from .contracts import load_declaration
 
     ensure_storage()
@@ -671,11 +671,17 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
             (str(pref.get("value", "pending")) for pref in preferences if pref.get("name") == "post_action_rule"),
             "pending",
         )
+        normalized_output = str(output).strip() if output is not None else ""
+        resolved_output = normalized_output or None
+        resolved_post_action_rule = str(post_action_rule).strip() if post_action_rule is not None else ""
+        if not resolved_post_action_rule:
+            resolved_post_action_rule = default_rule
+
         item = QueueItem(
             id=str(uuid4()),
             url=url,
-            output=output,
-            post_action_rule=post_action_rule or default_rule,
+            output=resolved_output,
+            post_action_rule=resolved_post_action_rule,
             created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
             session_id=state.get("session_id"),
         )
@@ -691,7 +697,7 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str = 
             detail={
                 "item_id": item.id,
                 "url": url,
-                "output": output,
+                "output": item.output,
                 "post_action_rule": item.post_action_rule,
             },
         )
