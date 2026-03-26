@@ -57,10 +57,11 @@ jobs:
         run: |
           expected="${GITHUB_REF_NAME#v}"
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            current=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
-              https://raw.githubusercontent.com/bonomani/homebrew-ariaflow/master/Formula/ariaflow.rb \
-              | python3 -c 'import re,sys; text=sys.stdin.read(); m=re.search(r"^version \"([^\"]+)\"$", text, re.M); print(m.group(1) if m else "")'
-            )
+            current=$(gh api --method GET \
+              "/repos/bonomani/homebrew-ariaflow/contents/Formula/ariaflow.rb?ref=master" \
+              --jq '.content' \
+              | tr -d '\n' \
+              | python3 -c 'import base64,sys; lines=base64.b64decode(sys.stdin.read()).decode().splitlines(); print(next((line.split("\"")[1] for line in lines if line.strip().startswith("version ")), ""))')
             if [ "$current" = "$expected" ]; then
               echo "Tap synced to ${current}"
               exit 0
