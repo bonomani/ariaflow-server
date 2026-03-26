@@ -39,21 +39,13 @@ class WebSmokeTests(unittest.TestCase):
             time.sleep(0.2)
             try:
                 base = f"http://127.0.0.1:{port}"
-                with self.assertRaises(urllib.error.HTTPError) as html_error:
-                    urllib.request.urlopen(f"{base}/", timeout=5)
-                self.assertEqual(html_error.exception.code, 404)
-                with self.assertRaises(urllib.error.HTTPError) as bandwidth_error:
-                    urllib.request.urlopen(f"{base}/bandwidth", timeout=5)
-                self.assertEqual(bandwidth_error.exception.code, 404)
-                with self.assertRaises(urllib.error.HTTPError) as lifecycle_error:
-                    urllib.request.urlopen(f"{base}/lifecycle", timeout=5)
-                self.assertEqual(lifecycle_error.exception.code, 404)
-                with self.assertRaises(urllib.error.HTTPError) as options_error:
-                    urllib.request.urlopen(f"{base}/options", timeout=5)
-                self.assertEqual(options_error.exception.code, 404)
-                with self.assertRaises(urllib.error.HTTPError) as log_error:
-                    urllib.request.urlopen(f"{base}/log", timeout=5)
-                self.assertEqual(log_error.exception.code, 404)
+                page = urllib.request.urlopen(f"{base}/", timeout=5).read().decode("utf-8")
+                self.assertIn("ariaflow API", page)
+                self.assertIn("API-only", page)
+                for route in ("/bandwidth", "/lifecycle", "/options", "/log"):
+                    with self.assertRaises(urllib.error.HTTPError) as route_error:
+                        urllib.request.urlopen(f"{base}{route}", timeout=5)
+                    self.assertEqual(route_error.exception.code, 404)
                 status = request_json(f"{base}/api/status")
                 self.assertIn("items", status)
                 self.assertIn("state", status)

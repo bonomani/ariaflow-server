@@ -14,7 +14,6 @@ from .api import (
     aria_status,
     current_bandwidth,
     current_global_options,
-    get_active_progress,
     homebrew_install_ariaflow,
     homebrew_uninstall_ariaflow,
     install_aria2_launchd,
@@ -29,7 +28,6 @@ from .api import (
     resume_active_transfer,
     run_ucc,
     save_declaration,
-    save_state,
     start_background_process,
     start_new_state_session,
     status_all,
@@ -38,9 +36,6 @@ from .api import (
     uninstall_aria2_launchd,
     ucc_record,
 )
-from .core import format_bytes, format_mbps, format_rate
-
-
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 STATUS_CACHE_TTL = 2.0
 
@@ -61,9 +56,8 @@ def _lifecycle_payload() -> dict[str, object]:
     lifecycle.update(_session_fields())
     return lifecycle
 
-
-# Legacy snapshot only. The headless backend serves JSON under `/api/*`;
-# the active frontend lives in the separate `ariaflow-web` project.
+# Deprecated dashboard snapshot retained only as a reference during the
+# API-only transition. ariaflow does not serve this HTML.
 INDEX_HTML = """<!doctype html>
 <html>
 <head>
@@ -427,6 +421,18 @@ INDEX_HTML = """<!doctype html>
         </div>
       </div>
     </div>
+    <div class="panel" style="margin-bottom:14px;">
+      <div class="section-title">
+        <h2>Backends</h2>
+        <div class="hint">Default is the current backend</div>
+      </div>
+      <div class="row">
+        <input id="backend-input" placeholder="http://127.0.0.1:8000">
+        <button class="secondary" onclick="addBackend()">Add backend</button>
+        <button class="secondary" onclick="useDefaultBackend()">Use default</button>
+      </div>
+      <div id="backend-panel" class="chips" style="margin-top:12px;"></div>
+    </div>
     <div class="grid">
       <div class="span-12 show-dashboard page-only">
         <div class="panel toolbar">
@@ -604,7 +610,15 @@ INDEX_HTML = """<!doctype html>
     let backendGlobalOptions = {};
     let lastDeclaration = null;
     const path = window.location.pathname.replace(/[/]+$/, "");
-    const page = path === "/bandwidth" ? "bandwidth" : path === "/lifecycle" ? "lifecycle" : path === "/log" ? "log" : "dashboard";
+    const page = path === "/bandwidth"
+      ? "bandwidth"
+      : path === "/lifecycle"
+        ? "lifecycle"
+        : path === "/options"
+          ? "options"
+          : path === "/log"
+            ? "log"
+            : "dashboard";
 
     function applyPage() {
       document.body.classList.add(`page-${page}`);
@@ -617,6 +631,8 @@ INDEX_HTML = """<!doctype html>
         document.querySelectorAll('.show-bandwidth').forEach((el) => el.style.display = '');
       } else if (page === 'lifecycle') {
         document.querySelectorAll('.show-lifecycle').forEach((el) => el.style.display = '');
+      } else if (page === 'options') {
+        document.querySelectorAll('.show-options').forEach((el) => el.style.display = '');
       } else if (page === 'log') {
         document.querySelectorAll('.show-log').forEach((el) => el.style.display = '');
       }
@@ -645,6 +661,75 @@ INDEX_HTML = """<!doctype html>
       };
       if (mq.addEventListener) mq.addEventListener('change', sync);
       else if (mq.addListener) mq.addListener(sync);
+    }
+
+    const DEFAULT_BACKEND_URL = window.location.origin || "http://127.0.0.1:8000";
+
+    function loadBackendState() {
+      let backends = [];
+      try {
+        backends = JSON.parse(localStorage.getItem('ariaflow.backends') || '[]');
+      } catch (err) {
+        backends = [];
+      }
+      backends = [...new Set((backends.length ? backends : [DEFAULT_BACKEND_URL]).map((item) => String(item || '').trim()).filter(Boolean))];
+      const selected = (localStorage.getItem('ariaflow.selected_backend') || '').trim();
+      return {
+        backends,
+        selected: backends.includes(selected) ? selected : backends[0],
+      };
+    }
+
+    function saveBackendState(backends, selected) {
+      const clean = [...new Set((backends || []).map((item) => String(item || '').trim()).filter(Boolean))];
+      const nextSelected = clean.includes(selected) ? selected : (clean[0] || DEFAULT_BACKEND_URL);
+      localStorage.setItem('ariaflow.backends', JSON.stringify(clean));
+      localStorage.setItem('ariaflow.selected_backend', nextSelected);
+      renderBackendPanel();
+    }
+
+    function apiPath(path) {
+      const backend = loadBackendState().selected || DEFAULT_BACKEND_URL;
+      const u = new URL(path, window.location.origin);
+      u.searchParams.set('backend', backend);
+      return `${u.pathname}${u.search}`;
+    }
+
+    function renderBackendPanel() {
+      const panel = document.getElementById('backend-panel');
+      if (!panel) return;
+      const { backends, selected } = loadBackendState();
+      panel.innerHTML = backends.map((backend) => `
+        <button class="${backend === selected ? '' : 'secondary'}" onclick="selectBackend('${backend.replace(/'/g, "\\'")}')">${backend}${backend === selected ? ' · active' : ''}</button>
+      `).join('');
+      const input = document.getElementById('backend-input');
+      if (input && !input.value) input.value = selected || DEFAULT_BACKEND_URL;
+    }
+
+    function selectBackend(backend) {
+      const state = loadBackendState();
+      if (!state.backends.includes(backend)) state.backends.push(backend);
+      saveBackendState(state.backends, backend);
+      refresh();
+      if (page === 'lifecycle') loadLifecycle();
+      if (page === 'log') refreshActionLog();
+    }
+
+    function addBackend() {
+      const input = document.getElementById('backend-input');
+      const value = (input?.value || '').trim();
+      if (!value) return;
+      const state = loadBackendState();
+      if (!state.backends.includes(value)) state.backends.push(value);
+      saveBackendState(state.backends, value);
+      refresh();
+    }
+
+    function useDefaultBackend() {
+      const state = loadBackendState();
+      if (!state.backends.includes(DEFAULT_BACKEND_URL)) state.backends.unshift(DEFAULT_BACKEND_URL);
+      saveBackendState(state.backends, DEFAULT_BACKEND_URL);
+      refresh();
     }
 
     function toggleTheme() {
@@ -719,7 +804,7 @@ INDEX_HTML = """<!doctype html>
       ].join('');
     }
     async function setAutoPreflightPreference(enabled) {
-      const r = await fetch('/api/declaration');
+      const r = await fetch(apiPath('/api/declaration'));
       const data = await r.json();
       const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
       const idx = prefs.findIndex((item) => item.name === 'auto_preflight_on_run');
@@ -728,13 +813,13 @@ INDEX_HTML = """<!doctype html>
       else prefs.push(next);
       data.uic = data.uic || {};
       data.uic.preferences = prefs;
-      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      const save = await fetch(apiPath('/api/declaration'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
       lastDeclaration = await save.json();
       const options = document.getElementById('options-panel');
       if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
     }
     async function setDuplicateAction(value) {
-      const r = await fetch('/api/declaration');
+      const r = await fetch(apiPath('/api/declaration'));
       const data = await r.json();
       const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
       const idx = prefs.findIndex((item) => item.name === 'duplicate_active_transfer_action');
@@ -743,13 +828,13 @@ INDEX_HTML = """<!doctype html>
       else prefs.push(next);
       data.uic = data.uic || {};
       data.uic.preferences = prefs;
-      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      const save = await fetch(apiPath('/api/declaration'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
       lastDeclaration = await save.json();
       const options = document.getElementById('options-panel');
       if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
     }
     async function setSimultaneousLimit(value) {
-      const r = await fetch('/api/declaration');
+      const r = await fetch(apiPath('/api/declaration'));
       const data = await r.json();
       const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
       const idx = prefs.findIndex((item) => item.name === 'max_simultaneous_downloads');
@@ -759,13 +844,13 @@ INDEX_HTML = """<!doctype html>
       else prefs.push(next);
       data.uic = data.uic || {};
       data.uic.preferences = prefs;
-      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      const save = await fetch(apiPath('/api/declaration'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
       lastDeclaration = await save.json();
       const options = document.getElementById('options-panel');
       if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
     }
     async function setPostActionRule(value) {
-      const r = await fetch('/api/declaration');
+      const r = await fetch(apiPath('/api/declaration'));
       const data = await r.json();
       const prefs = Array.isArray(data?.uic?.preferences) ? data.uic.preferences : [];
       const idx = prefs.findIndex((item) => item.name === 'post_action_rule');
@@ -774,7 +859,7 @@ INDEX_HTML = """<!doctype html>
       else prefs.push(next);
       data.uic = data.uic || {};
       data.uic.preferences = prefs;
-      const save = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+      const save = await fetch(apiPath('/api/declaration'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
       lastDeclaration = await save.json();
       const options = document.getElementById('options-panel');
       if (options) options.innerHTML = renderOptionsPanel(lastDeclaration);
@@ -850,6 +935,10 @@ INDEX_HTML = """<!doctype html>
       if (state?.session_id && !state?.session_closed_at) return `current ${String(state.session_id).slice(0, 8)}`;
       if (state?.session_id && state?.session_closed_at) return `closed ${String(state.session_id).slice(0, 8)}`;
       return "-";
+    }
+    function backendUnavailableLabel(data) {
+      const error = data?.backend?.error || data?.error || 'backend unavailable';
+      return `Backend unavailable · ${error}`;
     }
     function enrichQueueItems(items, active, state) {
       const liveItems = Array.isArray(active) ? active : (active ? [active] : []);
@@ -1151,9 +1240,30 @@ INDEX_HTML = """<!doctype html>
       if (refreshInFlight) return;
       refreshInFlight = true;
       try {
-        const r = await fetch('/api/status');
+        const r = await fetch(apiPath('/api/status'));
         const data = await r.json();
         lastStatus = data;
+        if (data?.ok === false || data?.backend?.reachable === false) {
+          document.getElementById('queue').innerHTML = `<div class='item'>${backendUnavailableLabel(data)}</div>`;
+          document.getElementById('mode-label').textContent = 'offline';
+          document.getElementById('active-label').textContent = 'none';
+          document.getElementById('sum-speed').textContent = 'idle';
+          document.getElementById('chip-runner').textContent = 'offline';
+          document.getElementById('chip-error').textContent = data?.backend?.error || 'connection refused';
+          document.getElementById('bw-source').textContent = 'offline';
+          document.getElementById('bw-down').textContent = backendUnavailableLabel(data);
+          document.getElementById('bw-cap').textContent = '-';
+          document.getElementById('bw-global').textContent = 'Backend unavailable';
+          document.getElementById('bw-live').textContent = 'offline';
+          document.getElementById('bw-live-detail').textContent = backendUnavailableLabel(data);
+          document.getElementById('bw-probe-mode').textContent = '-';
+          document.getElementById('bw-probe-detail').textContent = backendUnavailableLabel(data);
+          document.getElementById('runner-btn').textContent = 'Start engine';
+          document.getElementById('toggle-btn').textContent = 'Pause';
+          renderQueueSummary({ queued: 0, done: 0, error: 0 });
+          syncRefreshControl();
+          return;
+        }
         backendGlobalOptions = data.aria2_global_options || {};
         const state = data.state || {};
         const active = data.active || {status: 'idle'};
@@ -1194,13 +1304,17 @@ INDEX_HTML = """<!doctype html>
       }
     }
     async function loadLifecycle() {
-      const r = await fetch('/api/lifecycle');
+      const r = await fetch(apiPath('/api/lifecycle'));
       const data = await r.json();
       lastLifecycle = data;
+      if (data?.ok === false || data?.backend?.reachable === false) {
+        document.getElementById('lifecycle').innerHTML = `<div class='item'>${backendUnavailableLabel(data)}</div>`;
+        return;
+      }
       document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(data);
     }
     async function pauseQueue() {
-      const r = await fetch('/api/pause', { method: 'POST' });
+      const r = await fetch(apiPath('/api/pause'), { method: 'POST' });
       const data = await r.json();
       lastResult = data;
       document.getElementById('result').textContent = data.paused ? "Queue paused" : "Pause requested";
@@ -1208,7 +1322,7 @@ INDEX_HTML = """<!doctype html>
       await refresh();
     }
     async function resumeQueue() {
-      const r = await fetch('/api/resume', { method: 'POST' });
+      const r = await fetch(apiPath('/api/resume'), { method: 'POST' });
       const data = await r.json();
       lastResult = data;
       document.getElementById('result').textContent = data.resumed ? "Queue resumed" : "Resume requested";
@@ -1223,7 +1337,7 @@ INDEX_HTML = """<!doctype html>
       const raw = document.getElementById('url').value.trim();
       const urls = raw.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
       const payload = urls.length > 1 ? { urls } : { url: urls[0] || "" };
-      const r = await fetch('/api/add', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const r = await fetch(apiPath('/api/add'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
       const data = await r.json();
       lastResult = data;
       const queued = Array.isArray(data.added) ? data.added.length : (data.added ? 1 : 0);
@@ -1234,7 +1348,7 @@ INDEX_HTML = """<!doctype html>
       await refresh();
     }
     async function preflightRun() {
-      const r = await fetch('/api/preflight', { method: 'POST' });
+      const r = await fetch(apiPath('/api/preflight'), { method: 'POST' });
       const data = await r.json();
       lastResult = data;
       document.getElementById('result').textContent = data.status === 'pass' ? "Preflight passed" : "Preflight needs attention";
@@ -1244,7 +1358,7 @@ INDEX_HTML = """<!doctype html>
     }
     async function runQueue() {
       const autoPreflight = document.getElementById('auto-preflight')?.checked;
-      const r = await fetch('/api/run', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({auto_preflight_on_run: !!autoPreflight}) });
+      const r = await fetch(apiPath('/api/run'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({auto_preflight_on_run: !!autoPreflight}) });
       const data = await r.json();
       lastResult = data;
       document.getElementById('result').textContent = data.started ? "Queue runner started" : data.stopped ? "Queue runner stopped" : "Queue runner already running";
@@ -1255,7 +1369,7 @@ INDEX_HTML = """<!doctype html>
       return runQueue();
     }
     async function uccRun() {
-      const r = await fetch('/api/ucc', { method: 'POST' });
+      const r = await fetch(apiPath('/api/ucc'), { method: 'POST' });
       const data = await r.json();
       lastResult = data;
       const outcome = data.result && data.result.outcome ? data.result.outcome : "unknown";
@@ -1268,7 +1382,7 @@ INDEX_HTML = """<!doctype html>
       await refresh();
     }
     async function lifecycleAction(target, action) {
-      const r = await fetch('/api/lifecycle/action', {
+      const r = await fetch(apiPath('/api/lifecycle/action'), {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ target, action }),
@@ -1281,7 +1395,7 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
     }
     async function newSession() {
-      const r = await fetch('/api/session', {
+      const r = await fetch(apiPath('/api/session'), {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ action: 'new' }),
@@ -1295,8 +1409,13 @@ INDEX_HTML = """<!doctype html>
       if (page === 'log') refreshActionLog();
     }
     async function loadDeclaration() {
-      const r = await fetch('/api/declaration');
+      const r = await fetch(apiPath('/api/declaration'));
       lastDeclaration = await r.json();
+      if (lastDeclaration?.ok === false || lastDeclaration?.backend?.reachable === false) {
+        const options = document.getElementById('options-panel');
+        if (options) options.innerHTML = `<div class='item'>${backendUnavailableLabel(lastDeclaration)}</div>`;
+        return;
+      }
       const declarationBox = document.getElementById('declaration');
       if (declarationBox) declarationBox.value = JSON.stringify(lastDeclaration, null, 2);
       const checkbox = document.getElementById('auto-preflight');
@@ -1309,7 +1428,7 @@ INDEX_HTML = """<!doctype html>
     async function saveDeclaration() {
       const value = document.getElementById('declaration').value;
       const parsed = JSON.parse(value);
-      const r = await fetch('/api/declaration', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(parsed) });
+      const r = await fetch(apiPath('/api/declaration'), { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(parsed) });
       const data = await r.json();
       lastResult = data;
       document.getElementById('result').textContent = "Declaration saved";
@@ -1319,8 +1438,13 @@ INDEX_HTML = """<!doctype html>
       if (page !== 'log') return;
       const sessionFilter = document.getElementById('session-filter');
       if (sessionFilter && !sessionFilter.value) sessionFilter.value = 'current';
-      const r = await fetch('/api/log?limit=120');
+      const r = await fetch(apiPath('/api/log?limit=120'));
       const data = await r.json();
+      if (data?.ok === false || data?.backend?.reachable === false) {
+        const actionLog = document.getElementById('action-log');
+        if (actionLog) actionLog.innerHTML = `<div class='item'>${backendUnavailableLabel(data)}</div>`;
+        return;
+      }
       const actionLog = document.getElementById('action-log');
       if (actionLog) actionLog.innerHTML = renderActionLog(data.items || []);
     }
@@ -1338,8 +1462,72 @@ INDEX_HTML = """<!doctype html>
     if (page === 'dashboard') {
       loadDeclaration().catch(() => {});
     }
+    renderBackendPanel();
     applyPage();
   </script>
+</body>
+</html>
+"""
+
+
+API_ONLY_HTML = """<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ariaflow API</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #08111f;
+      --panel: rgba(15, 23, 42, 0.92);
+      --line: rgba(148, 163, 184, 0.18);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #7dd3fc;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, #050b15 0%, var(--bg) 100%);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 24px;
+    }
+    main {
+      width: min(720px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 24px;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.8rem; }
+    p { margin: 0 0 12px; line-height: 1.5; color: var(--muted); }
+    code {
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    ul { margin: 16px 0 0; padding-left: 18px; }
+    li { margin: 8px 0; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ariaflow API</h1>
+    <p>This process is the headless backend. It is API-only and serves JSON under <code>/api/*</code>.</p>
+    <p>The dashboard is not hosted here. Use <code>ariaflow-web</code> for the browser UI.</p>
+    <ul>
+      <li><code>GET /api/status</code></li>
+      <li><code>GET /api/log</code></li>
+      <li><code>GET /api/declaration</code></li>
+      <li><code>GET /api/lifecycle</code></li>
+      <li><code>POST /api/add</code></li>
+      <li><code>POST /api/run</code></li>
+    </ul>
+  </main>
 </body>
 </html>
 """
@@ -1416,6 +1604,23 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
+        if path in {"/", "/index.html"}:
+            body = API_ONLY_HTML.encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path in {"/bandwidth", "/lifecycle", "/options", "/log"}:
+            self._send_json(
+                {
+                    "error": "ui_not_served",
+                    "message": "ariaflow is API-only; use ariaflow-web for the dashboard",
+                },
+                status=404,
+            )
+            return
         if path == "/api/status":
             self._send_json(self._status_payload())
             return

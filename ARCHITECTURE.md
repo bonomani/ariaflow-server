@@ -6,6 +6,7 @@ Ariaflow is a headless download engine.
 It manages queue state, sessions, runs, and policy.
 The engine exposes its state through an HTTP API.
 The web UI is a separate client and is documented elsewhere.
+This backend is API-only.
 
 ## 2. Canonical Model
 

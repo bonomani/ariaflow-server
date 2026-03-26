@@ -87,6 +87,9 @@ The intended macOS installation path is a Homebrew tap.
 The web UI lives in the separate `ariaflow-web` project and talks to this
 backend over the local `/api/*` HTTP surface.
 
+`ariaflow` is API-only. It exposes a small landing page at `/` to explain the
+boundary, but the dashboard routes are not hosted here.
+
 `ariaflow` depends on `aria2` as the runtime engine. `ariaflow-web` depends on a
 running `ariaflow` backend and connects to it through `ARIAFLOW_API_URL`.
 
@@ -99,6 +102,8 @@ If the download location changes, update the tap formula for the new asset
 instead of patching Homebrew globally.
 
 ## Release Tooling
+
+The dedicated release checklist lives in [`RELEASE.md`](./RELEASE.md).
 
 The repo ships a small release helper:
 
