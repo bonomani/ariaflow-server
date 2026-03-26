@@ -14,19 +14,19 @@ Release workflow:
 - Make the code change in `ariaflow`.
 - Run the local test suite before tagging.
 - Prefer the helper script:
-  - `python3 scripts/release.py --next-alpha --push`
+  - `python3 scripts/release.py --push`
 - Use `--dry-run` first if you want to preview the exact release plan.
 - If you need to do it manually, bump the package version in `pyproject.toml`
   and `src/aria_queue/__init__.py`, commit on `main`, create and push the tag,
-  and let the release workflow publish the prerelease.
-- Verify the release is `isDraft: false` and `isPrerelease: true` for alpha releases.
+  and let the release workflow publish the release.
+- Verify the release is `isDraft: false` and `isPrerelease: false`.
 - The release workflow automatically dispatches a `sync-formula` event to `bonomani/homebrew-ariaflow` via `repository_dispatch` after publishing the release. The tap formula is updated automatically.
 
 Homebrew notes:
 
 - The tap repo (`bonomani/homebrew-ariaflow`) syncs automatically on each release via the dispatch in `release.yml`.
 - The sync picks the latest non-draft release sorted by `created_at` descending.
-- Do not leave the tap pointing at an older alpha tag after a new prerelease is published.
+- Do not leave the tap pointing at an older stable tag after a new release is published.
 
 Verification:
 

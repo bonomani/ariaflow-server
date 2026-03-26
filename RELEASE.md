@@ -8,8 +8,8 @@ release flow.
 Run the helper from a clean checkout on `main`:
 
 ```bash
-python3 scripts/release.py --next-alpha --dry-run
-python3 scripts/release.py --next-alpha --push
+python3 scripts/release.py --dry-run
+python3 scripts/release.py --push
 ```
 
 The helper will:
@@ -19,13 +19,17 @@ The helper will:
 - run `py_compile` and `python3 -m unittest discover -s tests -v` unless `--no-tests` is used
 - bump the package version
 - commit the version bump
-- create the `v0.1.1-alpha.N` tag
+- create the matching `vX.Y.Z` tag
 - push `main` and tags when `--push` is given
+
+From the current repo state, the next release becomes `0.1.1`. Once the repo is
+on stable versions, the helper bumps the patch version automatically, for
+example `0.1.1` to `0.1.2`.
 
 Useful flags:
 
 - `--dry-run`: print the release plan without changing files
-- `--version 0.1.1a44`: set an explicit version instead of auto-bumping
+- `--version 0.1.2`: set an explicit stable version instead of auto-bumping
 - `--no-tests`: skip local tests
 - `--allow-dirty`: bypass the clean-tree check
 
@@ -47,14 +51,14 @@ If you do not use the helper, keep the sequence the same:
 2. Update `src/aria_queue/__init__.py` to the same version.
 3. Run the local test suite.
 4. Commit the version bump on `main`.
-5. Create the matching tag, for example `v0.1.1-alpha.44`.
+5. Create the matching tag, for example `v0.1.2`.
 6. Push `main` and the tag.
 
 ## Verification
 
 After release:
 
-- verify the GitHub release is published and, for alpha releases, marked as a prerelease
+- verify the GitHub release is published as a normal release
 - verify the Homebrew tap formula updated to the same version
 - on macOS, check:
 

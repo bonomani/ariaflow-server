@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 PACKAGE_INIT = ROOT / "src" / "aria_queue" / "__init__.py"
+VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:a(\d+))?")
 
 
 def read_version() -> str:
@@ -29,20 +30,26 @@ def read_package_version() -> str:
     return match.group(1)
 
 
-def alpha_to_tag(version: str) -> str:
-    match = re.fullmatch(r"(\d+\.\d+\.\d+)a(\d+)", version)
+def parse_version(version: str) -> tuple[int, int, int, int | None]:
+    match = re.fullmatch(VERSION_RE, version)
     if not match:
         raise SystemExit(f"Unsupported version format: {version!r}")
-    base, alpha = match.groups()
-    return f"v{base}-alpha.{alpha}"
+    major, minor, patch, alpha = match.groups()
+    return int(major), int(minor), int(patch), int(alpha) if alpha is not None else None
 
 
-def bump_alpha(version: str) -> str:
-    match = re.fullmatch(r"(\d+\.\d+\.\d+)a(\d+)", version)
-    if not match:
-        raise SystemExit(f"Unsupported version format: {version!r}")
-    base, alpha = match.groups()
-    return f"{base}a{int(alpha) + 1}"
+def version_to_tag(version: str) -> str:
+    major, minor, patch, alpha = parse_version(version)
+    if alpha is not None:
+        raise SystemExit(f"Release versions must be stable semver, got: {version!r}")
+    return f"v{major}.{minor}.{patch}"
+
+
+def next_release_version(version: str) -> str:
+    major, minor, patch, alpha = parse_version(version)
+    if alpha is not None:
+        return f"{major}.{minor}.{patch}"
+    return f"{major}.{minor}.{patch + 1}"
 
 
 def write_version(version: str) -> None:
@@ -94,17 +101,16 @@ def build_plan(current: str, next_version: str, tag: str, push: bool, run_tests:
         f"dirty tree: {'allowed' if allow_dirty else 'not allowed'}",
         f"push: {'yes' if push else 'no'}",
         "write pyproject.toml and src/aria_queue/__init__.py",
-        f"commit: Bump version for alpha {tag.split('.')[-1]}",
+        f"commit: Release {next_version}",
         f"tag: {tag}",
         "if push: git push origin main --tags",
-        "GitHub Actions will publish the prerelease and dispatch tap sync",
+        "GitHub Actions will publish the release and dispatch tap sync",
     ]
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Bump ariaflow, tag a prerelease, and push it.")
-    parser.add_argument("--version", help="Set an explicit package version like 0.1.1a24.")
-    parser.add_argument("--next-alpha", action="store_true", help="Auto-bump the current alpha version by one.")
+    parser = argparse.ArgumentParser(description="Bump ariaflow, tag a release, and push it.")
+    parser.add_argument("--version", help="Set an explicit stable package version like 0.1.2.")
     parser.add_argument("--no-tests", action="store_true", help="Skip local tests before committing.")
     parser.add_argument("--allow-dirty", action="store_true", help="Allow uncommitted changes before releasing.")
     parser.add_argument("--dry-run", action="store_true", help="Print the planned release steps and exit.")
@@ -115,14 +121,13 @@ def main() -> int:
     package_version = read_package_version()
     if current != package_version:
         raise SystemExit(f"Version files disagree: pyproject.toml={current!r}, __init__.py={package_version!r}")
-    if args.version and args.next_alpha:
-        raise SystemExit("Use either --version or --next-alpha, not both.")
 
-    next_version = args.version or (bump_alpha(current) if args.next_alpha else None)
-    if not next_version:
-        raise SystemExit("Provide --version or --next-alpha.")
+    next_version = args.version or next_release_version(current)
+    _, _, _, next_alpha = parse_version(next_version)
+    if next_alpha is not None:
+        raise SystemExit(f"Release versions must be stable semver, got: {next_version!r}")
 
-    tag = alpha_to_tag(next_version)
+    tag = version_to_tag(next_version)
     if tag_exists(tag):
         raise SystemExit(f"Tag already exists: {tag}")
     ensure_clean_tree(args.allow_dirty)
@@ -146,8 +151,7 @@ def main() -> int:
 
     write_version(next_version)
     run(["git", "add", "pyproject.toml", "src/aria_queue/__init__.py"])
-    alpha = tag.split(".")[-1]
-    run(["git", "commit", "-m", f"Bump version for alpha {alpha}"])
+    run(["git", "commit", "-m", f"Release {next_version}"])
     run(["git", "tag", tag])
 
     if args.push:

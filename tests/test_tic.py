@@ -281,11 +281,11 @@ class TicAriaFlowTests(unittest.TestCase):
     def test_lifecycle_status_includes_versions(self) -> None:
         with patch("aria_queue.install.package_version", return_value="9.9.9"), \
              patch("aria_queue.install.brew_is_installed", return_value=True), \
-             patch("aria_queue.install.brew_package_version", side_effect=["0.1.1-alpha.21", "0.8.2"]), \
+             patch("aria_queue.install.brew_package_version", side_effect=["0.1.1", "0.8.2"]), \
              patch("aria_queue.install.networkquality_status", return_value={"installed": True, "usable": True, "version": None, "reason": "ready", "message": "networkquality available"}), \
              patch("aria_queue.install.aria2_status", return_value={"loaded": True, "plist_exists": True, "session_exists": True, "version": "1.37.0"}):
             status = status_all()
-        self.assertIn("0.1.1-alpha.21", status["ariaflow"]["result"]["message"])
+        self.assertIn("0.1.1", status["ariaflow"]["result"]["message"])
         self.assertIn("0.8.2", status["aria2"]["result"]["message"])
         self.assertIn("networkquality available", status["networkquality"]["result"]["message"])
         self.assertIn("1.37.0", status["aria2-launchd"]["result"]["message"])

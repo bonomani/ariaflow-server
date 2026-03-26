@@ -93,12 +93,16 @@ boundary, but the dashboard routes are not hosted here.
 `ariaflow` depends on `aria2` as the runtime engine. `ariaflow-web` depends on a
 running `ariaflow` backend and connects to it through `ARIAFLOW_API_URL`.
 
-When you publish a new version, update the matching tap formula:
+The Homebrew tap formulas live in `bonomani/homebrew-ariaflow`:
 
 - `Formula/ariaflow.rb`
 - `Formula/ariaflow-web.rb`
 
-If the download location changes, update the tap formula for the new asset
+`ariaflow` releases dispatch an automatic sync for `Formula/ariaflow.rb` after
+the GitHub release is published. `ariaflow-web` is released separately and uses
+its own release process.
+
+If an asset download location changes, update the tap formula for the new asset
 instead of patching Homebrew globally.
 
 ## Release Tooling
@@ -108,13 +112,13 @@ The dedicated release checklist lives in [`RELEASE.md`](./RELEASE.md).
 The repo ships a small release helper:
 
 ```bash
-python3 scripts/release.py --next-alpha --push
+python3 scripts/release.py --push
 ```
 
 Preview the steps without changing files:
 
 ```bash
-python3 scripts/release.py --next-alpha --dry-run
+python3 scripts/release.py --dry-run
 ```
 
 That script will:
@@ -122,14 +126,17 @@ That script will:
 - run the local test suite
 - bump `pyproject.toml` and `src/aria_queue/__init__.py`
 - commit the version bump
-- create and push the `v0.1.1-alpha.N` tag
+- create and push the matching `vX.Y.Z` tag
 - optionally print the plan first with `--dry-run`
 
-After the tag push, the GitHub release workflow publishes the prerelease and
+From the current repo state, the helper resolves the next release to `0.1.1`.
+After that, it bumps stable patch releases.
+
+After the tag push, the GitHub release workflow publishes the release and
 dispatches the Homebrew tap sync.
 
 The flow still expects a recent `gh` (GitHub CLI). The Ubuntu `jammy` archive
-ships an older `gh` that is not suitable for the prerelease flow used here.
+ships an older `gh` that is not suitable for the release flow used here.
 
 If you are on Ubuntu and need a newer `gh`, install it from GitHub's official
 apt repository:
