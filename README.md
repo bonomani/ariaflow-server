@@ -98,9 +98,8 @@ The Homebrew tap formulas live in `bonomani/homebrew-ariaflow`:
 - `Formula/ariaflow.rb`
 - `Formula/ariaflow-web.rb`
 
-`ariaflow` releases dispatch an automatic sync for `Formula/ariaflow.rb` after
-the GitHub release is published. `ariaflow-web` is released separately and uses
-its own release process.
+Both source repos now update their matching Homebrew formulas automatically
+after a stable GitHub release is published.
 
 If an asset download location changes, update the tap formula for the new asset
 instead of patching Homebrew globally.
@@ -129,32 +128,14 @@ That script will:
 - create and push the matching `vX.Y.Z` tag
 - optionally print the plan first with `--dry-run`
 
-From the current repo state, the helper resolves the next release to `0.1.1`.
-After that, it bumps stable patch releases.
+The helper always promotes an alpha package version to the matching stable
+release, and otherwise bumps the next stable patch release.
 
 After the tag push, the GitHub release workflow publishes the release and
-dispatches the Homebrew tap sync.
-
-The flow still expects a recent `gh` (GitHub CLI). The Ubuntu `jammy` archive
-ships an older `gh` that is not suitable for the release flow used here.
-
-If you are on Ubuntu and need a newer `gh`, install it from GitHub's official
-apt repository:
-
-```bash
-type -p curl >/dev/null || sudo apt install curl -y
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-sudo apt update
-sudo apt install gh
-```
-
-Verify with:
-
-```bash
-gh --version
-```
+updates `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly.
 
 If you prefer to do the steps manually, the release helper is just a thin
 wrapper around the same version bump, commit, tag, and push sequence.
+
+The workflow also expects a repo secret named `ARIAFLOW_TAP_TOKEN` with write
+access to `bonomani/homebrew-ariaflow` so the formula update can be pushed.

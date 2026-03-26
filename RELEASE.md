@@ -22,9 +22,9 @@ The helper will:
 - create the matching `vX.Y.Z` tag
 - push `main` and tags when `--push` is given
 
-From the current repo state, the next release becomes `0.1.1`. Once the repo is
-on stable versions, the helper bumps the patch version automatically, for
-example `0.1.1` to `0.1.2`.
+The helper promotes an alpha package version to the matching stable release.
+Once the repo is already on a stable version, it bumps the patch version
+automatically, for example `0.1.1` to `0.1.2`.
 
 Useful flags:
 
@@ -41,7 +41,7 @@ tag pushes. It will:
 - run the test suite again on GitHub Actions
 - build the source distribution
 - create the GitHub release
-- dispatch the Homebrew tap sync to `bonomani/homebrew-ariaflow`
+- update `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly
 
 ## Manual Flow
 
@@ -53,6 +53,9 @@ If you do not use the helper, keep the sequence the same:
 4. Commit the version bump on `main`.
 5. Create the matching tag, for example `v0.1.2`.
 6. Push `main` and the tag.
+
+The GitHub workflow only publishes stable tags. Tags containing `-` are ignored
+so old alpha tag shapes cannot become normal Homebrew releases by mistake.
 
 ## Verification
 
@@ -68,7 +71,13 @@ brew upgrade ariaflow
 ariaflow --version
 ```
 
+## GitHub Secret
+
+Set `ARIAFLOW_TAP_TOKEN` in this repo with write access to
+`bonomani/homebrew-ariaflow`. The release workflow uses it to commit the
+formula update.
+
 ## Tooling Note
 
-This flow expects a recent `gh` CLI. The repo README includes Ubuntu install
-steps if the system package is too old.
+The automated release path only needs `git`, Python, and the
+`ARIAFLOW_TAP_TOKEN` GitHub secret.

@@ -20,12 +20,12 @@ Release workflow:
   and `src/aria_queue/__init__.py`, commit on `main`, create and push the tag,
   and let the release workflow publish the release.
 - Verify the release is `isDraft: false` and `isPrerelease: false`.
-- The release workflow automatically dispatches a `sync-formula` event to `bonomani/homebrew-ariaflow` via `repository_dispatch` after publishing the release. The tap formula is updated automatically.
+- The release workflow only publishes stable tags and updates `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly after publishing the release.
 
 Homebrew notes:
 
-- The tap repo (`bonomani/homebrew-ariaflow`) syncs automatically on each release via the dispatch in `release.yml`.
-- The sync picks the latest non-draft release sorted by `created_at` descending.
+- The release workflow writes the tap formula from `scripts/homebrew_formula.py`.
+- The generated formula tracks `main` for `--HEAD`.
 - Do not leave the tap pointing at an older stable tag after a new release is published.
 
 Verification:

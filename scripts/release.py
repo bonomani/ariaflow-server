@@ -88,7 +88,11 @@ def tag_exists(tag: str) -> bool:
 
 
 def run_py_compile() -> None:
-    files = sorted(glob.glob(str(ROOT / "src" / "aria_queue" / "*.py"))) + sorted(glob.glob(str(ROOT / "tests" / "*.py"))) + [str(ROOT / "scripts" / "release.py")]
+    files = (
+        sorted(glob.glob(str(ROOT / "src" / "aria_queue" / "*.py")))
+        + sorted(glob.glob(str(ROOT / "tests" / "*.py")))
+        + [str(ROOT / "scripts" / "release.py"), str(ROOT / "scripts" / "homebrew_formula.py")]
+    )
     run(["python3", "-m", "py_compile", *files])
 
 
@@ -104,7 +108,7 @@ def build_plan(current: str, next_version: str, tag: str, push: bool, run_tests:
         f"commit: Release {next_version}",
         f"tag: {tag}",
         "if push: git push origin main --tags",
-        "GitHub Actions will publish the release and dispatch tap sync",
+        "GitHub Actions will publish the release and update the Homebrew tap formula",
     ]
 
 

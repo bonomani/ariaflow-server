@@ -7,6 +7,7 @@ on:
 
 jobs:
   build-release:
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,33 +43,40 @@ jobs:
           generate_release_notes: true
           prerelease: false
 
-      - name: Dispatch tap sync
-        env:
-          GH_TOKEN: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
-        run: |
-          gh api \
-            --method POST \
-            /repos/bonomani/homebrew-ariaflow/dispatches \
-            -f event_type=sync-formula \
-            -f client_payload[tag]=${GITHUB_REF_NAME}
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: bonomani/homebrew-ariaflow
+          token: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
+          path: tap
 
-      - name: Verify tap sync
-        env:
-          GH_TOKEN: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
+      - name: Update tap formula
+        run: |
+          python3 scripts/homebrew_formula.py --tag "${GITHUB_REF_NAME}" --output tap/Formula/ariaflow.rb
+
+      - name: Commit tap update
+        working-directory: tap
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/ariaflow.rb
+          if git diff --cached --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git commit -m "Update ariaflow formula to ${GITHUB_REF_NAME#v}"
+          git push
+
+      - name: Verify tap version
         run: |
           expected="${GITHUB_REF_NAME#v}"
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            current=$(gh api --method GET \
-              "/repos/bonomani/homebrew-ariaflow/contents/Formula/ariaflow.rb?ref=master" \
-              --jq '.content' \
-              | tr -d '\n' \
-              | python3 -c 'import base64,sys; lines=base64.b64decode(sys.stdin.read()).decode().splitlines(); print(next((line.split("\"")[1] for line in lines if line.strip().startswith("version ")), ""))')
-            if [ "$current" = "$expected" ]; then
-              echo "Tap synced to ${current}"
-              exit 0
-            fi
-            echo "Tap still at ${current:-unknown}; waiting..."
-            sleep 15
-          done
-          echo "Tap did not sync to ${expected}"
-          exit 1
+          current=$(python3 - <<'PY'
+from pathlib import Path
+import re
+
+text = Path("tap/Formula/ariaflow.rb").read_text(encoding="utf-8")
+match = re.search(r'^  version "([^"]+)"$', text, re.MULTILINE)
+print(match.group(1) if match else "")
+PY
+          )
+          test "$current" = "$expected"
