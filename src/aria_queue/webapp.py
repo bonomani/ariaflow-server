@@ -37,6 +37,7 @@ from .api import (
     uninstall_aria2_launchd,
     ucc_record,
 )
+from .core import cleanup_queue_state
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 STATUS_CACHE_TTL = 2.0
 
@@ -1803,6 +1804,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         cached = STATUS_CACHE.get("payload")
         if not force and cached is not None and now - float(STATUS_CACHE.get("ts", 0.0)) < STATUS_CACHE_TTL:
             return cached  # type: ignore[return-value]
+
+        try:
+            cleanup_queue_state()
+        except Exception:
+            pass
 
         state = load_state()
         items = load_queue()

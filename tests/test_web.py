@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from aria_queue.core import save_queue, save_state  # noqa: E402
 from aria_queue.webapp import serve  # noqa: E402
 
 
@@ -123,26 +124,44 @@ class WebSmokeTests(unittest.TestCase):
     def test_status_payload_does_not_synthesize_active_from_paused_queue_item(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["ARIA_QUEUE_DIR"] = tmp
-            paused_item = {
-                "id": "item-1",
-                "gid": "gid-1",
-                "url": "https://example.com/file.gguf",
-                "status": "paused",
-                "live_status": "active",
-                "created_at": "2026-03-27T10:00:00+0100",
-            }
-            state = {
-                "running": False,
-                "paused": True,
-                "active_gid": None,
-                "active_url": None,
-                "session_id": "session-1",
-            }
-            summary = {"queued": 0, "done": 0, "error": 0, "paused": 1, "total": 1}
-            with patch("aria_queue.webapp.load_queue", return_value=[paused_item]), \
-                 patch("aria_queue.webapp.load_state", return_value=state), \
-                 patch("aria_queue.webapp.summarize_queue", return_value=summary), \
-                 patch("aria_queue.webapp.current_bandwidth", return_value={"limit": "0"}), \
+            save_queue(
+                [
+                    {
+                        "id": "older-error",
+                        "url": "https://example.com/error.iso",
+                        "status": "error",
+                        "gid": "gid-error",
+                        "error_message": "boom",
+                        "created_at": "2026-03-27T09:00:00+0100",
+                    },
+                    {
+                        "id": "newer-error",
+                        "url": "https://example.com/error.iso",
+                        "status": "error",
+                        "gid": "gid-error",
+                        "error_message": "boom",
+                        "created_at": "2026-03-27T10:00:00+0100",
+                    },
+                    {
+                        "id": "item-1",
+                        "gid": "gid-1",
+                        "url": "https://example.com/file.gguf",
+                        "status": "paused",
+                        "live_status": "active",
+                        "created_at": "2026-03-27T10:00:00+0100",
+                    },
+                ]
+            )
+            save_state(
+                {
+                    "running": False,
+                    "paused": True,
+                    "active_gid": None,
+                    "active_url": None,
+                    "session_id": "session-1",
+                }
+            )
+            with patch("aria_queue.webapp.current_bandwidth", return_value={"limit": "0"}), \
                  patch("aria_queue.webapp.aria_status", return_value={"reachable": True, "version": "1.37.0", "error": None}), \
                  patch("aria_queue.webapp.active_status", return_value=None), \
                  patch("aria_queue.webapp.active_gids", return_value=[]):
@@ -153,7 +172,9 @@ class WebSmokeTests(unittest.TestCase):
                 time.sleep(0.2)
                 try:
                     status = request_json(f"http://127.0.0.1:{port}/api/status")
-                    self.assertEqual(status["items"][0]["status"], "paused")
+                    self.assertEqual(len(status["items"]), 2)
+                    paused = next(item for item in status["items"] if item["status"] == "paused")
+                    self.assertEqual(paused["live_status"], "paused")
                     self.assertNotIn("active", status)
                     self.assertNotIn("actives", status)
                     self.assertNotIn("bandwidth_global", status)

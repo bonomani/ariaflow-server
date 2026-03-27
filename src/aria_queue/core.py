@@ -546,6 +546,23 @@ def _merge_queue_rows(primary: dict[str, Any], candidate: dict[str, Any]) -> boo
     return changed
 
 
+def _normalize_queue_row(item: dict[str, Any]) -> bool:
+    changed = False
+    status = str(item.get("status") or "").lower()
+    live_status = str(item.get("live_status") or "").lower()
+    if status == "paused" and live_status in {"active", "waiting"}:
+        item["live_status"] = "paused"
+        changed = True
+    elif status == "error":
+        if live_status != "error":
+            item["live_status"] = "error"
+            changed = True
+    elif status == "done" and item.get("live_status") is not None:
+        item.pop("live_status", None)
+        changed = True
+    return changed
+
+
 def cleanup_queue_state() -> dict[str, Any]:
     ensure_storage()
     with storage_locked():
@@ -553,8 +570,12 @@ def cleanup_queue_state() -> dict[str, Any]:
         before_summary = summarize_queue(items)
         survivors: list[dict[str, Any]] = []
         changed = False
+        normalized = 0
 
         for item in items:
+            if _normalize_queue_row(item):
+                changed = True
+                normalized += 1
             gid = str(item.get("gid") or "")
             url = str(item.get("url") or "")
             match: dict[str, Any] | None = None
@@ -587,12 +608,12 @@ def cleanup_queue_state() -> dict[str, Any]:
                 action="cleanup",
                 target="queue",
                 outcome="changed",
-                reason="startup_duplicate_rows_collapsed",
+                reason="queue_rows_normalized",
                 before={"summary": before_summary},
                 after={"summary": summarize_queue(survivors)},
-                detail={"removed": max(len(items) - len(survivors), 0)},
+                detail={"removed": max(len(items) - len(survivors), 0), "normalized": normalized},
             )
-        return {"changed": changed, "items": survivors, "removed": max(len(items) - len(survivors), 0)}
+        return {"changed": changed, "items": survivors, "removed": max(len(items) - len(survivors), 0), "normalized": normalized}
 
 
 def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool = True) -> dict[str, Any]:

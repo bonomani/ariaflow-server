@@ -171,6 +171,28 @@ class QueueSchedulerTests(unittest.TestCase):
         self.assertEqual(items[0]["gid"], "gid-error")
         self.assertEqual(items[0]["error_message"], "Resource not found")
 
+    def test_cleanup_queue_state_normalizes_stale_live_status_for_paused_item(self) -> None:
+        save_queue(
+            [
+                {
+                    "id": "paused-item",
+                    "url": "https://example.com/model.gguf",
+                    "status": "paused",
+                    "gid": "gid-1",
+                    "live_status": "active",
+                    "created_at": "2026-03-27T10:00:00+0100",
+                }
+            ]
+        )
+
+        result = cleanup_queue_state()
+
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["normalized"], 1)
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "paused")
+        self.assertEqual(items[0]["live_status"], "paused")
+
     def test_process_queue_runs_startup_cleanup_before_reconcile(self) -> None:
         save_queue(
             [
