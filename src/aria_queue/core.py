@@ -497,6 +497,109 @@ def _merge_active_status(status: str | None) -> str:
     return str(status or "downloading")
 
 
+def _queue_item_preference(item: dict[str, Any]) -> tuple[int, float, int, int]:
+    status_rank = {
+        "downloading": 3,
+        "paused": 2,
+        "queued": 1,
+        "done": 0,
+        "error": 0,
+    }.get(str(item.get("status") or ""), 0)
+    completed = _coerce_float(item.get("completedLength")) or 0.0
+    has_gid = 1 if item.get("gid") else 0
+    recovered = 1 if item.get("recovered") else 0
+    return (status_rank, completed, has_gid, recovered)
+
+
+def _merge_queue_rows(primary: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    changed = False
+    for key in (
+        "url",
+        "output",
+        "post_action_rule",
+        "session_id",
+        "recovery_session_id",
+        "recovered_at",
+        "error_code",
+        "error_message",
+        "live_status",
+        "created_at",
+    ):
+        if not primary.get(key) and candidate.get(key):
+            primary[key] = candidate.get(key)
+            changed = True
+    for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
+        primary_val = _coerce_float(primary.get(key))
+        candidate_val = _coerce_float(candidate.get(key))
+        if key == "files":
+            if not primary.get(key) and candidate.get(key):
+                primary[key] = candidate.get(key)
+                changed = True
+            continue
+        if candidate.get(key) is not None and (primary.get(key) is None or (candidate_val or 0.0) > (primary_val or 0.0)):
+            primary[key] = candidate.get(key)
+            changed = True
+    if candidate.get("recovered") and not primary.get("recovered"):
+        primary["recovered"] = True
+        changed = True
+    return changed
+
+
+def cleanup_queue_state() -> dict[str, Any]:
+    ensure_storage()
+    with storage_locked():
+        items = load_queue()
+        before_summary = summarize_queue(items)
+        survivors: list[dict[str, Any]] = []
+        changed = False
+
+        for item in items:
+            if item.get("status") in {"done", "error"}:
+                survivors.append(item)
+                continue
+
+            gid = str(item.get("gid") or "")
+            url = str(item.get("url") or "")
+            match: dict[str, Any] | None = None
+            for existing in survivors:
+                if existing.get("status") in {"done", "error"}:
+                    continue
+                existing_gid = str(existing.get("gid") or "")
+                existing_url = str(existing.get("url") or "")
+                same_gid = bool(gid and existing_gid and gid == existing_gid)
+                same_url = bool(url and existing_url and url == existing_url)
+                if same_gid or same_url:
+                    match = existing
+                    break
+
+            if match is None:
+                survivors.append(item)
+                continue
+
+            primary = match
+            secondary = item
+            if _queue_item_preference(item) > _queue_item_preference(match):
+                primary = item
+                secondary = match
+                survivors[survivors.index(match)] = item
+            if _merge_queue_rows(primary, secondary):
+                changed = True
+            changed = True
+
+        if changed:
+            save_queue(survivors)
+            record_action(
+                action="cleanup",
+                target="queue",
+                outcome="changed",
+                reason="startup_duplicate_rows_collapsed",
+                before={"summary": before_summary},
+                after={"summary": summarize_queue(survivors)},
+                detail={"removed": max(len(items) - len(survivors), 0)},
+            )
+        return {"changed": changed, "items": survivors, "removed": max(len(items) - len(survivors), 0)}
+
+
 def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool = True) -> dict[str, Any]:
     ensure_storage()
     with storage_locked():
@@ -1221,6 +1324,10 @@ def post_action(item: dict[str, Any]) -> dict[str, Any]:
 def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     ensure_storage()
     ensure_state_session()
+    try:
+        cleanup_queue_state()
+    except Exception:
+        pass
     ensure_aria_daemon(port=port)
     try:
         deduplicate_active_transfers(port=port)
