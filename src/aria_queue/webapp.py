@@ -573,7 +573,7 @@ INDEX_HTML = """<!doctype html>
         <div class="panel toolbar">
           <div class="row">
             <textarea id="url" rows="3" placeholder="Paste one or more URLs, one per line"></textarea>
-            <button onclick="add()">Add to queue</button>
+            <button class="secondary" onclick="add()">Add to queue</button>
           </div>
         </div>
       </div>
@@ -682,7 +682,7 @@ INDEX_HTML = """<!doctype html>
               <div class="item-url">Update policy</div>
               <span class="badge">Homebrew tap</span>
             </div>
-            <div class="meta"><span>ariaflow updates are applied through the Homebrew tap, not in-place by the running app.</span></div>
+            <div class="meta"><span>Upgrades require Homebrew to install the new version and restart the service.</span></div>
           </div>
           <div id="lifecycle" class="list">Loading...</div>
         </div>
