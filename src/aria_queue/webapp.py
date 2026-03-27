@@ -1343,7 +1343,7 @@ INDEX_HTML = """<!doctype html>
           actions: [],
         },
         {
-          name: "aria2 auto-start",
+          name: "aria2 auto-start (advanced)",
           record: data["aria2-launchd"],
           actions: [
             { target: "aria2-launchd", action: "install", label: "Load" },
@@ -2125,7 +2125,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                             outcome="changed",
                             completion="complete",
                             reason="install",
-                            detail="aria2 launchd service installed or queued for installation",
+                            detail="optional aria2 launchd service installed or queued for installation",
                             commands=commands,
                         )
                     }
@@ -2138,7 +2138,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                             outcome="changed",
                             completion="complete",
                             reason="uninstall",
-                            detail="aria2 launchd removed or queued for removal",
+                            detail="optional aria2 launchd removed or queued for removal",
                             commands=commands,
                         )
                     }

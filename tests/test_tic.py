@@ -79,11 +79,24 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(duplicate_entry["outcome"], "unchanged")
 
     def test_preflight_emits_gate_results(self) -> None:
-        result = preflight()
+        with patch("aria_queue.contracts.aria_rpc", return_value={"result": {"version": "1.37.0"}}), \
+             patch("aria_queue.contracts.ensure_aria_daemon") as ensure:
+            result = preflight()
         self.assertIn("gates", result)
         self.assertIn("status", result)
         self.assertIn(result["exit_code"], [0, 1])
         self.assertNotIn("action_log", result)
+        self.assertFalse(ensure.called)
+
+    def test_preflight_bootstraps_aria2_when_rpc_is_initially_unavailable(self) -> None:
+        with patch(
+            "aria_queue.contracts.aria_rpc",
+            side_effect=[RuntimeError("offline"), {"result": {"version": "1.37.0"}}],
+        ), patch("aria_queue.contracts.ensure_aria_daemon") as ensure:
+            result = preflight()
+        gate = next(gate for gate in result["gates"] if gate["name"] == "aria2_available")
+        self.assertTrue(gate["satisfied"])
+        ensure.assert_called_once_with(port=6800)
 
     def test_auto_preflight_default_is_disabled(self) -> None:
         from aria_queue.contracts import load_declaration
@@ -400,7 +413,22 @@ class TicAriaFlowTests(unittest.TestCase):
 
     def test_ucc_returns_structured_result(self) -> None:
         add_queue_item("https://example.com/model.gguf")
-        result = run_ucc()
+        preflight_result = {
+            "contract": "UCC",
+            "version": "2.0",
+            "gates": [],
+            "preferences": [],
+            "policies": [],
+            "warnings": [],
+            "hard_failures": [],
+            "status": "pass",
+            "exit_code": 0,
+        }
+        with patch("aria_queue.contracts.preflight", return_value=preflight_result), \
+             patch("aria_queue.core.load_queue", return_value=[]), \
+             patch("aria_queue.core.process_queue", return_value=[]), \
+             patch("aria_queue.core.get_active_progress", return_value=None):
+            result = run_ucc()
         self.assertIn("result", result)
         self.assertIn("meta", result)
         self.assertIn("observation", result["result"])
@@ -409,7 +437,7 @@ class TicAriaFlowTests(unittest.TestCase):
     def test_install_dry_run_is_describable(self) -> None:
         plan = install_all(dry_run=True)
         self.assertIn("ariaflow", plan)
-        self.assertIn("aria2-launchd", plan)
+        self.assertNotIn("aria2-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["observation"], "ok")
         self.assertEqual(plan["ariaflow"]["result"]["outcome"], "changed")
@@ -436,9 +464,9 @@ class TicAriaFlowTests(unittest.TestCase):
              patch("aria_queue.install.aria2_status", return_value={"loaded": True, "plist_exists": True, "session_exists": True, "version": "1.37.0"}):
             status = status_all()
         self.assertIn("0.1.1", status["ariaflow"]["result"]["message"])
-        self.assertIn("0.8.2", status["aria2"]["result"]["message"])
+        self.assertIn("runtime engine dependency", status["aria2"]["result"]["message"])
         self.assertIn("networkquality available", status["networkquality"]["result"]["message"])
-        self.assertIn("1.37.0", status["aria2-launchd"]["result"]["message"])
+        self.assertIn("optional advanced auto-start integration", status["aria2-launchd"]["result"]["message"])
 
     def test_networkquality_status_reports_availability_without_probe(self) -> None:
         with patch("aria_queue.install._find_networkquality", return_value="/usr/bin/networkQuality"), \
@@ -453,7 +481,7 @@ class TicAriaFlowTests(unittest.TestCase):
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
         self.assertIn("ariaflow", plan)
-        self.assertIn("aria2-launchd", plan)
+        self.assertNotIn("aria2-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["reason"], "uninstall")
 

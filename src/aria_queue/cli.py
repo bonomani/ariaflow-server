@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from . import __version__
 from .bonjour import advertise_http_service
 from .contracts import preflight, run_ucc
-from .core import add_queue_item, load_queue
+from .core import add_queue_item, ensure_aria_daemon, load_queue
 from .webapp import serve as serve_api
 
 
@@ -41,11 +42,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     install = sub.add_parser("install", help="install ariaflow on macOS")
     install.add_argument("--dry-run", action="store_true")
-    install.add_argument("--with-aria2", action="store_true", help="also install the optional aria2 launchd service")
+    install.add_argument("--with-aria2", action="store_true", help="also install the optional advanced aria2 launchd service")
 
     uninstall = sub.add_parser("uninstall", help="remove installed ariaflow components on macOS")
     uninstall.add_argument("--dry-run", action="store_true")
-    uninstall.add_argument("--with-aria2", action="store_true", help="also remove the optional aria2 launchd service")
+    uninstall.add_argument("--with-aria2", action="store_true", help="also remove the optional advanced aria2 launchd service")
 
     lifecycle = sub.add_parser("lifecycle", help="show install and service status")
 
@@ -99,6 +100,11 @@ def main() -> int:
         return 0 if result["result"].get("failure_class") is None else 1
 
     if args.command == "serve":
+        try:
+            ensure_aria_daemon()
+        except Exception as exc:
+            print(f"Unable to start aria2 runtime: {exc}", file=sys.stderr)
+            return 1
         server = serve_api(host=args.host, port=args.port)
         print(f"Serving API on http://{args.host}:{args.port}")
         try:

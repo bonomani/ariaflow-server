@@ -150,7 +150,7 @@ def homebrew_uninstall_ariaflow(dry_run: bool = False) -> list[str]:
 
 def install_all(
     dry_run: bool = False,
-    include_aria2: bool = True,
+    include_aria2: bool = False,
 ) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("install is only supported on macOS")
@@ -196,9 +196,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if ariaflow_installed else "missing",
             detail=(
-                f"ariaflow installed {ariaflow_version or 'unknown'}; current production {current_version}; updates via Homebrew tap"
+                f"ariaflow installed {ariaflow_version or 'unknown'}; current production {current_version}; updates via Homebrew tap; default service bootstraps aria2 automatically"
                 if ariaflow_installed
-                else f"ariaflow package absent; current production {current_version}; install/update via Homebrew tap"
+                else f"ariaflow package absent; current production {current_version}; install/update via Homebrew tap; default service bootstraps aria2 automatically"
             ),
         ),
         "aria2": ucc_record(
@@ -208,9 +208,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2_installed else "missing",
             detail=(
-                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; required dependency"
+                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; runtime engine dependency"
                 if aria2_installed
-                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; required dependency"
+                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; runtime engine dependency"
             ),
         ),
         "networkquality": ucc_record(
@@ -228,9 +228,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2["loaded"] else "missing",
             detail=(
-                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'}); required dependency"
+                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'}); optional advanced auto-start integration"
                 if aria2["loaded"]
-                else "aria2 launchd absent; required dependency"
+                else "aria2 launchd absent; optional advanced auto-start integration"
             ),
         ),
     }
@@ -239,7 +239,7 @@ def status_all() -> dict[str, dict[str, object]]:
 
 def uninstall_all(
     dry_run: bool = False,
-    include_aria2: bool = True,
+    include_aria2: bool = False,
 ) -> dict[str, dict[str, object]]:
     if not dry_run and not is_macos():
         raise RuntimeError("uninstall is only supported on macOS")

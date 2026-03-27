@@ -5,7 +5,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
-from .core import aria_rpc, config_dir, get_active_progress, load_state, queue_path, storage_locked, summarize_queue
+from .core import aria_rpc, config_dir, ensure_aria_daemon, get_active_progress, load_state, queue_path, storage_locked, summarize_queue
 
 
 DEFAULT_DECLARATION = {
@@ -54,16 +54,27 @@ def save_declaration(declaration: dict[str, Any]) -> dict[str, Any]:
         return declaration
 
 
+def _aria_available(port: int = 6800) -> bool:
+    try:
+        aria_rpc("aria2.getVersion", port=port)
+        return True
+    except Exception:
+        pass
+
+    try:
+        ensure_aria_daemon(port=port)
+        aria_rpc("aria2.getVersion", port=port)
+        return True
+    except Exception:
+        return False
+
+
 def preflight() -> dict[str, Any]:
     decl = load_declaration()
     gates = []
     failures = []
 
-    aria_ok = True
-    try:
-        aria_rpc("aria2.getVersion")
-    except Exception:
-        aria_ok = False
+    aria_ok = _aria_available()
 
     queue_ok = queue_path().parent.exists()
     state = load_state()
