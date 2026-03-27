@@ -252,20 +252,6 @@ INDEX_HTML = """<!doctype html>
       box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.12);
       background: rgba(8, 17, 31, 0.82);
     }
-    .system-layout {
-      display: grid;
-      gap: 12px;
-    }
-    .system-engine {
-      display: grid;
-      gap: 12px;
-    }
-    .system-grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 12px;
-      align-items: start;
-    }
     .system-card {
       border: 1px solid var(--line);
       background: rgba(8, 17, 31, 0.65);
@@ -317,6 +303,26 @@ INDEX_HTML = """<!doctype html>
     }
     .system-actions button {
       width: 100%;
+    }
+    .action-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .engine-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.92rem;
     }
     .item-top {
       display: flex;
@@ -490,7 +496,16 @@ INDEX_HTML = """<!doctype html>
       .hero, .summary { grid-template-columns: 1fr; }
       .hero { align-items: start; }
       .span-8, .span-7, .span-5, .span-4, .span-6 { grid-column: span 12; }
-      .system-grid { grid-template-columns: 1fr; }
+      .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .action-buttons {
+        width: 100%;
+      }
+      .action-buttons button {
+        flex: 1 1 0;
+      }
     }
   </style>
 </head>
@@ -563,32 +578,16 @@ INDEX_HTML = """<!doctype html>
       </div>
       <div class="span-12 show-dashboard page-only">
         <div class="panel toolbar">
-          <div class="section-title" style="margin-bottom:0;">
-            <h2>Engine</h2>
-            <div class="hint">The runner powers queue processing, but the queue and session stay separate concepts</div>
-          </div>
-          <div class="system-layout">
-            <div class="system-card system-engine">
-              <div class="system-head">
-                <div class="system-copy">
-                  <h3>Engine</h3>
-                  <div class="meta"><span>The runner is the executor. It powers the queue but does not define the job grouping.</span></div>
-                </div>
-                <span class="badge" id="engine-state">idle</span>
-              </div>
-              <div class="system-facts">
-                <div class="system-fact"><span>Runner state</span><strong id="engine-detail">Idle</strong></div>
-                <div class="system-fact"><span>Startup policy</span><strong id="engine-policy">Manual start</strong></div>
-                <div class="system-fact"><span>Current mode</span><strong id="engine-mode">idle</strong></div>
-              </div>
-              <div class="system-actions">
-                <button class="secondary" onclick="preflightRun()">Preflight</button>
-                <button class="secondary" id="runner-btn" onclick="toggleRunner()">Start engine</button>
-                <label class="refresh-control" style="justify-self:start;">
-                  <input type="checkbox" id="auto-preflight" onchange="setAutoPreflightPreference(this.checked)">
-                  Run preflight before start
-                </label>
-              </div>
+          <div class="action-bar">
+            <div class="engine-inline">
+              <span>Engine <strong id="engine-state">idle</strong></span>
+              <span>Mode <strong id="engine-mode">idle</strong></span>
+              <span>Startup <strong id="engine-policy">Manual start</strong></span>
+            </div>
+            <div class="action-buttons">
+              <button class="secondary" onclick="preflightRun()">Preflight</button>
+              <button class="secondary" id="runner-btn" onclick="toggleRunner()">Start engine</button>
+              <button class="secondary" onclick="newSession()">Start new run</button>
             </div>
           </div>
         </div>
@@ -611,6 +610,7 @@ INDEX_HTML = """<!doctype html>
               <div class="system-fact"><span>Queue flow</span><strong id="queue-detail">Waiting for state</strong></div>
               <div class="system-fact"><span>Active job</span><strong id="queue-active">none</strong></div>
               <div class="system-fact"><span>Jobs in queue</span><strong id="queue-count">0 queued</strong></div>
+              <div class="system-fact"><span>Runner state</span><strong id="engine-detail">Idle</strong></div>
             </div>
             <div class="system-actions">
               <button class="secondary" id="toggle-btn" onclick="toggleQueue()">Pause queue</button>
@@ -638,9 +638,6 @@ INDEX_HTML = """<!doctype html>
               <div class="system-fact"><span>Started</span><strong id="session-started">-</strong></div>
               <div class="system-fact"><span>Last seen</span><strong id="session-last-seen">-</strong></div>
               <div class="system-fact"><span>Closed</span><strong id="session-closed">-</strong></div>
-            </div>
-            <div class="system-actions">
-              <button class="secondary" onclick="newSession()">Start new run</button>
             </div>
           </div>
         </div>
