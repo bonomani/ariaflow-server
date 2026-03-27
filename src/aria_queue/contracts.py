@@ -18,7 +18,7 @@ DEFAULT_DECLARATION = {
         "preferences": [
             {"name": "post_action_rule", "value": "pending", "options": ["pending"], "rationale": "default placeholder"},
             {"name": "auto_preflight_on_run", "value": False, "options": [True, False], "rationale": "default off"},
-            {"name": "duplicate_active_transfer_action", "value": "pause", "options": ["pause", "remove", "ignore"], "rationale": "default dedup policy"},
+            {"name": "duplicate_active_transfer_action", "value": "remove", "options": ["remove", "pause", "ignore"], "rationale": "remove duplicate live jobs by default"},
             {"name": "max_simultaneous_downloads", "value": 1, "options": [1], "rationale": "1 preserves the sequential default"}
         ],
         "policies": [],

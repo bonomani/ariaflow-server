@@ -99,6 +99,14 @@ class TicAriaFlowTests(unittest.TestCase):
         limit = next((pref for pref in prefs if pref.get("name") == "max_simultaneous_downloads"), {})
         self.assertEqual(limit.get("value", 0), 1)
 
+    def test_duplicate_active_transfer_default_is_remove(self) -> None:
+        from aria_queue.contracts import load_declaration
+
+        declaration = load_declaration()
+        prefs = declaration.get("uic", {}).get("preferences", [])
+        dedup = next((pref for pref in prefs if pref.get("name") == "duplicate_active_transfer_action"), {})
+        self.assertEqual(dedup.get("value"), "remove")
+
     def test_probe_fallback_reports_reason(self) -> None:
         with patch("aria_queue.core._find_networkquality", return_value=None):
             result = probe_bandwidth()
@@ -230,7 +238,7 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertTrue(saved_items[0]["recovered"])
         record_action.assert_called_once()
 
-    def test_deduplicate_active_transfers_pauses_less_advanced_duplicates(self) -> None:
+    def test_deduplicate_active_transfers_removes_less_advanced_duplicates_by_default(self) -> None:
         active = [
             {
                 "gid": "gid-keep",
@@ -253,9 +261,10 @@ class TicAriaFlowTests(unittest.TestCase):
              patch("aria_queue.core.aria_rpc") as rpc:
             result = deduplicate_active_transfers()
         self.assertTrue(result["changed"])
+        self.assertEqual(result["action"], "remove")
         self.assertIn("gid-keep", result["kept"])
         self.assertIn("gid-drop", result["paused"])
-        rpc.assert_any_call("aria2.pause", ["gid-drop"], port=6800, timeout=5)
+        rpc.assert_any_call("aria2.remove", ["gid-drop"], port=6800, timeout=5)
 
     def test_process_queue_marks_completed_tracked_download_done(self) -> None:
         add_queue_item("https://example.com/model.gguf")
