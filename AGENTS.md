@@ -14,11 +14,12 @@ Release workflow:
 - Make the code change in `ariaflow`.
 - Run the local test suite before tagging.
 - Prefer the helper script:
-  - `python3 scripts/release.py --push`
+  - `python3 scripts/publish.py --push`
 - Use `--dry-run` first if you want to preview the exact release plan.
-- If you need to do it manually, bump the package version in `pyproject.toml`
-  and `src/aria_queue/__init__.py`, commit on `main`, create and push the tag,
-  and let the release workflow publish the release.
+- If you need an explicit stable version, use:
+  - `python3 scripts/publish.py --version X.Y.Z --push`
+- If you need to do it manually, commit on `main`, push `main`, and let the
+  release workflow publish the release.
 - Verify the release is `isDraft: false` and `isPrerelease: false`.
 - The release workflow only publishes stable tags and updates `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly after publishing the release.
 

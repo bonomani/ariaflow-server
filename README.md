@@ -108,34 +108,30 @@ instead of patching Homebrew globally.
 
 The dedicated release checklist lives in [`RELEASE.md`](./RELEASE.md).
 
-The repo ships a small release helper:
+The repo ships a small publish helper:
 
 ```bash
-python3 scripts/release.py --push
+python3 scripts/publish.py --push
 ```
 
 Preview the steps without changing files:
 
 ```bash
-python3 scripts/release.py --dry-run
+python3 scripts/publish.py --dry-run
 ```
 
 That script will:
 
 - run the local test suite
-- bump `pyproject.toml` and `src/aria_queue/__init__.py`
-- commit the version bump
-- create and push the matching `vX.Y.Z` tag
+- push `main` with a `pull --rebase` retry if needed
+- optionally trigger an explicit `workflow_dispatch` release with `--version`
 - optionally print the plan first with `--dry-run`
 
-The helper always promotes an alpha package version to the matching stable
-release, and otherwise bumps the next stable patch release.
+Normal patch releases come from the GitHub Actions workflow on `main` pushes.
+Use `--version X.Y.Z --push` only when you need to force an explicit release.
 
-After the tag push, the GitHub release workflow publishes the release and
+After the push or explicit dispatch, the GitHub release workflow publishes the release and
 updates `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly.
-
-If you prefer to do the steps manually, the release helper is just a thin
-wrapper around the same version bump, commit, tag, and push sequence.
 
 The workflow also expects a repo secret named `ARIAFLOW_TAP_TOKEN` with write
 access to `bonomani/homebrew-ariaflow` so the formula update can be pushed.

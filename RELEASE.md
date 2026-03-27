@@ -8,8 +8,8 @@ release flow.
 Run the helper from a clean checkout on `main`:
 
 ```bash
-python3 scripts/release.py --dry-run
-python3 scripts/release.py --push
+python3 scripts/publish.py --dry-run
+python3 scripts/publish.py --push
 ```
 
 The helper will:
@@ -17,26 +17,20 @@ The helper will:
 - validate that `pyproject.toml` and `src/aria_queue/__init__.py` agree
 - refuse to reuse an existing tag
 - run `py_compile` and `python3 -m unittest discover -s tests -v` unless `--no-tests` is used
-- bump the package version
-- commit the version bump
-- create the matching `vX.Y.Z` tag
-- push `main` and tags when `--push` is given
-
-The helper promotes an alpha package version to the matching stable release.
-Once the repo is already on a stable version, it bumps the patch version
-automatically, for example `0.1.1` to `0.1.2`.
+- push `main` with a `pull --rebase` retry when `--push` is given
+- optionally trigger `workflow_dispatch` for an explicit stable version with `--version X.Y.Z`
 
 Useful flags:
 
 - `--dry-run`: print the release plan without changing files
-- `--version 0.1.2`: set an explicit stable version instead of auto-bumping
+- `--version 0.1.2`: dispatch an explicit stable release on GitHub Actions
 - `--no-tests`: skip local tests
-- `--allow-dirty`: bypass the clean-tree check
+- `--allow-dirty`: bypass the clean-tree check for dry-run planning only
 
-## After Tag Push
+## After Push
 
 The GitHub workflow in `.github/workflows/release.yml` runs automatically on
-tag pushes. It will:
+`main` pushes and can also be triggered explicitly with `workflow_dispatch`. It will:
 
 - run the test suite again on GitHub Actions
 - build the source distribution
@@ -47,15 +41,15 @@ tag pushes. It will:
 
 If you do not use the helper, keep the sequence the same:
 
-1. Update the version in `pyproject.toml`.
-2. Update `src/aria_queue/__init__.py` to the same version.
-3. Run the local test suite.
-4. Commit the version bump on `main`.
-5. Create the matching tag, for example `v0.1.2`.
-6. Push `main` and the tag.
+1. Commit the code change on `main`.
+2. Push `main`.
+3. Let GitHub Actions create the release commit, stable tag, GitHub release, and Homebrew update.
 
-The GitHub workflow only publishes stable tags. Tags containing `-` are ignored
-so old alpha tag shapes cannot become normal Homebrew releases by mistake.
+If you need to force a specific stable version:
+
+```bash
+python3 scripts/publish.py --version 0.1.2 --push
+```
 
 ## Verification
 
@@ -79,5 +73,5 @@ formula update.
 
 ## Tooling Note
 
-The automated release path only needs `git`, Python, and the
+The automated publish path only needs `git`, Python, `gh`, and the
 `ARIAFLOW_TAP_TOKEN` GitHub secret.
