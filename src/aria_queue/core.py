@@ -715,12 +715,14 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
             item["recovered"] = True
             item["recovery_session_id"] = state.get("session_id")
             item["recovered_at"] = now
+            item["session_id"] = state.get("session_id")
             changed = True
             recovered += 1
         elif live_status == "active" and item.get("status") in {"paused", "queued"}:
             item["recovered"] = True
             item["recovery_session_id"] = state.get("session_id")
             item["recovered_at"] = now
+            item["session_id"] = state.get("session_id")
             changed = True
             recovered += 1
 

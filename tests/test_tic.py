@@ -252,7 +252,9 @@ class TicAriaFlowTests(unittest.TestCase):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
         self.assertEqual(result["recovered"], 1)
-        save_queue.assert_called_once()
+        saved_items = save_queue.call_args[0][0]
+        self.assertEqual(saved_items[0]["session_id"], "batch-2")
+        self.assertEqual(saved_items[0]["recovery_session_id"], "batch-2")
         record_action.assert_called_once()
 
     def test_reconcile_live_queue_collapses_duplicate_rows_for_same_live_download(self) -> None:
