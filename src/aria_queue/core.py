@@ -67,7 +67,11 @@ def storage_locked() -> Any:
         handle = getattr(_STORAGE_LOCK_STATE, "handle", None)
         if depth == 0 or handle is None:
             handle = storage_lock_path().open("a+", encoding="utf-8")
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            except Exception:
+                handle.close()
+                raise
             _STORAGE_LOCK_STATE.handle = handle
         _STORAGE_LOCK_STATE.depth = depth + 1
         try:
@@ -626,9 +630,9 @@ def cleanup_queue_state() -> dict[str, Any]:
                 primary = item
                 secondary = match
                 survivors[survivors.index(match)] = item
+                changed = True
             if _merge_queue_rows(primary, secondary):
                 changed = True
-            changed = True
 
         if changed:
             save_queue(survivors)
@@ -1099,7 +1103,13 @@ def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800, tim
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        data = json.loads(resp.read().decode("utf-8"))
+    if not isinstance(data, dict):
+        raise RuntimeError(f"aria2 RPC returned non-object: {type(data).__name__}")
+    if "error" in data:
+        err = data["error"]
+        raise RuntimeError(f"aria2 RPC error {err.get('code')}: {err.get('message')}")
+    return data
 
 
 def ensure_aria_daemon(port: int = 6800) -> None:
@@ -1366,8 +1376,8 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         items = load_queue()
         for item in items:
             if str(item.get("gid") or "") in resumed:
-                item["status"] = "queued"
-                item["live_status"] = "waiting"
+                item["status"] = "downloading"
+                item.pop("live_status", None)
         save_state(state)
         save_queue(items)
     payload = {"resumed": bool(resumed), "gids": resumed, "result": {"resumed": resumed}}
