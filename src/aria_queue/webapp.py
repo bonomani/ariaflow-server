@@ -2223,7 +2223,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             if handler is None:
                 self._send_json(_error_payload("invalid_action", f"unknown item action: {action}"), status=400)
                 return
-            result = handler(item_id)
+            try:
+                result = handler(item_id)
+            except Exception as exc:
+                self._send_json(_error_payload("internal_error", str(exc)), status=500)
+                return
             if not result.get("ok", True):
                 status_code = 404 if result.get("error") == "not_found" else 400
                 self._send_json(result, status=status_code)
