@@ -231,6 +231,19 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["url"], "https://example.com/recovered.gguf")
 
+    def test_reconcile_promotes_paused_item_to_downloading_when_live_active(self) -> None:
+        queue_item = {"id": "item-1", "url": "https://example.com/file.gguf", "status": "paused", "gid": "gid-1", "session_id": "batch-1"}
+        live = [{"gid": "gid-1", "status": "active", "completedLength": "50", "totalLength": "100", "downloadSpeed": "10", "files": [{"uris": [{"uri": "https://example.com/file.gguf"}]}]}]
+        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}), \
+             patch("aria_queue.core.active_gids", return_value=live), \
+             patch("aria_queue.core.load_queue", return_value=[queue_item]), \
+             patch("aria_queue.core.save_queue") as save_queue, \
+             patch("aria_queue.core.record_action"):
+            result = reconcile_live_queue()
+        self.assertTrue(result["changed"])
+        saved = save_queue.call_args[0][0]
+        self.assertEqual(saved[0]["status"], "downloading")
+
     def test_reconcile_live_queue_adopts_unmatched_active_job(self) -> None:
         with patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}), \
              patch("aria_queue.core.active_gids", return_value=[{"gid": "gid-9", "status": "active", "completedLength": "5", "totalLength": "100", "downloadSpeed": "10", "files": [{"uris": [{"uri": "https://example.com/new.gguf"}]}]}]), \
@@ -332,6 +345,27 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("gid-keep", result["kept"])
         self.assertIn("gid-drop", result["paused"])
         rpc.assert_any_call("aria2.remove", ["gid-drop"], port=6800, timeout=5)
+
+    def test_poll_marks_item_error_after_consecutive_rpc_failures(self) -> None:
+        add_queue_item("https://example.com/model.gguf")
+        items = load_queue()
+        items[0]["status"] = "downloading"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+
+        with patch("aria_queue.core.ensure_aria_daemon"), \
+             patch("aria_queue.core.deduplicate_active_transfers"), \
+             patch("aria_queue.core.reconcile_live_queue"), \
+             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
+             patch("aria_queue.core.current_bandwidth", return_value={}), \
+             patch("aria_queue.core.set_bandwidth"), \
+             patch("aria_queue.core.active_gids", return_value=[]), \
+             patch("aria_queue.core.status", side_effect=RuntimeError("connection refused")), \
+             patch("aria_queue.core.time.sleep", return_value=None):
+            result = process_queue()
+        self.assertEqual(result[0]["status"], "error")
+        self.assertEqual(result[0]["error_code"], "rpc_unreachable")
+        self.assertIn("5", result[0]["error_message"])
 
     def test_process_queue_marks_completed_tracked_download_done(self) -> None:
         add_queue_item("https://example.com/model.gguf")

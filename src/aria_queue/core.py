@@ -109,6 +109,24 @@ def write_json(path: Path, value: Any) -> None:
         return
 
 
+_ACTION_LOG_MAX_LINES = 10000
+_ACTION_LOG_KEEP_LINES = 5000
+
+
+def _rotate_action_log() -> None:
+    path = action_log_path()
+    try:
+        size = path.stat().st_size
+    except FileNotFoundError:
+        return
+    if size < 512 * 1024:
+        return
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if len(lines) <= _ACTION_LOG_MAX_LINES:
+        return
+    path.write_text("\n".join(lines[-_ACTION_LOG_KEEP_LINES:]) + "\n", encoding="utf-8")
+
+
 def append_action_log(entry: dict[str, Any]) -> None:
     with storage_locked():
         payload = dict(entry)
@@ -126,6 +144,7 @@ def append_action_log(entry: dict[str, Any]) -> None:
                 save_state(state)
         with action_log_path().open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(payload, sort_keys=True) + "\n")
+        _rotate_action_log()
 
 
 def load_action_log(limit: int = 200) -> list[dict[str, Any]]:
@@ -412,10 +431,10 @@ def dedup_active_transfer_action() -> str:
     declaration = load_declaration()
     for pref in declaration.get("uic", {}).get("preferences", []):
         if pref.get("name") == "duplicate_active_transfer_action":
-            value = str(pref.get("value", "pause")).strip().lower()
+            value = str(pref.get("value", "remove")).strip().lower()
             if value in {"pause", "remove", "ignore"}:
                 return value
-    return "pause"
+    return "remove"
 
 
 def max_simultaneous_downloads() -> int:
@@ -705,9 +724,6 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
             changed = True
         if url and item.get("url") != url:
             item["url"] = url
-            changed = True
-        if item.get("status") == "paused" and live_status == "active":
-            item["status"] = "downloading"
             changed = True
         if live_status:
             item["live_status"] = live_status
@@ -1475,6 +1491,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             "files": [{"uris": [{"uri": item.get("url")}]}] if item.get("url") else [],
         }
 
+    _MAX_RPC_FAILURES = 5
+
     def _poll_tracked_jobs(items_snapshot: list[dict[str, Any]]) -> list[dict[str, Any]]:
         running_infos: list[dict[str, Any]] = []
         for item in items_snapshot:
@@ -1487,9 +1505,26 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             try:
                 info = status(gid, port=port, timeout=5)
             except Exception:
+                rpc_failures = item.get("rpc_failures", 0) + 1
+                item["rpc_failures"] = rpc_failures
+                if rpc_failures >= _MAX_RPC_FAILURES:
+                    item["status"] = "error"
+                    item["error_code"] = "rpc_unreachable"
+                    item["error_message"] = f"aria2 RPC unreachable after {rpc_failures} consecutive attempts"
+                    item.pop("live_status", None)
+                    record_action(
+                        action="error",
+                        target="queue_item",
+                        outcome="failed",
+                        reason="rpc_unreachable",
+                        before={"item": before_item},
+                        after={"item": dict(item)},
+                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "rpc_failures": rpc_failures},
+                    )
                 continue
             remote_status = str(info.get("status") or "")
             item["gid"] = gid
+            item.pop("rpc_failures", None)
             if remote_status:
                 item["live_status"] = remote_status
             _apply_transfer_fields(item, info)
@@ -1603,8 +1638,11 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         if item.get("status") == "paused":
                             before_item = dict(item)
                             try:
-                                set_download_bandwidth(gid, cap_bytes_per_sec, port=port, timeout=5)
                                 aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+                                try:
+                                    set_download_bandwidth(gid, cap_bytes_per_sec, port=port, timeout=5)
+                                except Exception:
+                                    pass
                                 item["status"] = "queued"
                                 item["live_status"] = "waiting"
                                 record_action(
