@@ -68,7 +68,7 @@ Each gap is tagged with where the work lives:
     `aria2.unpause(gid)`.
 - **Frontend dependency**: `../ariaflow-web/GAPS.md` §3.1 will add a
   file picker UI.
-- **Status**: missing.
+- **Status**: implemented.
 
 ### 3.2 DirectURL / file serving — backend
 
@@ -87,7 +87,7 @@ Each gap is tagged with where the work lives:
 - **Recommendation**: Option B for now (no code); Option A later if
   demand exists.
 - **Frontend dependency**: `../ariaflow-web/GAPS.md` §3.2.
-- **Status**: missing.
+- **Status**: deferred (Option B recommended — document static server setup).
 
 ---
 
@@ -119,7 +119,7 @@ Each gap is tagged with where the work lives:
     (e.g., `dir`, `rpc-*`, `enable-rpc`).
   - Log the change to `actions.jsonl`.
 - **Frontend dependency**: `../ariaflow-web/GAPS.md` §4.1.
-- **Status**: missing (by design — implement only if demand exists).
+- **Status**: implemented (safe subset only).
 
 ---
 
@@ -136,7 +136,7 @@ Each gap is tagged with where the work lives:
   - Exposes ports 8000 (backend) and 8001 (frontend).
   - Mounts a volume for the download directory and config.
   - Optionally provides an ARM variant for Raspberry Pi.
-- **Status**: missing.
+- **Status**: implemented (Dockerfile added).
 
 ---
 
@@ -145,10 +145,10 @@ Each gap is tagged with where the work lives:
 | # | Feature | Value | Blocks frontend | Status |
 |---|---------|-------|-----------------|--------|
 | 2.3 | Per-item action API | high | yes (§2.3) | implemented |
-| 3.1 | Torrent file selection API | medium | yes (§3.1) | missing |
-| 3.2 | DirectURL / file serving | medium | yes (§3.2) | missing |
-| 5.2 | Docker image | medium | no | missing |
-| 4.1 | aria2 options proxy | low-medium | yes (§4.1) | missing |
+| 3.1 | Torrent file selection API | medium | yes (§3.1) | implemented |
+| 3.2 | DirectURL / file serving | medium | yes (§3.2) | deferred (Option B) |
+| 5.2 | Docker image | medium | no | implemented |
+| 4.1 | aria2 options proxy | low-medium | yes (§4.1) | implemented |
 
 ---
 

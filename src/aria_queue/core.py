@@ -1135,13 +1135,21 @@ def ensure_aria_daemon(port: int = 6800) -> None:
     time.sleep(2)
 
 
+def _is_metadata_url(url: str) -> bool:
+    lower = url.lower().rstrip("?&#")
+    return lower.endswith(".torrent") or lower.endswith(".metalink") or lower.endswith(".meta4") or lower.startswith("magnet:")
+
+
 def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
-    options = {
+    options: dict[str, str] = {
         "max-download-limit": _aria_speed_value(cap_bytes_per_sec),
         "allow-overwrite": "true",
         "continue": "true",
     }
-    uris = [item["url"]]
+    url = str(item.get("url") or "")
+    if _is_metadata_url(url):
+        options["pause-metadata"] = "true"
+    uris = [url]
     result = aria_rpc("aria2.addUri", [uris, options], port=port)
     return result["result"]
 
@@ -1150,6 +1158,54 @@ def status(gid: str, port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     fields = ["status", "errorCode", "errorMessage", "downloadSpeed", "completedLength", "totalLength", "files"]
     result = aria_rpc("aria2.tellStatus", [gid, fields], port=port, timeout=timeout)
     return result["result"]
+
+
+def get_item_files(item_id: str, port: int = 6800) -> dict[str, Any]:
+    with storage_locked():
+        _, item, _ = _find_queue_item_by_id(item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+        gid = str(item.get("gid") or "")
+    if not gid:
+        return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
+    try:
+        result = aria_rpc("aria2.getFiles", [gid], port=port, timeout=5)
+        files = result.get("result", [])
+    except Exception as exc:
+        return {"ok": False, "error": "rpc_error", "message": str(exc)}
+    return {"ok": True, "item_id": item_id, "gid": gid, "files": files}
+
+
+def select_item_files(item_id: str, indices: list[int], port: int = 6800) -> dict[str, Any]:
+    with storage_locked():
+        items, item, idx = _find_queue_item_by_id(item_id)
+        if item is None:
+            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+        gid = str(item.get("gid") or "")
+    if not gid:
+        return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
+    select_str = ",".join(str(i) for i in indices)
+    try:
+        aria_rpc("aria2.changeOption", [gid, {"select-file": select_str}], port=port, timeout=5)
+        aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+    except Exception as exc:
+        return {"ok": False, "error": "rpc_error", "message": str(exc)}
+    with storage_locked():
+        items, item, idx = _find_queue_item_by_id(item_id)
+        if item is not None:
+            item["status"] = "downloading"
+            item.pop("live_status", None)
+            save_queue(items)
+            record_action(
+                action="select_files",
+                target="queue_item",
+                outcome="changed",
+                reason="user_select_files",
+                before={},
+                after={"item": dict(item), "selected": indices},
+                detail={"item_id": item_id, "gid": gid, "select": select_str},
+            )
+    return {"ok": True, "item_id": item_id, "gid": gid, "selected": indices}
 
 
 def active_gids(port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
@@ -1307,6 +1363,42 @@ def current_global_options(port: int = 6800, timeout: int = 5) -> dict[str, Any]
         return aria_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
     except Exception as exc:
         return {"error": str(exc)}
+
+
+_SAFE_ARIA2_OPTIONS = {
+    "max-concurrent-downloads",
+    "max-connection-per-server",
+    "split",
+    "min-split-size",
+    "max-overall-download-limit",
+    "max-download-limit",
+    "timeout",
+    "connect-timeout",
+}
+
+
+def change_aria2_options(options: dict[str, str], port: int = 6800) -> dict[str, Any]:
+    rejected = [k for k in options if k not in _SAFE_ARIA2_OPTIONS]
+    if rejected:
+        return {"ok": False, "error": "rejected_options", "message": f"unsafe options: {rejected}"}
+    if not options:
+        return {"ok": False, "error": "empty_options", "message": "no options provided"}
+    before = current_global_options(port=port)
+    try:
+        aria_rpc("aria2.changeGlobalOption", [options], port=port, timeout=5)
+    except Exception as exc:
+        return {"ok": False, "error": "rpc_error", "message": str(exc)}
+    after = current_global_options(port=port)
+    record_action(
+        action="change_options",
+        target="aria2",
+        outcome="changed",
+        reason="user_change_options",
+        before={"options": before},
+        after={"options": after},
+        detail={"requested": options},
+    )
+    return {"ok": True, "applied": options, "options": after}
 
 
 def pause_active_transfer(port: int = 6800) -> dict[str, Any]:

@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from . import __version__
 from .api import (
     add_queue_item,
+    change_aria2_options,
     active_gids,
     active_status,
     auto_preflight_on_run,
@@ -19,6 +20,7 @@ from .api import (
     homebrew_uninstall_ariaflow,
     install_aria2_launchd,
     is_macos,
+    get_item_files,
     load_action_log,
     load_declaration,
     load_queue,
@@ -31,6 +33,7 @@ from .api import (
     resume_active_transfer,
     resume_queue_item,
     retry_queue_item,
+    select_item_files,
     run_ucc,
     save_declaration,
     start_background_process,
@@ -1937,6 +1940,15 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/lifecycle":
             self._send_json(_lifecycle_payload())
             return
+        if path.startswith("/api/item/") and path.endswith("/files") and path.count("/") == 4:
+            item_id = path.split("/")[3]
+            result = get_item_files(item_id)
+            if not result.get("ok", True):
+                status_code = 404 if result.get("error") == "not_found" else 400
+                self._send_json(result, status=status_code)
+                return
+            self._send_json(result)
+            return
         self._send_json({"error": "not_found"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -2205,6 +2217,38 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
         if path == "/api/resume":
             result = resume_active_transfer()
+            self._invalidate_status_cache()
+            self._send_json(result)
+            return
+
+        if path == "/api/aria2/options":
+            if not isinstance(payload, dict) or not payload:
+                self._send_json(_error_payload("invalid_payload", "expected a JSON object with option key-value pairs"), status=400)
+                return
+            options = {str(k): str(v) for k, v in payload.items()}
+            result = change_aria2_options(options)
+            if not result.get("ok", True):
+                self._send_json(result, status=400)
+                return
+            self._send_json(result)
+            return
+
+        if path.startswith("/api/item/") and path.endswith("/files") and path.count("/") == 4:
+            item_id = path.split("/")[3]
+            select = payload.get("select") if isinstance(payload, dict) else None
+            if not isinstance(select, list) or not select:
+                self._send_json(_error_payload("invalid_payload", "expected {select: [1, 3, 5]}"), status=400)
+                return
+            try:
+                indices = [int(i) for i in select]
+            except (ValueError, TypeError):
+                self._send_json(_error_payload("invalid_payload", "select must be a list of integers"), status=400)
+                return
+            result = select_item_files(item_id, indices)
+            if not result.get("ok", True):
+                status_code = 404 if result.get("error") == "not_found" else 400
+                self._send_json(result, status=status_code)
+                return
             self._invalidate_status_cache()
             self._send_json(result)
             return
