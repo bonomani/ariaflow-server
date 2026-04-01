@@ -1,0 +1,48 @@
+decision_id: ariaflow-engine-001
+bgs_slice: BGS-State-Modeled-Governed
+declared_scope: "engine execution path: session, run, queue, and job lifecycle"
+decision_reason: >
+  Ariaflow is a stateful download engine with explicit session/run lifecycle,
+  preflight readiness checks, and queue/job state transitions. The scope
+  depends on installation, runtime readiness, recovery, and transition
+  legality — an ASM-based slice is the natural fit per CR-1b.
+
+bgs_version_ref: bgs@6d9b3d8
+
+members_used:
+  - BISS
+  - ASM
+  - UIC
+  - UCC
+  - TIC
+
+overlays_used: []
+
+member_version_refs:
+  ucc: ucc@370c1f7
+  uic: uic@11bd400
+  asm: asm@dca032b
+  tic: tic@7cfba80
+
+external_controls:
+  IAM_and_authorization: not_applicable        # local CLI tool, no multi-user auth
+  sandboxing_or_runtime_isolation: delegated    # OS-level process isolation for aria2 daemon
+  secret_and_token_lifecycle: not_applicable    # no secrets managed by the engine
+  rate_limiting_and_budget_control: implemented # max_simultaneous_downloads policy in declaration
+  privacy_and_data_boundary_control: not_applicable  # no PII processed
+
+evidence_refs:
+  - ./docs/governance/biss-classification.md
+  - ./docs/governance/asm-state-model.md        # ASM formalized state model
+  - ./docs/governance/tic-oracle.md             # TIC oracle with trace targets
+  - ./src/aria_queue/contracts.py               # UCC declaration + UIC gates/preferences
+  - ./ARCHITECTURE.md                           # architectural overview
+  - ./tests/
+
+owner: bonomani
+date: 2026-04-01
+
+limitations:
+  - BISS classification is initial and needs expansion as new boundaries are added
+  - ASM state model formalized in docs/governance/asm-state-model.md
+  - TIC oracle mapped from existing tests — 33 test-to-trace-target mappings
