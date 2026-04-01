@@ -23,6 +23,8 @@ tags:
     description: Install, uninstall, status
   - name: Observability
     description: Logs and session management
+  - name: Meta
+    description: API docs and test runner
 
 paths:
   /api/status:
@@ -434,6 +436,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Declaration"
+
+  /api/docs:
+    get:
+      tags: [Meta]
+      summary: Swagger UI
+      description: Interactive API documentation rendered with Swagger UI.
+      responses:
+        "200":
+          description: HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/openapi.yaml:
+    get:
+      tags: [Meta]
+      summary: OpenAPI spec
+      description: Raw OpenAPI 3.0.3 specification in YAML format.
+      responses:
+        "200":
+          description: YAML spec
+          content:
+            text/yaml:
+              schema:
+                type: string
+
+  /api/tests:
+    get:
+      tags: [Meta]
+      summary: Run test suite
+      description: |
+        Executes the full test suite and returns structured results.
+        Each test includes name and pass/fail status.
+      responses:
+        "200":
+          description: Test results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  total:
+                    type: integer
+                  passed:
+                    type: integer
+                  failed:
+                    type: integer
+                  tests:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        status:
+                          type: string
+                          enum: [ok, FAIL, ERROR]
+                  summary:
+                    type: string
+                  exit_code:
+                    type: integer
 
   /api/aria2/options:
     post:

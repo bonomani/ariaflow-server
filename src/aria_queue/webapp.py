@@ -7,6 +7,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+import subprocess
+from pathlib import Path
+
 from . import __version__
 from .api import (
     add_queue_item,
@@ -1850,6 +1853,66 @@ API_ONLY_HTML = """<!doctype html>
 """
 
 
+def _swagger_ui_html() -> str:
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ariaflow API Docs</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+SwaggerUIBundle({
+  url: '/api/openapi.yaml',
+  dom_id: '#swagger-ui',
+  deepLinking: true,
+  presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+  layout: 'BaseLayout'
+});
+</script>
+</body>
+</html>"""
+
+
+def _run_tests() -> dict[str, object]:
+    project_root = Path(__file__).resolve().parent.parent.parent
+    try:
+        result = subprocess.run(
+            ["python", "-m", "unittest", "discover", "-s", "tests", "-v"],
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        lines = (result.stderr or "").strip().splitlines()
+        tests: list[dict[str, str]] = []
+        summary = ""
+        for line in lines:
+            if " ... " in line:
+                name, _, status = line.rpartition(" ... ")
+                tests.append({"name": name.strip(), "status": status.strip()})
+            elif line.startswith("Ran ") or line.startswith("OK") or line.startswith("FAILED"):
+                summary += line + "\n"
+        passed = sum(1 for t in tests if t["status"] == "ok")
+        failed = sum(1 for t in tests if t["status"] != "ok")
+        return {
+            "ok": result.returncode == 0,
+            "total": len(tests),
+            "passed": passed,
+            "failed": failed,
+            "tests": tests,
+            "summary": summary.strip(),
+            "exit_code": result.returncode,
+        }
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "timeout", "message": "tests timed out after 60s"}
+    except Exception as exc:
+        return {"ok": False, "error": "execution_error", "message": str(exc)}
+
+
 class AriaFlowHandler(BaseHTTPRequestHandler):
     def _invalidate_status_cache(self) -> None:
         STATUS_CACHE["ts"] = 0.0
@@ -1896,8 +1959,16 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_OPTIONS(self) -> None:  # noqa: N802
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -1918,6 +1989,32 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 },
                 status=404,
             )
+            return
+        if path == "/api/openapi.yaml":
+            spec_path = Path(__file__).resolve().parent.parent.parent / "openapi.yaml"
+            if not spec_path.exists():
+                self._send_json({"error": "not_found", "message": "openapi.yaml not found"}, status=404)
+                return
+            body = spec_path.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/yaml; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/api/docs":
+            html = _swagger_ui_html()
+            body = html.encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path == "/api/tests":
+            result = _run_tests()
+            self._send_json(result)
             return
         if path == "/api/status":
             self._send_json(self._status_payload())
