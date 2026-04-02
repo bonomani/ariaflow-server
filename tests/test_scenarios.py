@@ -223,8 +223,8 @@ class TestScenarioErrorRetry(ScenarioBase):
         # Retry first one
         _, retried, _ = _req(f"{base}/api/item/{id_1}/retry", "POST")
         self.assertEqual(retried["item"]["status"], "queued")
-        self.assertIsNone(retried["item"]["error_code"])
-        self.assertIsNone(retried["item"]["gid"])
+        self.assertNotIn("error_code", retried["item"])
+        self.assertNotIn("gid", retried["item"])
 
         # Remove second one
         _req(f"{base}/api/item/{id_2}/remove", "POST")

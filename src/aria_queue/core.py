@@ -1676,6 +1676,10 @@ def ensure_aria_daemon(port: int = 6800) -> None:
     ]
     subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
+    try:
+        aria_rpc("aria2.getVersion", port=port, timeout=5)
+    except Exception as exc:
+        raise RuntimeError(f"aria2c failed to start on port {port}: {exc}") from exc
 
 
 def _is_metadata_url(url: str) -> bool:
@@ -1716,7 +1720,7 @@ def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800)
 
     if mode == "mirror":
         mirrors = item.get("mirrors") or []
-        uris = [url] + [str(m) for m in mirrors if str(m) != url]
+        uris = list(dict.fromkeys([url] + [str(m) for m in mirrors]))
         if not uris:
             uris = [url]
         result = aria_rpc("aria2.addUri", [uris, options], port=port)
@@ -2298,12 +2302,18 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
         before = dict(item)
         now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         item["status"] = "queued"
-        item["gid"] = None
-        item["error_code"] = None
-        item["error_message"] = None
-        item["error_at"] = None
-        item.pop("live_status", None)
-        item.pop("rpc_failures", None)
+        for key in (
+            "gid",
+            "error_code",
+            "error_message",
+            "error_at",
+            "live_status",
+            "rpc_failures",
+            "recovered",
+            "recovered_at",
+            "recovery_session_id",
+        ):
+            item.pop(key, None)
         state = load_state()
         sid = state.get("session_id")
         if sid:
@@ -2565,24 +2575,31 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         return running_infos
 
     while True:
+        # Phase 1: load state (locked)
         with storage_locked():
             items = load_queue()
             state = load_state()
-            if state.get("stop_requested"):
-                active_infos = active_gids(port=port, timeout=5)
-                for info in active_infos:
-                    gid = str(info.get("gid") or "")
-                    if not gid:
-                        continue
-                    try:
-                        aria_rpc("aria2.pause", [gid], port=port, timeout=5)
-                    except Exception:
-                        pass
-                    for item in items:
-                        if str(item.get("gid") or "") == gid:
-                            item["status"] = "paused"
-                            item["live_status"] = "paused"
-                            break
+            stop = state.get("stop_requested")
+            is_paused = state.get("paused")
+
+        # Phase 2: RPC calls (unlocked — no storage lock held)
+        if stop:
+            active_infos = active_gids(port=port, timeout=5)
+            for info in active_infos:
+                gid = str(info.get("gid") or "")
+                if not gid:
+                    continue
+                try:
+                    aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+                except Exception:
+                    pass
+                for item in items:
+                    if str(item.get("gid") or "") == gid:
+                        item["status"] = "paused"
+                        item["live_status"] = "paused"
+                        break
+            with storage_locked():
+                state = load_state()
                 state["running"] = False
                 state["stop_requested"] = False
                 state["paused"] = False
@@ -2591,55 +2608,53 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 save_state(state)
                 save_queue(items)
                 close_state_session(reason="stop_requested")
-                return items
+            return items
 
-            running_infos = _poll_tracked_jobs(items)
-            _finalize_primary_state(items, running_infos)
+        running_infos = _poll_tracked_jobs(items)
+        probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(
+            port=port, state=state
+        )
 
-            state = load_state()
-            probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(
-                port=port, state=state
-            )
-            state = load_state()
-            occupied = len(running_infos)
-            current_running_infos = list(running_infos)
-            if not state.get("paused"):
-                slots = None if limit == 0 else max(limit - occupied, 0)
-                allocated = 0
-                for item in sorted(
-                    items, key=lambda i: int(i.get("priority", 0)), reverse=True
-                ):
-                    if item.get("status") != "queued":
-                        continue
-                    if slots is not None and allocated >= slots:
-                        break
-                    gid = str(item.get("gid") or "")
-                    live_status = str(item.get("live_status") or "")
-                    if gid and live_status in {"active", "waiting"}:
-                        continue
-                    before_item = dict(item)
-                    item["status"] = "downloading"
-                    item.pop("live_status", None)
-                    gid = add_download(
-                        item, cap_bytes_per_sec=cap_bytes_per_sec, port=port
-                    )
-                    item["gid"] = gid
-                    record_action(
-                        action="run",
-                        target="queue_item",
-                        outcome="changed",
-                        reason="download_started",
-                        before={"item": before_item},
-                        after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
-                        detail={
-                            "item_id": item.get("id"),
-                            "gid": gid,
-                            "url": item.get("url"),
-                            "cap_mbps": cap_mbps,
-                        },
-                    )
-                    current_running_infos.append(_queued_info(item, gid, "waiting"))
-                    allocated += 1
+        occupied = len(running_infos)
+        current_running_infos = list(running_infos)
+        if not is_paused:
+            slots = None if limit == 0 else max(limit - occupied, 0)
+            allocated = 0
+            for item in sorted(
+                items, key=lambda i: int(i.get("priority", 0)), reverse=True
+            ):
+                if item.get("status") != "queued":
+                    continue
+                if slots is not None and allocated >= slots:
+                    break
+                gid = str(item.get("gid") or "")
+                live_status = str(item.get("live_status") or "")
+                if gid and live_status in {"active", "waiting"}:
+                    continue
+                before_item = dict(item)
+                item["status"] = "downloading"
+                item.pop("live_status", None)
+                gid = add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
+                item["gid"] = gid
+                record_action(
+                    action="run",
+                    target="queue_item",
+                    outcome="changed",
+                    reason="download_started",
+                    before={"item": before_item},
+                    after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
+                    detail={
+                        "item_id": item.get("id"),
+                        "gid": gid,
+                        "url": item.get("url"),
+                        "cap_mbps": cap_mbps,
+                    },
+                )
+                current_running_infos.append(_queued_info(item, gid, "waiting"))
+                allocated += 1
+
+        # Phase 3: save state (locked)
+        with storage_locked():
             save_queue(items)
             _finalize_primary_state(items, current_running_infos)
 
@@ -2650,6 +2665,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 current = load_state()
                 current["running"] = False
                 current["stop_requested"] = False
+                current["paused"] = False
                 current["active_gid"] = None
                 current["active_url"] = None
                 save_state(current)

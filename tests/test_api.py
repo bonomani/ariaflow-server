@@ -289,9 +289,9 @@ class TestPerItemActions(APIServerPerTestCase):
         code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "queued")
-        self.assertIsNone(body["item"]["error_code"])
-        self.assertIsNone(body["item"]["error_message"])
-        self.assertIsNone(body["item"]["gid"])
+        self.assertNotIn("error_code", body["item"])
+        self.assertNotIn("error_message", body["item"])
+        self.assertNotIn("gid", body["item"])
 
     def test_retry_failed_item(self) -> None:
         items = load_queue()

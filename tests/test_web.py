@@ -292,7 +292,7 @@ class WebSmokeTests(unittest.TestCase):
                 )
                 self.assertTrue(retried["ok"])
                 self.assertEqual(retried["item"]["status"], "queued")
-                self.assertIsNone(retried["item"]["error_code"])
+                self.assertNotIn("error_code", retried["item"])
 
                 # Remove
                 removed = request_json(

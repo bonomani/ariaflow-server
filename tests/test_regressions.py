@@ -302,6 +302,103 @@ class TestRegressions(IsolatedTestCase):
         rev2 = state.get("_rev", 0)
         self.assertGreater(rev2, rev1)
 
+    # ── Bug #13: state["paused"] not cleared on queue completion ──
+    # Fixed: queue_complete exit now clears paused flag
+    # Before: paused stayed True after normal completion
+
+    def test_regression_paused_cleared_on_queue_complete(self) -> None:
+        state = load_state()
+        state["paused"] = True
+        state["running"] = True
+        save_state(state)
+        # Simulate queue complete by having no active items
+        save_queue([{"id": "x", "url": "https://x.com/done.bin", "status": "done"}])
+
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.time.sleep", return_value=None),
+        ):
+            from aria_queue.core import process_queue
+
+            process_queue()
+        state = load_state()
+        self.assertFalse(state.get("paused"))
+        self.assertFalse(state.get("running"))
+
+    # ── Bug #14: ensure_aria_daemon doesn't verify startup ──
+    # Fixed: now retries RPC after spawn, raises on failure
+
+    def test_regression_ensure_daemon_raises_on_failed_start(self) -> None:
+        from aria_queue.core import ensure_aria_daemon
+
+        with (
+            patch(
+                "aria_queue.core.aria_rpc",
+                side_effect=RuntimeError("connection refused"),
+            ),
+            patch("aria_queue.core.subprocess.Popen"),
+            patch("aria_queue.core.time.sleep"),
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                ensure_aria_daemon()
+        self.assertIn("aria2c failed to start", str(ctx.exception))
+
+    # ── Bug #15: retry doesn't clear recovery fields ──
+    # Fixed: retry now pops recovered, recovered_at, recovery_session_id
+
+    def test_regression_retry_clears_recovery_fields(self) -> None:
+        from aria_queue.core import retry_queue_item
+
+        item = add_queue_item("https://example.com/recover-clear.bin")
+        items = load_queue()
+        items[0]["status"] = "error"
+        items[0]["recovered"] = True
+        items[0]["recovered_at"] = "2026-01-01T00:00:00+0000"
+        items[0]["recovery_session_id"] = "old-session"
+        save_queue(items)
+        result = retry_queue_item(item.id)
+        self.assertTrue(result["ok"])
+        self.assertNotIn("recovered", result["item"])
+        self.assertNotIn("recovered_at", result["item"])
+        self.assertNotIn("recovery_session_id", result["item"])
+        self.assertNotIn("error_code", result["item"])
+        self.assertNotIn("gid", result["item"])
+
+    # ── Bug #16: mirror URLs not deduplicated ──
+
+    def test_regression_mirror_urls_deduplicated(self) -> None:
+        from aria_queue.core import add_download
+
+        item = {
+            "url": "https://a.com/file.bin",
+            "mode": "mirror",
+            "mirrors": [
+                "https://b.com/file.bin",
+                "https://a.com/file.bin",
+                "https://b.com/file.bin",
+            ],
+        }
+        with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
+            add_download(item, cap_bytes_per_sec=250000)
+        uris = rpc.call_args[0][1][0]
+        self.assertEqual(len(uris), 2)
+        self.assertEqual(uris[0], "https://a.com/file.bin")
+        self.assertEqual(uris[1], "https://b.com/file.bin")
+
 
 class TestSecurityInputValidation(IsolatedTestCase):
     """Security and input validation at API boundaries."""

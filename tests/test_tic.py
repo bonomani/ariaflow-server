@@ -732,7 +732,9 @@ class TicAriaFlowTests(IsolatedTestCase):
         ):
             status = status_all()
         self.assertIn("0.1.1", status["ariaflow"]["result"]["message"])
-        self.assertIn("runtime download dependency", status["aria2"]["result"]["message"])
+        self.assertIn(
+            "runtime download dependency", status["aria2"]["result"]["message"]
+        )
         self.assertIn(
             "networkquality available", status["networkquality"]["result"]["message"]
         )
@@ -850,8 +852,8 @@ class TicPerItemTests(IsolatedTestCase):
         result = retry_queue_item(item.id)
         self.assertTrue(result["ok"])
         self.assertEqual(result["item"]["status"], "queued")
-        self.assertIsNone(result["item"]["error_code"])
-        self.assertIsNone(result["item"]["gid"])
+        self.assertNotIn("error_code", result["item"])
+        self.assertNotIn("gid", result["item"])
 
     def test_retry_rejects_non_error_item(self) -> None:
         from aria_queue.core import retry_queue_item
