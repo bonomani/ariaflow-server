@@ -83,7 +83,7 @@ class TestAddReflectedInStatus(CrossCheckBase):
         self.assertEqual(item["status"], "queued")
 
     def test_added_item_counted_in_summary(self) -> None:
-        before_code, before = _req(f"{self.base}/api/status")
+        _, before = _req(f"{self.base}/api/status")
         before_total = before["summary"]["total"]
 
         url = f"https://example.com/xc-count-{time.time()}.bin"
@@ -99,6 +99,41 @@ class TestAddReflectedInStatus(CrossCheckBase):
 
         _, status = _req(f"{self.base}/api/status")
         self.assertEqual(status["state"]["session_id"], session_id)
+
+    def test_add_multiple_all_in_status(self) -> None:
+        urls = [f"https://example.com/xc-multi-{i}-{time.time()}.bin" for i in range(3)]
+        _, added = _req(
+            f"{self.base}/api/add", "POST", {"items": [{"url": u} for u in urls]}
+        )
+        added_ids = {item["id"] for item in added["added"]}
+
+        _, status = _req(f"{self.base}/api/status")
+        status_ids = {item["id"] for item in status["items"]}
+        self.assertTrue(added_ids.issubset(status_ids))
+
+    def test_add_with_output_reflected(self) -> None:
+        url = f"https://example.com/xc-output-{time.time()}.bin"
+        _, added = _req(
+            f"{self.base}/api/add",
+            "POST",
+            {"items": [{"url": url, "output": "custom.bin"}]},
+        )
+        item_id = added["added"][0]["id"]
+        self.assertEqual(added["added"][0]["output"], "custom.bin")
+
+        _, status = _req(f"{self.base}/api/status")
+        item = next(i for i in status["items"] if i["id"] == item_id)
+        self.assertEqual(item.get("output"), "custom.bin")
+
+    def test_duplicate_add_same_id_in_status(self) -> None:
+        url = f"https://example.com/xc-dup-{time.time()}.bin"
+        _, first = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        _, second = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        self.assertEqual(first["added"][0]["id"], second["added"][0]["id"])
+
+        _, status = _req(f"{self.base}/api/status")
+        matching = [i for i in status["items"] if i["url"] == url]
+        self.assertEqual(len(matching), 1)
 
 
 # ═══════════════════════════════════════════════════════
@@ -128,6 +163,36 @@ class TestPauseReflectedInStatus(CrossCheckBase):
         _, status = _req(f"{self.base}/api/status")
         self.assertGreater(status["summary"].get("paused", 0), 0)
 
+    def test_pause_preserves_url_and_id(self) -> None:
+        url = f"https://example.com/xc-pause-fields-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+
+        _, status = _req(f"{self.base}/api/status")
+        item = next(i for i in status["items"] if i["id"] == item_id)
+        self.assertEqual(item["url"], url)
+        self.assertEqual(item["id"], item_id)
+
+    def test_pause_does_not_affect_other_items(self) -> None:
+        _, added = _req(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [
+                    {"url": f"https://example.com/xc-p-other-a-{time.time()}.bin"},
+                    {"url": f"https://example.com/xc-p-other-b-{time.time()}.bin"},
+                ]
+            },
+        )
+        id_a = added["added"][0]["id"]
+        id_b = added["added"][1]["id"]
+        _req(f"{self.base}/api/item/{id_a}/pause", "POST")
+
+        _, status = _req(f"{self.base}/api/status")
+        item_b = next(i for i in status["items"] if i["id"] == id_b)
+        self.assertEqual(item_b["status"], "queued")
+
 
 # ═══════════════════════════════════════════════════════
 # Resume → Status
@@ -147,6 +212,36 @@ class TestResumeReflectedInStatus(CrossCheckBase):
         _, status = _req(f"{self.base}/api/status")
         item = next(i for i in status["items"] if i["id"] == item_id)
         self.assertEqual(item["status"], expected_status)
+
+    def test_resume_clears_paused_summary(self) -> None:
+        url = f"https://example.com/xc-resume-sum-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+
+        _, before = _req(f"{self.base}/api/status")
+        paused_before = before["summary"].get("paused", 0)
+
+        _req(f"{self.base}/api/item/{item_id}/resume", "POST")
+
+        _, after = _req(f"{self.base}/api/status")
+        paused_after = after["summary"].get("paused", 0)
+        self.assertLess(paused_after, paused_before)
+
+    def test_pause_resume_cycle_preserves_url(self) -> None:
+        url = f"https://example.com/xc-cycle-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+        _req(f"{self.base}/api/item/{item_id}/resume", "POST")
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+        _req(f"{self.base}/api/item/{item_id}/resume", "POST")
+
+        _, status = _req(f"{self.base}/api/status")
+        item = next(i for i in status["items"] if i["id"] == item_id)
+        self.assertEqual(item["url"], url)
+        self.assertIn(item["status"], ("queued", "downloading"))
 
 
 # ═══════════════════════════════════════════════════════
@@ -192,7 +287,6 @@ class TestRetryReflectedInStatus(CrossCheckBase):
         _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
         item_id = added["added"][0]["id"]
 
-        # Force error state
         items = load_queue()
         for item in items:
             if item["id"] == item_id:
@@ -208,6 +302,63 @@ class TestRetryReflectedInStatus(CrossCheckBase):
         self.assertEqual(item["status"], "queued")
         self.assertIsNone(item.get("error_code"))
         self.assertIsNone(item.get("gid"))
+
+    def test_retry_clears_error_message(self) -> None:
+        url = f"https://example.com/xc-retry-msg-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+
+        items = load_queue()
+        for item in items:
+            if item["id"] == item_id:
+                item["status"] = "error"
+                item["error_code"] = "5"
+                item["error_message"] = "connection timeout"
+                item["gid"] = "gid-dead"
+        save_queue(items)
+
+        _req(f"{self.base}/api/item/{item_id}/retry", "POST")
+
+        _, status = _req(f"{self.base}/api/status")
+        item = next(i for i in status["items"] if i["id"] == item_id)
+        self.assertIsNone(item.get("error_message"))
+
+    def test_retry_preserves_url(self) -> None:
+        url = f"https://example.com/xc-retry-url-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+
+        items = load_queue()
+        for item in items:
+            if item["id"] == item_id:
+                item["status"] = "failed"
+        save_queue(items)
+
+        _req(f"{self.base}/api/item/{item_id}/retry", "POST")
+
+        _, status = _req(f"{self.base}/api/status")
+        item = next(i for i in status["items"] if i["id"] == item_id)
+        self.assertEqual(item["url"], url)
+
+    def test_retry_error_count_decreases(self) -> None:
+        url = f"https://example.com/xc-retry-errcount-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+
+        items = load_queue()
+        for item in items:
+            if item["id"] == item_id:
+                item["status"] = "error"
+        save_queue(items)
+
+        _, before = _req(f"{self.base}/api/status")
+        err_before = before["summary"].get("error", 0)
+
+        _req(f"{self.base}/api/item/{item_id}/retry", "POST")
+
+        _, after = _req(f"{self.base}/api/status")
+        err_after = after["summary"].get("error", 0)
+        self.assertLess(err_after, err_before)
 
 
 # ═══════════════════════════════════════════════════════
@@ -256,6 +407,55 @@ class TestDeclarationRoundtrip(CrossCheckBase):
         decl.pop("_request_id", None)
         opts.pop("_request_id", None)
         self.assertEqual(decl, opts)
+
+    def test_declaration_gate_change_reflected(self) -> None:
+        _, decl = _req(f"{self.base}/api/declaration")
+        decl["uic"]["gates"].append(
+            {"name": "xc_test_gate", "class": "readiness", "blocking": "soft"}
+        )
+        _req(f"{self.base}/api/declaration", "POST", decl)
+        _, reloaded = _req(f"{self.base}/api/declaration")
+        gate_names = [g["name"] for g in reloaded["uic"]["gates"]]
+        self.assertIn("xc_test_gate", gate_names)
+
+    def test_declaration_preference_value_change_reflected(self) -> None:
+        _, decl = _req(f"{self.base}/api/declaration")
+        for pref in decl["uic"]["preferences"]:
+            if pref["name"] == "max_simultaneous_downloads":
+                pref["value"] = 5
+        _req(f"{self.base}/api/declaration", "POST", decl)
+        _, reloaded = _req(f"{self.base}/api/declaration")
+        pref = next(
+            p
+            for p in reloaded["uic"]["preferences"]
+            if p["name"] == "max_simultaneous_downloads"
+        )
+        self.assertEqual(pref["value"], 5)
+
+    def test_all_bandwidth_prefs_in_declaration_and_config(self) -> None:
+        _, decl = _req(f"{self.base}/api/declaration")
+        pref_names = {p["name"] for p in decl["uic"]["preferences"]}
+        expected = {
+            "bandwidth_down_free_percent",
+            "bandwidth_down_free_absolute_mbps",
+            "bandwidth_up_free_percent",
+            "bandwidth_up_free_absolute_mbps",
+            "bandwidth_probe_interval_seconds",
+        }
+        self.assertTrue(expected.issubset(pref_names))
+
+        _, bw = _req(f"{self.base}/api/bandwidth")
+        config_keys = set(bw["config"].keys())
+        expected_config = {
+            "down_free_percent",
+            "down_free_absolute_mbps",
+            "down_use_percent",
+            "up_free_percent",
+            "up_free_absolute_mbps",
+            "up_use_percent",
+            "probe_interval_seconds",
+        }
+        self.assertTrue(expected_config.issubset(config_keys))
 
 
 # ═══════════════════════════════════════════════════════
@@ -487,6 +687,156 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
 # ═══════════════════════════════════════════════════════
 
 
+class TestLogEntryDetails(CrossCheckBase):
+    """Verify log entries contain the right detail fields."""
+
+    def test_add_log_contains_url(self) -> None:
+        url = f"https://example.com/xc-log-url-{time.time()}.bin"
+        _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        _, log = _req(f"{self.base}/api/log?limit=5")
+        add_entry = next((e for e in log["items"] if e.get("action") == "add"), None)
+        self.assertIsNotNone(add_entry)
+        self.assertIn("session_id", add_entry)
+        self.assertIn("timestamp", add_entry)
+
+    def test_pause_log_contains_item_id(self) -> None:
+        url = f"https://example.com/xc-log-pid-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+        _, log = _req(f"{self.base}/api/log?limit=5")
+        pause_entry = next(
+            (e for e in log["items"] if e.get("action") == "pause"), None
+        )
+        self.assertIsNotNone(pause_entry)
+        detail = pause_entry.get("detail", {})
+        self.assertEqual(detail.get("item_id"), item_id)
+
+    def test_remove_log_contains_item_id(self) -> None:
+        url = f"https://example.com/xc-log-rid-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+        _req(f"{self.base}/api/item/{item_id}/remove", "POST")
+        _, log = _req(f"{self.base}/api/log?limit=5")
+        rm_entry = next((e for e in log["items"] if e.get("action") == "remove"), None)
+        self.assertIsNotNone(rm_entry)
+        detail = rm_entry.get("detail", {})
+        self.assertEqual(detail.get("item_id"), item_id)
+
+    def test_log_entries_ordered_by_time(self) -> None:
+        for i in range(3):
+            _req(
+                f"{self.base}/api/add",
+                "POST",
+                {
+                    "items": [
+                        {
+                            "url": f"https://example.com/xc-log-order-{i}-{time.time()}.bin"
+                        }
+                    ]
+                },
+            )
+        _, log = _req(f"{self.base}/api/log?limit=10")
+        timestamps = [
+            e.get("timestamp", "") for e in log["items"] if e.get("timestamp")
+        ]
+        self.assertEqual(timestamps, sorted(timestamps))
+
+
+class TestMultiStepChains(CrossCheckBase):
+    """Verify state consistency across multi-step operation chains."""
+
+    def test_add_pause_resume_remove_chain(self) -> None:
+        url = f"https://example.com/xc-chain-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+
+        # Each step: verify action response matches status
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+        _, s = _req(f"{self.base}/api/status")
+        self.assertEqual(
+            next(i for i in s["items"] if i["id"] == item_id)["status"],
+            "paused",
+        )
+
+        _req(f"{self.base}/api/item/{item_id}/resume", "POST")
+        _, s = _req(f"{self.base}/api/status")
+        self.assertIn(
+            next(i for i in s["items"] if i["id"] == item_id)["status"],
+            ("queued", "downloading"),
+        )
+
+        _req(f"{self.base}/api/item/{item_id}/remove", "POST")
+        _, s = _req(f"{self.base}/api/status")
+        self.assertNotIn(item_id, [i["id"] for i in s["items"]])
+
+    def test_error_retry_pause_chain(self) -> None:
+        url = f"https://example.com/xc-err-chain-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+
+        # Set to error
+        items = load_queue()
+        for item in items:
+            if item["id"] == item_id:
+                item["status"] = "error"
+        save_queue(items)
+
+        # Retry → queued
+        _req(f"{self.base}/api/item/{item_id}/retry", "POST")
+        _, s = _req(f"{self.base}/api/status")
+        self.assertEqual(
+            next(i for i in s["items"] if i["id"] == item_id)["status"],
+            "queued",
+        )
+
+        # Pause → paused
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+        _, s = _req(f"{self.base}/api/status")
+        self.assertEqual(
+            next(i for i in s["items"] if i["id"] == item_id)["status"],
+            "paused",
+        )
+
+    def test_multiple_items_independent_state(self) -> None:
+        """Each item's state is independent of others."""
+        urls = [f"https://example.com/xc-indep-{i}-{time.time()}.bin" for i in range(4)]
+        _, added = _req(
+            f"{self.base}/api/add",
+            "POST",
+            {"items": [{"url": u} for u in urls]},
+        )
+        ids = [item["id"] for item in added["added"]]
+
+        # Pause first, remove second, leave third queued, error fourth
+        _req(f"{self.base}/api/item/{ids[0]}/pause", "POST")
+        _req(f"{self.base}/api/item/{ids[1]}/remove", "POST")
+        items = load_queue()
+        for item in items:
+            if item["id"] == ids[3]:
+                item["status"] = "error"
+        save_queue(items)
+
+        _, status = _req(f"{self.base}/api/status")
+        by_id = {i["id"]: i for i in status["items"]}
+        self.assertEqual(by_id[ids[0]]["status"], "paused")
+        self.assertNotIn(ids[1], by_id)
+        self.assertEqual(by_id[ids[2]]["status"], "queued")
+        self.assertEqual(by_id[ids[3]]["status"], "error")
+
+    def test_session_change_does_not_affect_existing_items(self) -> None:
+        url = f"https://example.com/xc-sess-keep-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+
+        _req(f"{self.base}/api/session", "POST", {"action": "new"})
+
+        _, status = _req(f"{self.base}/api/status")
+        item = next(i for i in status["items"] if i["id"] == item_id)
+        self.assertEqual(item["url"], url)
+        self.assertEqual(item["status"], "queued")
+
+
 class TestMutationsIncrementRevision(CrossCheckBase):
     def _get_rev(self) -> int:
         from aria_queue.core import load_state
@@ -517,6 +867,38 @@ class TestMutationsIncrementRevision(CrossCheckBase):
         )
         rev_before = self._get_rev()
         _req(f"{self.base}/api/session", "POST", {"action": "new"})
+        rev_after = self._get_rev()
+        self.assertGreater(rev_after, rev_before)
+
+    def test_pause_increments_rev(self) -> None:
+        url = f"https://example.com/xc-rev-pause-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+        rev_before = self._get_rev()
+        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+        rev_after = self._get_rev()
+        self.assertGreater(rev_after, rev_before)
+
+    def test_remove_increments_rev(self) -> None:
+        url = f"https://example.com/xc-rev-rm-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+        rev_before = self._get_rev()
+        _req(f"{self.base}/api/item/{item_id}/remove", "POST")
+        rev_after = self._get_rev()
+        self.assertGreater(rev_after, rev_before)
+
+    def test_retry_increments_rev(self) -> None:
+        url = f"https://example.com/xc-rev-retry-{time.time()}.bin"
+        _, added = _req(f"{self.base}/api/add", "POST", {"items": [{"url": url}]})
+        item_id = added["added"][0]["id"]
+        items = load_queue()
+        for item in items:
+            if item["id"] == item_id:
+                item["status"] = "error"
+        save_queue(items)
+        rev_before = self._get_rev()
+        _req(f"{self.base}/api/item/{item_id}/retry", "POST")
         rev_after = self._get_rev()
         self.assertGreater(rev_after, rev_before)
 
