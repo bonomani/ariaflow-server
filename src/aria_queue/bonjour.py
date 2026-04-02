@@ -17,7 +17,9 @@ def bonjour_available() -> bool:
 
 
 @contextmanager
-def advertise_http_service(*, role: str, port: int, path: str, product: str, version: str) -> Iterator[None]:
+def advertise_http_service(
+    *, role: str, port: int, path: str, product: str, version: str
+) -> Iterator[None]:
     if not bonjour_available():
         yield
         return

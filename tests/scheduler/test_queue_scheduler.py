@@ -10,7 +10,15 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from aria_queue.contracts import load_declaration, save_declaration
-from aria_queue.core import add_queue_item, cleanup_queue_state, load_queue, load_state, process_queue, save_queue, save_state
+from aria_queue.core import (
+    add_queue_item,
+    cleanup_queue_state,
+    load_queue,
+    load_state,
+    process_queue,
+    save_queue,
+    save_state,
+)
 
 
 class QueueSchedulerTests(unittest.TestCase):
@@ -33,46 +41,72 @@ class QueueSchedulerTests(unittest.TestCase):
                 break
         save_declaration(declaration)
 
-    def test_process_queue_starts_only_one_download_with_default_sequential_limit(self) -> None:
+    def test_process_queue_starts_only_one_download_with_default_sequential_limit(
+        self,
+    ) -> None:
         add_queue_item("https://example.com/one.gguf")
         add_queue_item("https://example.com/two.gguf")
 
-        with patch("aria_queue.core.ensure_aria_daemon"), \
-             patch("aria_queue.core.deduplicate_active_transfers"), \
-             patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth"), \
-             patch("aria_queue.core.active_gids", return_value=[]), \
-             patch("aria_queue.core.add_download", return_value="gid-1") as add_download, \
-             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")):
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.add_download", return_value="gid-1") as add_download,
+            patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
+        ):
             with self.assertRaisesRegex(RuntimeError, "stop loop"):
                 process_queue()
 
         add_download.assert_called_once()
 
-    def test_process_queue_respects_runner_paused_state_and_starts_no_new_downloads(self) -> None:
+    def test_process_queue_respects_runner_paused_state_and_starts_no_new_downloads(
+        self,
+    ) -> None:
         add_queue_item("https://example.com/queued.gguf")
         state = load_state()
         state["paused"] = True
         save_state(state)
 
-        with patch("aria_queue.core.ensure_aria_daemon"), \
-             patch("aria_queue.core.deduplicate_active_transfers"), \
-             patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth"), \
-             patch("aria_queue.core.active_gids", return_value=[]), \
-             patch("aria_queue.core.add_download") as add_download, \
-             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")):
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.add_download") as add_download,
+            patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
+        ):
             with self.assertRaisesRegex(RuntimeError, "stop loop"):
                 process_queue()
 
         add_download.assert_not_called()
         self.assertEqual(load_state()["paused"], True)
 
-    def test_process_queue_honors_active_slot_limit_before_starting_new_work(self) -> None:
+    def test_process_queue_honors_active_slot_limit_before_starting_new_work(
+        self,
+    ) -> None:
         add_queue_item("https://example.com/already-running.gguf")
         add_queue_item("https://example.com/queued.gguf")
         self._set_simultaneous_limit(1)
@@ -93,16 +127,28 @@ class QueueSchedulerTests(unittest.TestCase):
             "files": [{"uris": [{"uri": "https://example.com/already-running.gguf"}]}],
         }
 
-        with patch("aria_queue.core.ensure_aria_daemon"), \
-             patch("aria_queue.core.deduplicate_active_transfers"), \
-             patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth"), \
-             patch("aria_queue.core.active_gids", return_value=[]), \
-             patch("aria_queue.core.status", return_value=active_info), \
-             patch("aria_queue.core.add_download", return_value="gid-new") as add_download, \
-             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")):
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.status", return_value=active_info),
+            patch(
+                "aria_queue.core.add_download", return_value="gid-new"
+            ) as add_download,
+            patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
+        ):
             with self.assertRaisesRegex(RuntimeError, "stop loop"):
                 process_queue()
 
@@ -179,7 +225,9 @@ class QueueSchedulerTests(unittest.TestCase):
         self.assertNotIn("recovered_at", items[0])
         self.assertNotIn("recovery_session_id", items[0])
 
-    def test_cleanup_queue_state_normalizes_stale_live_status_for_paused_item(self) -> None:
+    def test_cleanup_queue_state_normalizes_stale_live_status_for_paused_item(
+        self,
+    ) -> None:
         save_queue(
             [
                 {
@@ -222,15 +270,25 @@ class QueueSchedulerTests(unittest.TestCase):
             ]
         )
 
-        with patch("aria_queue.core.ensure_aria_daemon"), \
-             patch("aria_queue.core.deduplicate_active_transfers"), \
-             patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth"), \
-             patch("aria_queue.core.active_gids", return_value=[]), \
-             patch("aria_queue.core.add_download", return_value="gid-1"), \
-             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")):
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.add_download", return_value="gid-1"),
+            patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
+        ):
             with self.assertRaisesRegex(RuntimeError, "stop loop"):
                 process_queue()
 

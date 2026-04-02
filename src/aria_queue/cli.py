@@ -42,15 +42,27 @@ def build_parser() -> argparse.ArgumentParser:
 
     install = sub.add_parser("install", help="install ariaflow on macOS")
     install.add_argument("--dry-run", action="store_true")
-    install.add_argument("--with-aria2", action="store_true", help="also install the optional advanced aria2 launchd service")
+    install.add_argument(
+        "--with-aria2",
+        action="store_true",
+        help="also install the optional advanced aria2 launchd service",
+    )
 
-    uninstall = sub.add_parser("uninstall", help="remove installed ariaflow components on macOS")
+    uninstall = sub.add_parser(
+        "uninstall", help="remove installed ariaflow components on macOS"
+    )
     uninstall.add_argument("--dry-run", action="store_true")
-    uninstall.add_argument("--with-aria2", action="store_true", help="also remove the optional advanced aria2 launchd service")
+    uninstall.add_argument(
+        "--with-aria2",
+        action="store_true",
+        help="also remove the optional advanced aria2 launchd service",
+    )
 
-    lifecycle = sub.add_parser("lifecycle", help="show install and service status")
+    sub.add_parser("lifecycle", help="show install and service status")
 
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
 
     return parser
 
@@ -60,7 +72,9 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "add":
-        item = add_queue_item(args.url, output=args.output, post_action_rule=args.post_action_rule)
+        item = add_queue_item(
+            args.url, output=args.output, post_action_rule=args.post_action_rule
+        )
         print(f"Queued: {item.url}")
         return 0
 
@@ -88,7 +102,9 @@ def main() -> int:
                 print(f"[GATE] {gate['name']} : {state} [{gate['blocking']}]")
             for pref in result["preferences"]:
                 options = " | ".join(pref.get("options", []))
-                print(f"[PREFERENCE] {pref['name']} : {pref.get('value', 'undeclared')} — options: {options}")
+                print(
+                    f"[PREFERENCE] {pref['name']} : {pref.get('value', 'undeclared')} — options: {options}"
+                )
         return result["exit_code"]
 
     if args.command == "ucc":

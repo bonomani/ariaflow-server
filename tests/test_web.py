@@ -40,7 +40,9 @@ class WebSmokeTests(unittest.TestCase):
             time.sleep(0.2)
             try:
                 base = f"http://127.0.0.1:{port}"
-                page = urllib.request.urlopen(f"{base}/", timeout=5).read().decode("utf-8")
+                page = (
+                    urllib.request.urlopen(f"{base}/", timeout=5).read().decode("utf-8")
+                )
                 self.assertIn("ariaflow API", page)
                 self.assertIn("API-only", page)
                 for route in ("/bandwidth", "/lifecycle", "/options", "/log"):
@@ -70,11 +72,28 @@ class WebSmokeTests(unittest.TestCase):
                 )
                 self.assertTrue(session["ok"])
                 self.assertIn("session", session)
-                with patch("aria_queue.webapp.is_macos", return_value=True), \
-                     patch("aria_queue.webapp.homebrew_install_ariaflow", return_value=["brew tap bonomani/ariaflow", "brew install ariaflow"]), \
-                     patch("aria_queue.webapp.homebrew_uninstall_ariaflow", return_value=["brew uninstall ariaflow"]), \
-                     patch("aria_queue.webapp.install_aria2_launchd", return_value=["load aria2"]), \
-                     patch("aria_queue.webapp.uninstall_aria2_launchd", return_value=["unload aria2"]):
+                with (
+                    patch("aria_queue.webapp.is_macos", return_value=True),
+                    patch(
+                        "aria_queue.webapp.homebrew_install_ariaflow",
+                        return_value=[
+                            "brew tap bonomani/ariaflow",
+                            "brew install ariaflow",
+                        ],
+                    ),
+                    patch(
+                        "aria_queue.webapp.homebrew_uninstall_ariaflow",
+                        return_value=["brew uninstall ariaflow"],
+                    ),
+                    patch(
+                        "aria_queue.webapp.install_aria2_launchd",
+                        return_value=["load aria2"],
+                    ),
+                    patch(
+                        "aria_queue.webapp.uninstall_aria2_launchd",
+                        return_value=["unload aria2"],
+                    ),
+                ):
                     lifecycle_action = request_json(
                         f"{base}/api/lifecycle/action",
                         method="POST",
@@ -91,17 +110,32 @@ class WebSmokeTests(unittest.TestCase):
                 added = request_json(
                     f"{base}/api/add",
                     method="POST",
-                    payload={"items": [{"url": "https://example.com/file.gguf", "output": "file.gguf", "post_action_rule": "pending"}]},
+                    payload={
+                        "items": [
+                            {
+                                "url": "https://example.com/file.gguf",
+                                "output": "file.gguf",
+                                "post_action_rule": "pending",
+                            }
+                        ]
+                    },
                 )
                 self.assertTrue(added["ok"])
                 self.assertEqual(added["count"], 1)
-                self.assertEqual(added["added"][0]["url"], "https://example.com/file.gguf")
+                self.assertEqual(
+                    added["added"][0]["url"], "https://example.com/file.gguf"
+                )
                 self.assertEqual(added["added"][0]["output"], "file.gguf")
                 self.assertEqual(added["added"][0]["post_action_rule"], "pending")
                 added_many = request_json(
                     f"{base}/api/add",
                     method="POST",
-                    payload={"items": [{"url": "https://example.com/one.gguf"}, {"url": "https://example.com/two.gguf"}]},
+                    payload={
+                        "items": [
+                            {"url": "https://example.com/one.gguf"},
+                            {"url": "https://example.com/two.gguf"},
+                        ]
+                    },
                 )
                 self.assertTrue(added_many["ok"])
                 self.assertEqual(len(added_many["added"]), 2)
@@ -121,7 +155,9 @@ class WebSmokeTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
-    def test_status_payload_does_not_synthesize_active_from_paused_queue_item(self) -> None:
+    def test_status_payload_does_not_synthesize_active_from_paused_queue_item(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["ARIA_QUEUE_DIR"] = tmp
             save_queue(
@@ -161,10 +197,21 @@ class WebSmokeTests(unittest.TestCase):
                     "session_id": "session-1",
                 }
             )
-            with patch("aria_queue.webapp.current_bandwidth", return_value={"limit": "0"}), \
-                 patch("aria_queue.webapp.aria_status", return_value={"reachable": True, "version": "1.37.0", "error": None}), \
-                 patch("aria_queue.webapp.active_status", return_value=None), \
-                 patch("aria_queue.webapp.active_gids", return_value=[]):
+            with (
+                patch(
+                    "aria_queue.webapp.current_bandwidth", return_value={"limit": "0"}
+                ),
+                patch(
+                    "aria_queue.webapp.aria_status",
+                    return_value={
+                        "reachable": True,
+                        "version": "1.37.0",
+                        "error": None,
+                    },
+                ),
+                patch("aria_queue.webapp.active_status", return_value=None),
+                patch("aria_queue.webapp.active_gids", return_value=[]),
+            ):
                 server = serve(host="127.0.0.1", port=0)
                 port = server.server_address[1]
                 thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -173,7 +220,9 @@ class WebSmokeTests(unittest.TestCase):
                 try:
                     status = request_json(f"http://127.0.0.1:{port}/api/status")
                     self.assertEqual(len(status["items"]), 2)
-                    paused = next(item for item in status["items"] if item["status"] == "paused")
+                    paused = next(
+                        item for item in status["items"] if item["status"] == "paused"
+                    )
                     self.assertEqual(paused["live_status"], "paused")
                     self.assertNotIn("active", status)
                     self.assertNotIn("actives", status)
@@ -196,9 +245,13 @@ class WebSmokeTests(unittest.TestCase):
                 base = f"http://127.0.0.1:{port}"
 
                 # Add an item
-                added = request_json(f"{base}/api/add", method="POST", payload={
-                    "items": [{"url": "https://example.com/test.bin"}],
-                })
+                added = request_json(
+                    f"{base}/api/add",
+                    method="POST",
+                    payload={
+                        "items": [{"url": "https://example.com/test.bin"}],
+                    },
+                )
                 self.assertTrue(added["ok"])
                 item_id = added["added"][0]["id"]
                 self.assertEqual(added["added"][0]["status"], "queued")
@@ -209,7 +262,9 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertEqual(paused["item"]["status"], "paused")
 
                 # Resume it
-                resumed = request_json(f"{base}/api/item/{item_id}/resume", method="POST")
+                resumed = request_json(
+                    f"{base}/api/item/{item_id}/resume", method="POST"
+                )
                 self.assertTrue(resumed["ok"])
                 self.assertEqual(resumed["item"]["status"], "queued")
 
@@ -226,19 +281,24 @@ class WebSmokeTests(unittest.TestCase):
                 # Resume, then manually set to error for retry test
                 request_json(f"{base}/api/item/{item_id}/resume", method="POST")
                 from aria_queue.core import load_queue, save_queue
+
                 items = load_queue()
                 items[0]["status"] = "error"
                 items[0]["error_code"] = "1"
                 save_queue(items)
 
                 # Retry
-                retried = request_json(f"{base}/api/item/{item_id}/retry", method="POST")
+                retried = request_json(
+                    f"{base}/api/item/{item_id}/retry", method="POST"
+                )
                 self.assertTrue(retried["ok"])
                 self.assertEqual(retried["item"]["status"], "queued")
                 self.assertIsNone(retried["item"]["error_code"])
 
                 # Remove
-                removed = request_json(f"{base}/api/item/{item_id}/remove", method="POST")
+                removed = request_json(
+                    f"{base}/api/item/{item_id}/remove", method="POST"
+                )
                 self.assertTrue(removed["ok"])
                 self.assertTrue(removed["removed"])
 
@@ -277,7 +337,11 @@ class WebSmokeTests(unittest.TestCase):
             try:
                 base = f"http://127.0.0.1:{port}"
                 try:
-                    request_json(f"{base}/api/aria2/options", method="POST", payload={"dir": "/tmp/evil"})
+                    request_json(
+                        f"{base}/api/aria2/options",
+                        method="POST",
+                        payload={"dir": "/tmp/evil"},
+                    )
                     self.fail("expected 400")
                 except urllib.error.HTTPError as exc:
                     self.assertEqual(exc.code, 400)
@@ -299,7 +363,9 @@ class WebSmokeTests(unittest.TestCase):
                 base = f"http://127.0.0.1:{port}"
 
                 # OpenAPI spec
-                with urllib.request.urlopen(f"{base}/api/openapi.yaml", timeout=5) as resp:
+                with urllib.request.urlopen(
+                    f"{base}/api/openapi.yaml", timeout=5
+                ) as resp:
                     self.assertEqual(resp.status, 200)
                     content_type = resp.headers.get("Content-Type", "")
                     self.assertIn("yaml", content_type)
@@ -334,8 +400,12 @@ class WebSmokeTests(unittest.TestCase):
             time.sleep(0.2)
             try:
                 fake_output = "test_example (test_tic.TicAriaFlowTests) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nOK\n"
-                fake_result = type("R", (), {"returncode": 0, "stderr": fake_output, "stdout": ""})()
-                with patch("aria_queue.webapp.subprocess.run", return_value=fake_result):
+                fake_result = type(
+                    "R", (), {"returncode": 0, "stderr": fake_output, "stdout": ""}
+                )()
+                with patch(
+                    "aria_queue.webapp.subprocess.run", return_value=fake_result
+                ):
                     result = request_json(f"http://127.0.0.1:{port}/api/tests")
                 self.assertTrue(result["ok"])
                 self.assertEqual(result["total"], 1)
@@ -365,9 +435,15 @@ class WebSmokeTests(unittest.TestCase):
                     "warnings": [],
                     "hard_failures": ["aria2_available"],
                 }
-                with patch("aria_queue.webapp.auto_preflight_on_run", return_value=False), \
-                     patch("aria_queue.webapp.preflight", return_value=preflight_result), \
-                     patch("aria_queue.webapp.start_background_process") as start_background_process:
+                with (
+                    patch(
+                        "aria_queue.webapp.auto_preflight_on_run", return_value=False
+                    ),
+                    patch("aria_queue.webapp.preflight", return_value=preflight_result),
+                    patch(
+                        "aria_queue.webapp.start_background_process"
+                    ) as start_background_process,
+                ):
                     with self.assertRaises(urllib.error.HTTPError) as run_error:
                         request_json(
                             f"{base}/api/run",

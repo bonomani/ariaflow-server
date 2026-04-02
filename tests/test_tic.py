@@ -28,7 +28,12 @@ from aria_queue.core import (
     save_state,
     start_new_state_session,
 )
-from aria_queue.install import install_all, networkquality_status, status_all, uninstall_all
+from aria_queue.install import (
+    install_all,
+    networkquality_status,
+    status_all,
+    uninstall_all,
+)
 
 
 class TicAriaFlowTests(unittest.TestCase):
@@ -52,11 +57,14 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(item.status, "queued")
         self.assertTrue(item.session_id)
         from aria_queue.core import load_state
+
         state = load_state()
         self.assertTrue(state.get("session_started_at"))
         self.assertTrue(state.get("session_last_seen_at"))
         log = load_action_log()
-        add_entry = next(entry for entry in reversed(log) if entry.get("action") == "add")
+        add_entry = next(
+            entry for entry in reversed(log) if entry.get("action") == "add"
+        )
         self.assertIn("session_id", add_entry)
         self.assertIn("observed_before", add_entry)
         self.assertIn("observed_after", add_entry)
@@ -65,7 +73,9 @@ class TicAriaFlowTests(unittest.TestCase):
         first = add_queue_item("https://example.com/one.gguf")
         state_before = load_state()
         next_state = start_new_state_session()
-        self.assertNotEqual(state_before.get("session_id"), next_state.get("session_id"))
+        self.assertNotEqual(
+            state_before.get("session_id"), next_state.get("session_id")
+        )
         self.assertTrue(next_state.get("session_started_at"))
         self.assertIsNone(next_state.get("session_closed_at"))
         self.assertEqual(first.session_id, state_before.get("session_id"))
@@ -75,12 +85,19 @@ class TicAriaFlowTests(unittest.TestCase):
         second = add_queue_item("https://example.com/model.gguf")
         self.assertEqual(first.id, second.id)
         log = load_action_log()
-        duplicate_entry = next(entry for entry in reversed(log) if entry.get("reason") == "duplicate_url")
+        duplicate_entry = next(
+            entry for entry in reversed(log) if entry.get("reason") == "duplicate_url"
+        )
         self.assertEqual(duplicate_entry["outcome"], "unchanged")
 
     def test_preflight_emits_gate_results(self) -> None:
-        with patch("aria_queue.contracts.aria_rpc", return_value={"result": {"version": "1.37.0"}}), \
-             patch("aria_queue.contracts.ensure_aria_daemon") as ensure:
+        with (
+            patch(
+                "aria_queue.contracts.aria_rpc",
+                return_value={"result": {"version": "1.37.0"}},
+            ),
+            patch("aria_queue.contracts.ensure_aria_daemon") as ensure,
+        ):
             result = preflight()
         self.assertIn("gates", result)
         self.assertIn("status", result)
@@ -89,12 +106,20 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertFalse(ensure.called)
 
     def test_preflight_bootstraps_aria2_when_rpc_is_initially_unavailable(self) -> None:
-        with patch(
-            "aria_queue.contracts.aria_rpc",
-            side_effect=[RuntimeError("offline"), {"result": {"version": "1.37.0"}}],
-        ), patch("aria_queue.contracts.ensure_aria_daemon") as ensure:
+        with (
+            patch(
+                "aria_queue.contracts.aria_rpc",
+                side_effect=[
+                    RuntimeError("offline"),
+                    {"result": {"version": "1.37.0"}},
+                ],
+            ),
+            patch("aria_queue.contracts.ensure_aria_daemon") as ensure,
+        ):
             result = preflight()
-        gate = next(gate for gate in result["gates"] if gate["name"] == "aria2_available")
+        gate = next(
+            gate for gate in result["gates"] if gate["name"] == "aria2_available"
+        )
         self.assertTrue(gate["satisfied"])
         ensure.assert_called_once_with(port=6800)
 
@@ -103,7 +128,9 @@ class TicAriaFlowTests(unittest.TestCase):
 
         declaration = load_declaration()
         prefs = declaration.get("uic", {}).get("preferences", [])
-        auto = next((pref for pref in prefs if pref.get("name") == "auto_preflight_on_run"), {})
+        auto = next(
+            (pref for pref in prefs if pref.get("name") == "auto_preflight_on_run"), {}
+        )
         self.assertFalse(auto.get("value", True))
 
     def test_concurrency_default_is_sequential(self) -> None:
@@ -111,7 +138,14 @@ class TicAriaFlowTests(unittest.TestCase):
 
         declaration = load_declaration()
         prefs = declaration.get("uic", {}).get("preferences", [])
-        limit = next((pref for pref in prefs if pref.get("name") == "max_simultaneous_downloads"), {})
+        limit = next(
+            (
+                pref
+                for pref in prefs
+                if pref.get("name") == "max_simultaneous_downloads"
+            ),
+            {},
+        )
         self.assertEqual(limit.get("value", 0), 1)
 
     def test_duplicate_active_transfer_default_is_remove(self) -> None:
@@ -119,7 +153,14 @@ class TicAriaFlowTests(unittest.TestCase):
 
         declaration = load_declaration()
         prefs = declaration.get("uic", {}).get("preferences", [])
-        dedup = next((pref for pref in prefs if pref.get("name") == "duplicate_active_transfer_action"), {})
+        dedup = next(
+            (
+                pref
+                for pref in prefs
+                if pref.get("name") == "duplicate_active_transfer_action"
+            ),
+            {},
+        )
         self.assertEqual(dedup.get("value"), "remove")
 
     def test_probe_fallback_reports_reason(self) -> None:
@@ -131,9 +172,25 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(result["cap_bytes_per_sec"], 250000)
 
     def test_probe_uses_machine_readable_networkquality_output(self) -> None:
-        output = json.dumps({"dl_throughput": 80_000_000, "dl_responsiveness": 1200, "interface_name": "en0"})
-        with patch("aria_queue.core._find_networkquality", return_value="/usr/bin/networkQuality"), \
-             patch("aria_queue.core.subprocess.run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout=output)) as run:
+        output = json.dumps(
+            {
+                "dl_throughput": 80_000_000,
+                "dl_responsiveness": 1200,
+                "interface_name": "en0",
+            }
+        )
+        with (
+            patch(
+                "aria_queue.core._find_networkquality",
+                return_value="/usr/bin/networkQuality",
+            ),
+            patch(
+                "aria_queue.core.subprocess.run",
+                return_value=subprocess.CompletedProcess(
+                    args=[], returncode=0, stdout=output
+                ),
+            ) as run,
+        ):
             result = probe_bandwidth()
         run.assert_called_once_with(
             ["/usr/bin/networkQuality", "-u", "-c", "-s", "-M", "8"],
@@ -157,8 +214,13 @@ class TicAriaFlowTests(unittest.TestCase):
             timeout=10,
             output="",
         )
-        with patch("aria_queue.core._find_networkquality", return_value="/usr/bin/networkQuality"), \
-             patch("aria_queue.core.subprocess.run", side_effect=timeout):
+        with (
+            patch(
+                "aria_queue.core._find_networkquality",
+                return_value="/usr/bin/networkQuality",
+            ),
+            patch("aria_queue.core.subprocess.run", side_effect=timeout),
+        ):
             result = probe_bandwidth()
         self.assertEqual(result["source"], "default")
         self.assertEqual(result["reason"], "probe_timeout_no_parse")
@@ -167,8 +229,12 @@ class TicAriaFlowTests(unittest.TestCase):
 
     def test_should_probe_bandwidth_uses_interval(self) -> None:
         self.assertTrue(_should_probe_bandwidth({}))
-        self.assertFalse(_should_probe_bandwidth({"last_bandwidth_probe_at": 100.0}, now=200.0))
-        self.assertTrue(_should_probe_bandwidth({"last_bandwidth_probe_at": 100.0}, now=281.0))
+        self.assertFalse(
+            _should_probe_bandwidth({"last_bandwidth_probe_at": 100.0}, now=200.0)
+        )
+        self.assertTrue(
+            _should_probe_bandwidth({"last_bandwidth_probe_at": 100.0}, now=281.0)
+        )
 
     def test_apply_bandwidth_probe_reuses_recent_probe(self) -> None:
         state = {
@@ -180,11 +246,13 @@ class TicAriaFlowTests(unittest.TestCase):
             },
             "last_bandwidth_probe_at": 100.0,
         }
-        with patch("aria_queue.core.time.time", return_value=120.0), \
-             patch("aria_queue.core.probe_bandwidth") as probe_bandwidth_mock, \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock, \
-             patch("aria_queue.core.record_action") as record_action_mock:
+        with (
+            patch("aria_queue.core.time.time", return_value=120.0),
+            patch("aria_queue.core.probe_bandwidth") as probe_bandwidth_mock,
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock,
+            patch("aria_queue.core.record_action") as record_action_mock,
+        ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
         self.assertFalse(probe_bandwidth_mock.called)
         self.assertFalse(set_bandwidth_mock.called)
@@ -201,11 +269,15 @@ class TicAriaFlowTests(unittest.TestCase):
             "cap_mbps": 32.0,
             "cap_bytes_per_sec": 4_000_000,
         }
-        with patch("aria_queue.core.time.time", return_value=400.0), \
-             patch("aria_queue.core.probe_bandwidth", return_value=fresh_probe) as probe_bandwidth_mock, \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock, \
-             patch("aria_queue.core.record_action") as record_action_mock:
+        with (
+            patch("aria_queue.core.time.time", return_value=400.0),
+            patch(
+                "aria_queue.core.probe_bandwidth", return_value=fresh_probe
+            ) as probe_bandwidth_mock,
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock,
+            patch("aria_queue.core.record_action") as record_action_mock,
+        ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
         probe_bandwidth_mock.assert_called_once()
         set_bandwidth_mock.assert_called_once_with(4_000_000, port=6800)
@@ -216,40 +288,112 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(state["last_bandwidth_probe_at"], 400.0)
 
     def test_discover_active_transfer_prefers_state_gid(self) -> None:
-        with patch("aria_queue.core.load_state", return_value={"active_gid": "gid-1", "active_url": "https://example.com/a.gguf"}), \
-             patch("aria_queue.core.status", return_value={"status": "active", "completedLength": "10", "totalLength": "100", "downloadSpeed": "5"}):
+        with (
+            patch(
+                "aria_queue.core.load_state",
+                return_value={
+                    "active_gid": "gid-1",
+                    "active_url": "https://example.com/a.gguf",
+                },
+            ),
+            patch(
+                "aria_queue.core.status",
+                return_value={
+                    "status": "active",
+                    "completedLength": "10",
+                    "totalLength": "100",
+                    "downloadSpeed": "5",
+                },
+            ),
+        ):
             active = discover_active_transfer()
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["status"], "active")
         self.assertEqual(active["percent"], 10.0)
 
     def test_discover_active_transfer_recovers_url_from_queue(self) -> None:
-        with patch("aria_queue.core.load_state", return_value={"active_gid": "gid-1", "active_url": None}), \
-             patch("aria_queue.core.load_queue", return_value=[{"id": "item-1", "url": "https://example.com/recovered.gguf", "status": "paused", "gid": "gid-1"}]), \
-             patch("aria_queue.core.status", return_value={"status": "active", "completedLength": "10", "totalLength": "100", "downloadSpeed": "5"}):
+        with (
+            patch(
+                "aria_queue.core.load_state",
+                return_value={"active_gid": "gid-1", "active_url": None},
+            ),
+            patch(
+                "aria_queue.core.load_queue",
+                return_value=[
+                    {
+                        "id": "item-1",
+                        "url": "https://example.com/recovered.gguf",
+                        "status": "paused",
+                        "gid": "gid-1",
+                    }
+                ],
+            ),
+            patch(
+                "aria_queue.core.status",
+                return_value={
+                    "status": "active",
+                    "completedLength": "10",
+                    "totalLength": "100",
+                    "downloadSpeed": "5",
+                },
+            ),
+        ):
             active = discover_active_transfer()
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["url"], "https://example.com/recovered.gguf")
 
-    def test_reconcile_promotes_paused_item_to_downloading_when_live_active(self) -> None:
-        queue_item = {"id": "item-1", "url": "https://example.com/file.gguf", "status": "paused", "gid": "gid-1", "session_id": "batch-1"}
-        live = [{"gid": "gid-1", "status": "active", "completedLength": "50", "totalLength": "100", "downloadSpeed": "10", "files": [{"uris": [{"uri": "https://example.com/file.gguf"}]}]}]
-        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}), \
-             patch("aria_queue.core.active_gids", return_value=live), \
-             patch("aria_queue.core.load_queue", return_value=[queue_item]), \
-             patch("aria_queue.core.save_queue") as save_queue, \
-             patch("aria_queue.core.record_action"):
+    def test_reconcile_promotes_paused_item_to_downloading_when_live_active(
+        self,
+    ) -> None:
+        queue_item = {
+            "id": "item-1",
+            "url": "https://example.com/file.gguf",
+            "status": "paused",
+            "gid": "gid-1",
+            "session_id": "batch-1",
+        }
+        live = [
+            {
+                "gid": "gid-1",
+                "status": "active",
+                "completedLength": "50",
+                "totalLength": "100",
+                "downloadSpeed": "10",
+                "files": [{"uris": [{"uri": "https://example.com/file.gguf"}]}],
+            }
+        ]
+        with (
+            patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}),
+            patch("aria_queue.core.active_gids", return_value=live),
+            patch("aria_queue.core.load_queue", return_value=[queue_item]),
+            patch("aria_queue.core.save_queue") as save_queue,
+            patch("aria_queue.core.record_action"),
+        ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
         saved = save_queue.call_args[0][0]
         self.assertEqual(saved[0]["status"], "downloading")
 
     def test_reconcile_live_queue_adopts_unmatched_active_job(self) -> None:
-        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}), \
-             patch("aria_queue.core.active_gids", return_value=[{"gid": "gid-9", "status": "active", "completedLength": "5", "totalLength": "100", "downloadSpeed": "10", "files": [{"uris": [{"uri": "https://example.com/new.gguf"}]}]}]), \
-             patch("aria_queue.core.load_queue", return_value=[]), \
-             patch("aria_queue.core.save_queue") as save_queue, \
-             patch("aria_queue.core.record_action") as record_action:
+        with (
+            patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}),
+            patch(
+                "aria_queue.core.active_gids",
+                return_value=[
+                    {
+                        "gid": "gid-9",
+                        "status": "active",
+                        "completedLength": "5",
+                        "totalLength": "100",
+                        "downloadSpeed": "10",
+                        "files": [{"uris": [{"uri": "https://example.com/new.gguf"}]}],
+                    }
+                ],
+            ),
+            patch("aria_queue.core.load_queue", return_value=[]),
+            patch("aria_queue.core.save_queue") as save_queue,
+            patch("aria_queue.core.record_action") as record_action,
+        ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
         self.assertEqual(result["recovered"], 1)
@@ -257,11 +401,36 @@ class TicAriaFlowTests(unittest.TestCase):
         record_action.assert_called_once()
 
     def test_reconcile_live_queue_updates_old_session_item_in_place(self) -> None:
-        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-2"}), \
-             patch("aria_queue.core.active_gids", return_value=[{"gid": "gid-9", "status": "active", "completedLength": "50", "totalLength": "100", "downloadSpeed": "10", "files": [{"uris": [{"uri": "https://example.com/file.gguf"}]}]}]), \
-             patch("aria_queue.core.load_queue", return_value=[{"id": "item-1", "url": "https://example.com/file.gguf", "status": "paused", "gid": "gid-old", "session_id": "batch-1"}]), \
-             patch("aria_queue.core.save_queue") as save_queue, \
-             patch("aria_queue.core.record_action") as record_action:
+        with (
+            patch("aria_queue.core.load_state", return_value={"session_id": "batch-2"}),
+            patch(
+                "aria_queue.core.active_gids",
+                return_value=[
+                    {
+                        "gid": "gid-9",
+                        "status": "active",
+                        "completedLength": "50",
+                        "totalLength": "100",
+                        "downloadSpeed": "10",
+                        "files": [{"uris": [{"uri": "https://example.com/file.gguf"}]}],
+                    }
+                ],
+            ),
+            patch(
+                "aria_queue.core.load_queue",
+                return_value=[
+                    {
+                        "id": "item-1",
+                        "url": "https://example.com/file.gguf",
+                        "status": "paused",
+                        "gid": "gid-old",
+                        "session_id": "batch-1",
+                    }
+                ],
+            ),
+            patch("aria_queue.core.save_queue") as save_queue,
+            patch("aria_queue.core.record_action") as record_action,
+        ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
         self.assertEqual(result["recovered"], 1)
@@ -270,7 +439,9 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertEqual(saved_items[0]["recovery_session_id"], "batch-2")
         record_action.assert_called_once()
 
-    def test_reconcile_live_queue_collapses_duplicate_rows_for_same_live_download(self) -> None:
+    def test_reconcile_live_queue_collapses_duplicate_rows_for_same_live_download(
+        self,
+    ) -> None:
         queue_items = [
             {
                 "id": "item-1",
@@ -290,35 +461,52 @@ class TicAriaFlowTests(unittest.TestCase):
                 "recovered": True,
             },
         ]
-        live = [{
-            "gid": "gid-9",
-            "status": "active",
-            "completedLength": "230300000",
-            "totalLength": "3200000000",
-            "downloadSpeed": "10",
-            "files": [{"uris": [{"uri": "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso"}]}],
-        }]
+        live = [
+            {
+                "gid": "gid-9",
+                "status": "active",
+                "completedLength": "230300000",
+                "totalLength": "3200000000",
+                "downloadSpeed": "10",
+                "files": [
+                    {
+                        "uris": [
+                            {
+                                "uri": "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso"
+                            }
+                        ]
+                    }
+                ],
+            }
+        ]
         saved_items: list[dict] = []
 
         def capture_save(items: list[dict]) -> None:
             saved_items[:] = items
 
-        with patch("aria_queue.core.load_state", return_value={"session_id": "batch-3"}), \
-             patch("aria_queue.core.active_gids", return_value=live), \
-             patch("aria_queue.core.load_queue", return_value=queue_items), \
-             patch("aria_queue.core.save_queue", side_effect=capture_save), \
-             patch("aria_queue.core.record_action") as record_action:
+        with (
+            patch("aria_queue.core.load_state", return_value={"session_id": "batch-3"}),
+            patch("aria_queue.core.active_gids", return_value=live),
+            patch("aria_queue.core.load_queue", return_value=queue_items),
+            patch("aria_queue.core.save_queue", side_effect=capture_save),
+            patch("aria_queue.core.record_action") as record_action,
+        ):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
         self.assertEqual(result["recovered"], 1)
         self.assertEqual(len(saved_items), 1)
         self.assertEqual(saved_items[0]["gid"], "gid-9")
-        self.assertEqual(saved_items[0]["url"], "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso")
+        self.assertEqual(
+            saved_items[0]["url"],
+            "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso",
+        )
         self.assertEqual(saved_items[0]["completedLength"], "230300000")
         self.assertTrue(saved_items[0]["recovered"])
         record_action.assert_called_once()
 
-    def test_deduplicate_active_transfers_removes_less_advanced_duplicates_by_default(self) -> None:
+    def test_deduplicate_active_transfers_removes_less_advanced_duplicates_by_default(
+        self,
+    ) -> None:
         active = [
             {
                 "gid": "gid-keep",
@@ -337,8 +525,10 @@ class TicAriaFlowTests(unittest.TestCase):
                 "files": [{"uris": [{"uri": "https://example.com/file.gguf"}]}],
             },
         ]
-        with patch("aria_queue.core.active_gids", return_value=active), \
-             patch("aria_queue.core.aria_rpc") as rpc:
+        with (
+            patch("aria_queue.core.active_gids", return_value=active),
+            patch("aria_queue.core.aria_rpc") as rpc,
+        ):
             result = deduplicate_active_transfers()
         self.assertTrue(result["changed"])
         self.assertEqual(result["action"], "remove")
@@ -353,15 +543,27 @@ class TicAriaFlowTests(unittest.TestCase):
         items[0]["gid"] = "gid-1"
         save_queue(items)
 
-        with patch("aria_queue.core.ensure_aria_daemon"), \
-             patch("aria_queue.core.deduplicate_active_transfers"), \
-             patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth"), \
-             patch("aria_queue.core.active_gids", return_value=[]), \
-             patch("aria_queue.core.status", side_effect=RuntimeError("connection refused")), \
-             patch("aria_queue.core.time.sleep", return_value=None):
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch(
+                "aria_queue.core.status", side_effect=RuntimeError("connection refused")
+            ),
+            patch("aria_queue.core.time.sleep", return_value=None),
+        ):
             result = process_queue()
         self.assertEqual(result[0]["status"], "error")
         self.assertEqual(result[0]["error_code"], "rpc_unreachable")
@@ -378,16 +580,26 @@ class TicAriaFlowTests(unittest.TestCase):
             "totalLength": "100",
             "files": [{"uris": [{"uri": "https://example.com/model.gguf"}]}],
         }
-        with patch("aria_queue.core.ensure_aria_daemon"), \
-             patch("aria_queue.core.deduplicate_active_transfers"), \
-             patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.set_bandwidth") as set_bandwidth, \
-             patch("aria_queue.core.active_gids", return_value=[]), \
-             patch("aria_queue.core.add_download", return_value="gid-1"), \
-             patch("aria_queue.core.status", return_value=complete), \
-             patch("aria_queue.core.time.sleep", return_value=None):
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.set_bandwidth") as set_bandwidth,
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.add_download", return_value="gid-1"),
+            patch("aria_queue.core.status", return_value=complete),
+            patch("aria_queue.core.time.sleep", return_value=None),
+        ):
             result = process_queue()
         set_bandwidth.assert_called_once_with(250000, port=6800)
         self.assertEqual(result[0]["status"], "done")
@@ -431,19 +643,34 @@ class TicAriaFlowTests(unittest.TestCase):
         def fake_status(_gid: str, port: int = 6800, timeout: int = 5) -> dict:
             return next(status_responses)
 
-        with patch("aria_queue.core.ensure_aria_daemon"), \
-             patch("aria_queue.core.deduplicate_active_transfers"), \
-             patch("aria_queue.core.reconcile_live_queue"), \
-             patch("aria_queue.core.probe_bandwidth", return_value={"source": "default", "reason": "probe_unavailable", "cap_mbps": 2, "cap_bytes_per_sec": 250000}), \
-             patch("aria_queue.core.current_bandwidth", return_value={}), \
-             patch("aria_queue.core.active_gids", return_value=[]), \
-             patch("aria_queue.core.add_download") as add_download, \
-             patch("aria_queue.core.status", side_effect=fake_status), \
-             patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc, \
-             patch("aria_queue.core.time.sleep", return_value=None):
+        with (
+            patch("aria_queue.core.ensure_aria_daemon"),
+            patch("aria_queue.core.deduplicate_active_transfers"),
+            patch("aria_queue.core.reconcile_live_queue"),
+            patch(
+                "aria_queue.core.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
+            patch("aria_queue.core.current_bandwidth", return_value={}),
+            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.add_download") as add_download,
+            patch("aria_queue.core.status", side_effect=fake_status),
+            patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc,
+            patch("aria_queue.core.time.sleep", return_value=None),
+        ):
             result = process_queue()
         self.assertFalse(add_download.called)
-        rpc.assert_any_call("aria2.changeOption", ["gid-1", {"max-download-limit": "250000"}], port=6800, timeout=5)
+        rpc.assert_any_call(
+            "aria2.changeOption",
+            ["gid-1", {"max-download-limit": "250000"}],
+            port=6800,
+            timeout=5,
+        )
         rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
         self.assertEqual(result[0]["status"], "done")
 
@@ -460,10 +687,12 @@ class TicAriaFlowTests(unittest.TestCase):
             "status": "pass",
             "exit_code": 0,
         }
-        with patch("aria_queue.contracts.preflight", return_value=preflight_result), \
-             patch("aria_queue.core.load_queue", return_value=[]), \
-             patch("aria_queue.core.process_queue", return_value=[]), \
-             patch("aria_queue.core.get_active_progress", return_value=None):
+        with (
+            patch("aria_queue.contracts.preflight", return_value=preflight_result),
+            patch("aria_queue.core.load_queue", return_value=[]),
+            patch("aria_queue.core.process_queue", return_value=[]),
+            patch("aria_queue.core.get_active_progress", return_value=None),
+        ):
             result = run_ucc()
         self.assertIn("result", result)
         self.assertIn("meta", result)
@@ -490,29 +719,65 @@ class TicAriaFlowTests(unittest.TestCase):
         self.assertIn("networkquality", status)
         self.assertIn("aria2-launchd", status)
         self.assertEqual(status["ariaflow"]["meta"]["contract"], "UCC")
-        self.assertIn(status["ariaflow"]["result"]["outcome"], ["converged", "unchanged"])
+        self.assertIn(
+            status["ariaflow"]["result"]["outcome"], ["converged", "unchanged"]
+        )
 
     def test_lifecycle_status_includes_versions(self) -> None:
-        with patch("aria_queue.install.package_version", return_value="9.9.9"), \
-             patch("aria_queue.install.brew_is_installed", return_value=True), \
-             patch("aria_queue.install.brew_package_version", side_effect=["0.1.1", "0.8.2"]), \
-             patch("aria_queue.install.networkquality_status", return_value={"installed": True, "usable": True, "version": None, "reason": "ready", "message": "networkquality available"}), \
-             patch("aria_queue.install.aria2_status", return_value={"loaded": True, "plist_exists": True, "session_exists": True, "version": "1.37.0"}):
+        with (
+            patch("aria_queue.install.package_version", return_value="9.9.9"),
+            patch("aria_queue.install.brew_is_installed", return_value=True),
+            patch(
+                "aria_queue.install.brew_package_version",
+                side_effect=["0.1.1", "0.8.2"],
+            ),
+            patch(
+                "aria_queue.install.networkquality_status",
+                return_value={
+                    "installed": True,
+                    "usable": True,
+                    "version": None,
+                    "reason": "ready",
+                    "message": "networkquality available",
+                },
+            ),
+            patch(
+                "aria_queue.install.aria2_status",
+                return_value={
+                    "loaded": True,
+                    "plist_exists": True,
+                    "session_exists": True,
+                    "version": "1.37.0",
+                },
+            ),
+        ):
             status = status_all()
         self.assertIn("0.1.1", status["ariaflow"]["result"]["message"])
         self.assertIn("runtime engine dependency", status["aria2"]["result"]["message"])
-        self.assertIn("networkquality available", status["networkquality"]["result"]["message"])
-        self.assertIn("optional advanced auto-start integration", status["aria2-launchd"]["result"]["message"])
+        self.assertIn(
+            "networkquality available", status["networkquality"]["result"]["message"]
+        )
+        self.assertIn(
+            "optional advanced auto-start integration",
+            status["aria2-launchd"]["result"]["message"],
+        )
 
     def test_networkquality_status_reports_availability_without_probe(self) -> None:
-        with patch("aria_queue.install._find_networkquality", return_value="/usr/bin/networkQuality"), \
-             patch("aria_queue.install.subprocess.run") as run:
+        with (
+            patch(
+                "aria_queue.install._find_networkquality",
+                return_value="/usr/bin/networkQuality",
+            ),
+            patch("aria_queue.install.subprocess.run") as run,
+        ):
             status = networkquality_status()
         self.assertFalse(run.called)
         self.assertTrue(status["installed"])
         self.assertTrue(status["usable"])
         self.assertEqual(status["reason"], "ready")
-        self.assertIn("bounded -u -c -s probes at startup and every 180s", str(status["message"]))
+        self.assertIn(
+            "bounded -u -c -s probes at startup and every 180s", str(status["message"])
+        )
 
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
@@ -539,6 +804,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_pause_queue_item_sets_paused(self) -> None:
         from aria_queue.core import pause_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         result = pause_queue_item(item.id)
         self.assertTrue(result["ok"])
@@ -546,6 +812,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_pause_queue_item_calls_aria2_if_gid(self) -> None:
         from aria_queue.core import pause_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
         items[0]["status"] = "downloading"
@@ -558,6 +825,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_resume_queue_item_from_paused(self) -> None:
         from aria_queue.core import pause_queue_item, resume_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         pause_queue_item(item.id)
         result = resume_queue_item(item.id)
@@ -566,6 +834,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_resume_queue_item_with_gid_calls_unpause(self) -> None:
         from aria_queue.core import resume_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
         items[0]["status"] = "paused"
@@ -577,6 +846,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_remove_queue_item_deletes_from_queue(self) -> None:
         from aria_queue.core import remove_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         result = remove_queue_item(item.id)
         self.assertTrue(result["ok"])
@@ -585,18 +855,20 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_remove_active_item_calls_aria2_remove(self) -> None:
         from aria_queue.core import remove_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
         items[0]["status"] = "downloading"
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc") as rpc:
-            result = remove_queue_item(item.id)
+            remove_queue_item(item.id)
         rpc.assert_any_call("aria2.remove", ["gid-1"], port=6800, timeout=5)
         self.assertEqual(len(load_queue()), 0)
 
     def test_retry_queue_item_requeues_failed(self) -> None:
         from aria_queue.core import retry_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
         items[0]["status"] = "error"
@@ -611,6 +883,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_retry_rejects_non_error_item(self) -> None:
         from aria_queue.core import retry_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         result = retry_queue_item(item.id)
         self.assertFalse(result["ok"])
@@ -618,6 +891,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_pause_rejects_already_paused(self) -> None:
         from aria_queue.core import pause_queue_item
+
         item = add_queue_item("https://example.com/file.gguf")
         pause_queue_item(item.id)
         result = pause_queue_item(item.id)
@@ -626,6 +900,7 @@ class TicPerItemTests(unittest.TestCase):
 
     def test_not_found_item(self) -> None:
         from aria_queue.core import pause_queue_item
+
         result = pause_queue_item("nonexistent")
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "not_found")
@@ -643,6 +918,7 @@ class TicTorrentAndOptionsTests(unittest.TestCase):
 
     def test_metadata_url_detection(self) -> None:
         from aria_queue.core import _is_metadata_url
+
         self.assertTrue(_is_metadata_url("https://example.com/file.torrent"))
         self.assertTrue(_is_metadata_url("https://example.com/file.metalink"))
         self.assertTrue(_is_metadata_url("https://example.com/file.meta4"))
@@ -652,6 +928,7 @@ class TicTorrentAndOptionsTests(unittest.TestCase):
 
     def test_add_download_sets_pause_metadata_for_torrent(self) -> None:
         from aria_queue.core import add_download
+
         item = {"url": "https://example.com/file.torrent"}
         with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             gid = add_download(item, cap_bytes_per_sec=250000)
@@ -662,6 +939,7 @@ class TicTorrentAndOptionsTests(unittest.TestCase):
 
     def test_add_download_no_pause_metadata_for_http(self) -> None:
         from aria_queue.core import add_download
+
         item = {"url": "https://example.com/file.zip"}
         with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             add_download(item, cap_bytes_per_sec=250000)
@@ -671,11 +949,19 @@ class TicTorrentAndOptionsTests(unittest.TestCase):
 
     def test_get_item_files_returns_file_list(self) -> None:
         from aria_queue.core import get_item_files
+
         item = add_queue_item("https://example.com/file.torrent")
         items = load_queue()
         items[0]["gid"] = "gid-1"
         save_queue(items)
-        files = [{"index": "1", "path": "/tmp/file1.txt", "length": "100", "selected": "true"}]
+        files = [
+            {
+                "index": "1",
+                "path": "/tmp/file1.txt",
+                "length": "100",
+                "selected": "true",
+            }
+        ]
         with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
             result = get_item_files(item.id)
         self.assertTrue(result["ok"])
@@ -684,6 +970,7 @@ class TicTorrentAndOptionsTests(unittest.TestCase):
 
     def test_get_item_files_no_gid(self) -> None:
         from aria_queue.core import get_item_files
+
         item = add_queue_item("https://example.com/file.torrent")
         result = get_item_files(item.id)
         self.assertFalse(result["ok"])
@@ -691,6 +978,7 @@ class TicTorrentAndOptionsTests(unittest.TestCase):
 
     def test_select_item_files_calls_change_option_and_unpause(self) -> None:
         from aria_queue.core import select_item_files
+
         item = add_queue_item("https://example.com/file.torrent")
         items = load_queue()
         items[0]["gid"] = "gid-1"
@@ -700,26 +988,43 @@ class TicTorrentAndOptionsTests(unittest.TestCase):
             result = select_item_files(item.id, [1, 3])
         self.assertTrue(result["ok"])
         self.assertEqual(result["selected"], [1, 3])
-        rpc.assert_any_call("aria2.changeOption", ["gid-1", {"select-file": "1,3"}], port=6800, timeout=5)
+        rpc.assert_any_call(
+            "aria2.changeOption",
+            ["gid-1", {"select-file": "1,3"}],
+            port=6800,
+            timeout=5,
+        )
         rpc.assert_any_call("aria2.unpause", ["gid-1"], port=6800, timeout=5)
 
     def test_change_aria2_options_safe_subset(self) -> None:
         from aria_queue.core import change_aria2_options
-        with patch("aria_queue.core.aria_rpc") as rpc, \
-             patch("aria_queue.core.current_global_options", return_value={}):
+
+        with (
+            patch("aria_queue.core.aria_rpc") as rpc,
+            patch("aria_queue.core.current_global_options", return_value={}),
+        ):
             result = change_aria2_options({"max-concurrent-downloads": "3"})
         self.assertTrue(result["ok"])
-        rpc.assert_any_call("aria2.changeGlobalOption", [{"max-concurrent-downloads": "3"}], port=6800, timeout=5)
+        rpc.assert_any_call(
+            "aria2.changeGlobalOption",
+            [{"max-concurrent-downloads": "3"}],
+            port=6800,
+            timeout=5,
+        )
 
     def test_change_aria2_options_rejects_unsafe(self) -> None:
         from aria_queue.core import change_aria2_options
-        result = change_aria2_options({"dir": "/tmp/evil", "max-concurrent-downloads": "3"})
+
+        result = change_aria2_options(
+            {"dir": "/tmp/evil", "max-concurrent-downloads": "3"}
+        )
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "rejected_options")
         self.assertIn("dir", result["message"])
 
     def test_change_aria2_options_rejects_empty(self) -> None:
         from aria_queue.core import change_aria2_options
+
         result = change_aria2_options({})
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "empty_options")
@@ -731,10 +1036,10 @@ class TicOpenAPITests(unittest.TestCase):
     def test_openapi_spec_is_valid_yaml(self) -> None:
         spec_path = Path(__file__).resolve().parents[1] / "openapi.yaml"
         self.assertTrue(spec_path.exists(), "openapi.yaml not found")
-        import json
         text = spec_path.read_text(encoding="utf-8")
         try:
             import yaml
+
             data = yaml.safe_load(text)
         except ImportError:
             self.skipTest("PyYAML not installed")

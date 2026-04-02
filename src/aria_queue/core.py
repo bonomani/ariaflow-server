@@ -32,7 +32,9 @@ _NETWORKQUALITY_CANDIDATES = (
 
 
 def config_dir() -> Path:
-    return Path(os.environ.get("ARIA_QUEUE_DIR", Path.home() / ".config" / "aria-queue"))
+    return Path(
+        os.environ.get("ARIA_QUEUE_DIR", Path.home() / ".config" / "aria-queue")
+    )
 
 
 def queue_path() -> Path:
@@ -107,7 +109,9 @@ def write_json(path: Path, value: Any) -> None:
     ensure_storage()
     tmp = path.with_suffix(path.suffix + ".tmp")
     try:
-        tmp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp.write_text(
+            json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         tmp.replace(path)
     except FileNotFoundError:
         return
@@ -457,6 +461,7 @@ def max_simultaneous_downloads() -> int:
 
 def _pref_value(name: str, default: Any = None) -> Any:
     from .contracts import load_declaration
+
     for pref in load_declaration().get("uic", {}).get("preferences", []):
         if pref.get("name") == name:
             return pref.get("value", default)
@@ -500,7 +505,9 @@ def bandwidth_status(port: int = 6800) -> dict[str, Any]:
 
 def manual_probe(port: int = 6800) -> dict[str, Any]:
     config = bandwidth_config()
-    probe = probe_bandwidth(percent=config["use_percent"], floor_mbps=config["floor_mbps"])
+    probe = probe_bandwidth(
+        percent=config["use_percent"], floor_mbps=config["floor_mbps"]
+    )
     probe["interval_seconds"] = config["probe_interval_seconds"]
     state = load_state()
     state["last_bandwidth_probe"] = probe
@@ -552,7 +559,9 @@ def _active_item_url(info: dict[str, Any]) -> str | None:
     return None
 
 
-def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _queue_item_for_active_info(
+    info: dict[str, Any], items: list[dict[str, Any]]
+) -> dict[str, Any] | None:
     gid = str(info.get("gid") or "")
     url = _active_item_url(info)
     session_id = load_state().get("session_id")
@@ -569,11 +578,18 @@ def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]
         if url_tail:
             for item in items:
                 current = str(item.get("url") or "")
-                if current and (current == url or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail):
+                if current and (
+                    current == url
+                    or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail
+                ):
                     return item
     session_candidates = candidates
     if session_id:
-        session_candidates = [item for item in candidates if not item.get("session_id") or item.get("session_id") == session_id]
+        session_candidates = [
+            item
+            for item in candidates
+            if not item.get("session_id") or item.get("session_id") == session_id
+        ]
         if session_candidates:
             candidates = session_candidates
     if gid:
@@ -588,7 +604,10 @@ def _queue_item_for_active_info(info: dict[str, Any], items: list[dict[str, Any]
         if url_tail:
             for item in candidates:
                 current = str(item.get("url") or "")
-                if current and (current == url or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail):
+                if current and (
+                    current == url
+                    or current.split("?")[0].rstrip("/").split("/")[-1] == url_tail
+                ):
                     return item
     return None
 
@@ -644,7 +663,9 @@ def _merge_queue_rows(primary: dict[str, Any], candidate: dict[str, Any]) -> boo
                 primary[key] = candidate.get(key)
                 changed = True
             continue
-        if candidate.get(key) is not None and (primary.get(key) is None or (candidate_val or 0.0) > (primary_val or 0.0)):
+        if candidate.get(key) is not None and (
+            primary.get(key) is None or (candidate_val or 0.0) > (primary_val or 0.0)
+        ):
             primary[key] = candidate.get(key)
             changed = True
     if candidate.get("recovered") and not primary.get("recovered"):
@@ -723,12 +744,22 @@ def cleanup_queue_state() -> dict[str, Any]:
                 reason="queue_rows_normalized",
                 before={"summary": before_summary},
                 after={"summary": summarize_queue(survivors)},
-                detail={"removed": max(len(items) - len(survivors), 0), "normalized": normalized},
+                detail={
+                    "removed": max(len(items) - len(survivors), 0),
+                    "normalized": normalized,
+                },
             )
-        return {"changed": changed, "items": survivors, "removed": max(len(items) - len(survivors), 0), "normalized": normalized}
+        return {
+            "changed": changed,
+            "items": survivors,
+            "removed": max(len(items) - len(survivors), 0),
+            "normalized": normalized,
+        }
 
 
-def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool = True) -> dict[str, Any]:
+def reconcile_live_queue(
+    port: int = 6800, timeout: int = 5, adopt_missing: bool = True
+) -> dict[str, Any]:
     ensure_storage()
     with storage_locked():
         state = ensure_state_session()
@@ -739,9 +770,15 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
     changed = False
     recovered = 0
 
-    def _collapse_duplicate_rows(primary: dict[str, Any], current_gid: str, current_url: str | None) -> None:
+    def _collapse_duplicate_rows(
+        primary: dict[str, Any], current_gid: str, current_url: str | None
+    ) -> None:
         nonlocal changed
-        duplicate_keys = {key for key in ("downloadSpeed", "completedLength", "totalLength", "files") if primary.get(key) is not None}
+        duplicate_keys = {
+            key
+            for key in ("downloadSpeed", "completedLength", "totalLength", "files")
+            if primary.get(key) is not None
+        }
         survivors: list[dict[str, Any]] = []
         for candidate in items:
             if candidate is primary:
@@ -749,12 +786,24 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
                 continue
             candidate_gid = str(candidate.get("gid") or "")
             candidate_url = str(candidate.get("url") or "")
-            same_job = bool(current_gid and candidate_gid and candidate_gid == current_gid)
-            same_url = bool(current_url and candidate_url and candidate_url == current_url)
+            same_job = bool(
+                current_gid and candidate_gid and candidate_gid == current_gid
+            )
+            same_url = bool(
+                current_url and candidate_url and candidate_url == current_url
+            )
             if not same_job and not same_url:
                 survivors.append(candidate)
                 continue
-            for key in ("output", "post_action_rule", "session_id", "recovery_session_id", "recovered_at", "error_code", "error_message"):
+            for key in (
+                "output",
+                "post_action_rule",
+                "session_id",
+                "recovery_session_id",
+                "recovered_at",
+                "error_code",
+                "error_message",
+            ):
                 if not primary.get(key) and candidate.get(key):
                     primary[key] = candidate.get(key)
             if candidate.get("recovered"):
@@ -811,7 +860,9 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
             changed = True
         if live_status:
             item["live_status"] = live_status
-        if state.get("session_id") and item.get("session_id") != state.get("session_id"):
+        if state.get("session_id") and item.get("session_id") != state.get(
+            "session_id"
+        ):
             item["recovered"] = True
             item["recovery_session_id"] = state.get("session_id")
             item["recovered_at"] = now
@@ -835,10 +886,27 @@ def reconcile_live_queue(port: int = 6800, timeout: int = 5, adopt_missing: bool
                 outcome="changed",
                 reason="live_state_merged",
                 before={"summary": before_summary},
-                after={"summary": summarize_queue(items), "recovered": recovered, "active": [str(info.get("gid") or "") for info in active_infos if info.get("gid")]},
-                detail={"recovered": recovered, "active_count": len(active_infos), "adopt_missing": adopt_missing},
+                after={
+                    "summary": summarize_queue(items),
+                    "recovered": recovered,
+                    "active": [
+                        str(info.get("gid") or "")
+                        for info in active_infos
+                        if info.get("gid")
+                    ],
+                },
+                detail={
+                    "recovered": recovered,
+                    "active_count": len(active_infos),
+                    "adopt_missing": adopt_missing,
+                },
             )
-    return {"changed": changed, "recovered": recovered, "active_count": len(active_infos), "items": items}
+    return {
+        "changed": changed,
+        "recovered": recovered,
+        "active_count": len(active_infos),
+        "items": items,
+    }
 
 
 def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
@@ -847,7 +915,11 @@ def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str
         return {"changed": False, "kept": [], "paused": []}
     action = dedup_active_transfer_action()
     if action == "ignore":
-        return {"changed": False, "kept": [str(info.get("gid") or "") for info in active if info.get("gid")], "paused": []}
+        return {
+            "changed": False,
+            "kept": [str(info.get("gid") or "") for info in active if info.get("gid")],
+            "paused": [],
+        }
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for info in active:
@@ -865,7 +937,8 @@ def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str
         ranked = sorted(
             jobs,
             key=lambda info: (
-                float(info.get("completedLength") or 0) / max(float(info.get("totalLength") or 1), 1.0),
+                float(info.get("completedLength") or 0)
+                / max(float(info.get("totalLength") or 1), 1.0),
                 float(info.get("completedLength") or 0),
                 float(info.get("downloadSpeed") or 0),
             ),
@@ -896,12 +969,19 @@ def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str
             reason="duplicate_active_transfer",
             before={"active": [info.get("gid") for info in active]},
             after={"kept": kept, "paused": paused, "action": action},
-            detail={"kept": kept, "paused": paused, "group_count": len(grouped), "action": action},
+            detail={
+                "kept": kept,
+                "paused": paused,
+                "group_count": len(grouped),
+                "action": action,
+            },
         )
     return {"changed": changed, "kept": kept, "paused": paused, "action": action}
 
 
-def add_queue_item(url: str, output: str | None = None, post_action_rule: str | None = None) -> QueueItem:
+def add_queue_item(
+    url: str, output: str | None = None, post_action_rule: str | None = None
+) -> QueueItem:
     from .contracts import load_declaration
 
     ensure_storage()
@@ -910,7 +990,14 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str | 
         touch_state_session()
         items = load_queue()
         before = {"summary": summarize_queue(items)}
-        existing = next((item for item in items if item.get("url") == url and item.get("status") != "error"), None)
+        existing = next(
+            (
+                item
+                for item in items
+                if item.get("url") == url and item.get("status") != "error"
+            ),
+            None,
+        )
         if existing is not None:
             record_action(
                 action="add",
@@ -918,8 +1005,16 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str | 
                 outcome="unchanged",
                 reason="duplicate_url",
                 before=before,
-                after={"summary": summarize_queue(items), "item_id": existing.get("id")},
-                detail={"item_id": existing.get("id"), "url": url, "status": existing.get("status"), "gid": existing.get("gid")},
+                after={
+                    "summary": summarize_queue(items),
+                    "item_id": existing.get("id"),
+                },
+                detail={
+                    "item_id": existing.get("id"),
+                    "url": url,
+                    "status": existing.get("status"),
+                    "gid": existing.get("gid"),
+                },
             )
             return QueueItem(
                 id=str(existing.get("id", "")),
@@ -937,12 +1032,18 @@ def add_queue_item(url: str, output: str | None = None, post_action_rule: str | 
         decl = load_declaration()
         preferences = decl.get("uic", {}).get("preferences", [])
         default_rule = next(
-            (str(pref.get("value", "pending")) for pref in preferences if pref.get("name") == "post_action_rule"),
+            (
+                str(pref.get("value", "pending"))
+                for pref in preferences
+                if pref.get("name") == "post_action_rule"
+            ),
             "pending",
         )
         normalized_output = str(output).strip() if output is not None else ""
         resolved_output = normalized_output or None
-        resolved_post_action_rule = str(post_action_rule).strip() if post_action_rule is not None else ""
+        resolved_post_action_rule = (
+            str(post_action_rule).strip() if post_action_rule is not None else ""
+        )
         if not resolved_post_action_rule:
             resolved_post_action_rule = default_rule
 
@@ -997,7 +1098,9 @@ def _coerce_float(value: object) -> float | None:
         return None
 
 
-def _cap_bytes_per_sec_from_mbps(downlink_mbps: float, percent: float, floor_mbps: int) -> int:
+def _cap_bytes_per_sec_from_mbps(
+    downlink_mbps: float, percent: float, floor_mbps: int
+) -> int:
     floor_bytes = int(floor_mbps * _BYTES_PER_MEGABIT)
     return max(floor_bytes, int(downlink_mbps * percent * _BYTES_PER_MEGABIT))
 
@@ -1032,7 +1135,9 @@ def _default_bandwidth_probe(
     return probe
 
 
-def _parse_networkquality_output(output: str, *, percent: float, floor_mbps: int) -> dict[str, Any] | None:
+def _parse_networkquality_output(
+    output: str, *, percent: float, floor_mbps: int
+) -> dict[str, Any] | None:
     text = (output or "").strip()
     if not text:
         return None
@@ -1044,7 +1149,9 @@ def _parse_networkquality_output(output: str, *, percent: float, floor_mbps: int
         throughput_bps = _coerce_float(payload.get("dl_throughput"))
         if throughput_bps and throughput_bps > 0:
             downlink_mbps = round(throughput_bps / _BITS_PER_MEGABIT, 1)
-            cap_bytes_per_sec = _cap_bytes_per_sec_from_mbps(downlink_mbps, percent, floor_mbps)
+            cap_bytes_per_sec = _cap_bytes_per_sec_from_mbps(
+                downlink_mbps, percent, floor_mbps
+            )
             probe: dict[str, Any] = {
                 "source": "networkquality",
                 "reason": "probe_complete",
@@ -1064,10 +1171,14 @@ def _parse_networkquality_output(output: str, *, percent: float, floor_mbps: int
             if isinstance(interface_name, str) and interface_name:
                 probe["interface_name"] = interface_name
             return probe
-    match = re.search(r"Downlink(?:\s+capacity)?:\s+([\d.]+)\s+Mbps", text, re.IGNORECASE)
+    match = re.search(
+        r"Downlink(?:\s+capacity)?:\s+([\d.]+)\s+Mbps", text, re.IGNORECASE
+    )
     if match:
         downlink_mbps = float(match.group(1))
-        cap_bytes_per_sec = _cap_bytes_per_sec_from_mbps(downlink_mbps, percent, floor_mbps)
+        cap_bytes_per_sec = _cap_bytes_per_sec_from_mbps(
+            downlink_mbps, percent, floor_mbps
+        )
         return {
             "source": "networkquality",
             "reason": "probe_complete",
@@ -1082,7 +1193,9 @@ def _parse_networkquality_output(output: str, *, percent: float, floor_mbps: int
 def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]:
     cmd = _find_networkquality()
     if not cmd:
-        return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_unavailable")
+        return _default_bandwidth_probe(
+            floor_mbps=floor_mbps, reason="probe_unavailable"
+        )
 
     probe_cmd = [cmd, "-u", "-c", "-s", "-M", str(_NETWORKQUALITY_MAX_RUNTIME)]
     command = " ".join(probe_cmd)
@@ -1095,14 +1208,20 @@ def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]
             stderr=subprocess.DEVNULL,
             timeout=_NETWORKQUALITY_TIMEOUT,
         )
-        parsed = _parse_networkquality_output(completed.stdout or "", percent=percent, floor_mbps=floor_mbps)
+        parsed = _parse_networkquality_output(
+            completed.stdout or "", percent=percent, floor_mbps=floor_mbps
+        )
         if parsed:
             parsed["command"] = command
             return parsed
-        return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_no_parse", command=command)
+        return _default_bandwidth_probe(
+            floor_mbps=floor_mbps, reason="probe_no_parse", command=command
+        )
     except subprocess.TimeoutExpired as exc:
         out = (exc.stdout or "") if isinstance(exc.stdout, str) else ""
-        parsed = _parse_networkquality_output(out, percent=percent, floor_mbps=floor_mbps)
+        parsed = _parse_networkquality_output(
+            out, percent=percent, floor_mbps=floor_mbps
+        )
         if parsed:
             parsed["reason"] = "probe_timeout_partial_capture"
             parsed["partial"] = True
@@ -1115,7 +1234,9 @@ def probe_bandwidth(percent: float = 0.8, floor_mbps: int = 2) -> dict[str, Any]
             command=command,
         )
     except Exception:
-        return _default_bandwidth_probe(floor_mbps=floor_mbps, reason="probe_error", command=command)
+        return _default_bandwidth_probe(
+            floor_mbps=floor_mbps, reason="probe_error", command=command
+        )
 
 
 def _should_probe_bandwidth(state: dict[str, Any], now: float | None = None) -> bool:
@@ -1144,7 +1265,9 @@ def _apply_bandwidth_probe(
     free_abs = config["free_absolute_mbps"]
     now = time.time()
     probe = state.get("last_bandwidth_probe")
-    needs_probe = force or not isinstance(probe, dict) or _should_probe_bandwidth(state, now=now)
+    needs_probe = (
+        force or not isinstance(probe, dict) or _should_probe_bandwidth(state, now=now)
+    )
     if needs_probe:
         probe = probe_bandwidth(percent=use_pct, floor_mbps=floor)
         probe["interval_seconds"] = interval
@@ -1157,12 +1280,16 @@ def _apply_bandwidth_probe(
     cap_mbps = float(probe.get("cap_mbps") or 0) if isinstance(probe, dict) else 0.0
     cap_bytes_per_sec = int(
         (probe or {}).get("cap_bytes_per_sec")
-        or _cap_bytes_per_sec_from_mbps(cap_mbps if cap_mbps > 0 else float(floor), 1.0, floor)
+        or _cap_bytes_per_sec_from_mbps(
+            cap_mbps if cap_mbps > 0 else float(floor), 1.0, floor
+        )
     )
     if free_abs > 0 and isinstance(probe, dict) and probe.get("downlink_mbps"):
         measured = float(probe["downlink_mbps"])
         abs_cap = max(0, measured - free_abs) * _BYTES_PER_MEGABIT
-        cap_bytes_per_sec = min(cap_bytes_per_sec, max(int(floor * _BYTES_PER_MEGABIT), int(abs_cap)))
+        cap_bytes_per_sec = min(
+            cap_bytes_per_sec, max(int(floor * _BYTES_PER_MEGABIT), int(abs_cap))
+        )
     if needs_probe:
         save_state(state)
         before_bandwidth = current_bandwidth(port=port)
@@ -1173,16 +1300,24 @@ def _apply_bandwidth_probe(
         record_action(
             action="probe",
             target="bandwidth",
-            outcome="changed" if (probe or {}).get("source") == "networkquality" else "unchanged",
+            outcome="changed"
+            if (probe or {}).get("source") == "networkquality"
+            else "unchanged",
             reason=(probe or {}).get("reason", (probe or {}).get("source", "default")),
             before={"cap": before_bandwidth},
-            after={"probe": probe, "cap_mbps": cap_mbps, "cap_bytes_per_sec": cap_bytes_per_sec},
+            after={
+                "probe": probe,
+                "cap_mbps": cap_mbps,
+                "cap_bytes_per_sec": cap_bytes_per_sec,
+            },
             detail=probe if isinstance(probe, dict) else None,
         )
     return (probe if isinstance(probe, dict) else {}), cap_mbps, cap_bytes_per_sec
 
 
-def aria_rpc(method: str, params: list[Any] | None = None, port: int = 6800, timeout: int = 15) -> dict[str, Any]:
+def aria_rpc(
+    method: str, params: list[Any] | None = None, port: int = 6800, timeout: int = 15
+) -> dict[str, Any]:
     payload = {
         "jsonrpc": "2.0",
         "id": "aria-queue",
@@ -1229,7 +1364,12 @@ def ensure_aria_daemon(port: int = 6800) -> None:
 
 def _is_metadata_url(url: str) -> bool:
     lower = url.lower().rstrip("?&#")
-    return lower.endswith(".torrent") or lower.endswith(".metalink") or lower.endswith(".meta4") or lower.startswith("magnet:")
+    return (
+        lower.endswith(".torrent")
+        or lower.endswith(".metalink")
+        or lower.endswith(".meta4")
+        or lower.startswith("magnet:")
+    )
 
 
 def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
@@ -1247,7 +1387,15 @@ def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800)
 
 
 def status(gid: str, port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    fields = ["status", "errorCode", "errorMessage", "downloadSpeed", "completedLength", "totalLength", "files"]
+    fields = [
+        "status",
+        "errorCode",
+        "errorMessage",
+        "downloadSpeed",
+        "completedLength",
+        "totalLength",
+        "files",
+    ]
     result = aria_rpc("aria2.tellStatus", [gid, fields], port=port, timeout=timeout)
     return result["result"]
 
@@ -1256,7 +1404,11 @@ def get_item_files(item_id: str, port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         _, item, _ = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         gid = str(item.get("gid") or "")
     if not gid:
         return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
@@ -1268,17 +1420,28 @@ def get_item_files(item_id: str, port: int = 6800) -> dict[str, Any]:
     return {"ok": True, "item_id": item_id, "gid": gid, "files": files}
 
 
-def select_item_files(item_id: str, indices: list[int], port: int = 6800) -> dict[str, Any]:
+def select_item_files(
+    item_id: str, indices: list[int], port: int = 6800
+) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         gid = str(item.get("gid") or "")
     if not gid:
         return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
     select_str = ",".join(str(i) for i in indices)
     try:
-        aria_rpc("aria2.changeOption", [gid, {"select-file": select_str}], port=port, timeout=5)
+        aria_rpc(
+            "aria2.changeOption",
+            [gid, {"select-file": select_str}],
+            port=port,
+            timeout=5,
+        )
         aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
     except Exception as exc:
         return {"ok": False, "error": "rpc_error", "message": str(exc)}
@@ -1308,15 +1471,21 @@ def active_gids(port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
         return []
 
 
-def queued_gids(port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5) -> list[dict[str, Any]]:
+def queued_gids(
+    port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5
+) -> list[dict[str, Any]]:
     try:
-        result = aria_rpc("aria2.tellWaiting", [offset, num], port=port, timeout=timeout)
+        result = aria_rpc(
+            "aria2.tellWaiting", [offset, num], port=port, timeout=timeout
+        )
         return list(result.get("result", []))
     except Exception:
         return []
 
 
-def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
+def discover_active_transfer(
+    port: int = 6800, timeout: int = 5
+) -> dict[str, Any] | None:
     reconcile_live_queue(port=port, timeout=timeout, adopt_missing=True)
     state = load_state()
     if state.get("active_gid"):
@@ -1331,7 +1500,8 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
             percent = round((done / total) * 100, 1) if total else 0
             return {
                 "gid": state["active_gid"],
-                "url": state.get("active_url") or (queue_item.get("url") if queue_item else None),
+                "url": state.get("active_url")
+                or (queue_item.get("url") if queue_item else None),
                 "status": info.get("status"),
                 "errorCode": info.get("errorCode"),
                 "errorMessage": info.get("errorMessage"),
@@ -1348,7 +1518,8 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
     ranked_infos = sorted(
         active_infos,
         key=lambda info: (
-            float(info.get("completedLength") or 0) / max(float(info.get("totalLength") or 1), 1.0),
+            float(info.get("completedLength") or 0)
+            / max(float(info.get("totalLength") or 1), 1.0),
             float(info.get("completedLength") or 0),
             float(info.get("downloadSpeed") or 0),
         ),
@@ -1370,7 +1541,8 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
         percent = round((done / total) * 100, 1) if total else 0
         return {
             "gid": gid,
-            "url": state.get("active_url") or (queue_item.get("url") if queue_item else None),
+            "url": state.get("active_url")
+            or (queue_item.get("url") if queue_item else None),
             "status": info.get("status"),
             "errorCode": info.get("errorCode"),
             "errorMessage": info.get("errorMessage"),
@@ -1386,7 +1558,9 @@ def discover_active_transfer(port: int = 6800, timeout: int = 5) -> dict[str, An
 
 def aria_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
-        version = aria_rpc("aria2.getVersion", port=port, timeout=timeout)["result"]["version"]
+        version = aria_rpc("aria2.getVersion", port=port, timeout=timeout)["result"][
+            "version"
+        ]
     except Exception as exc:
         return {"reachable": False, "version": None, "error": str(exc)}
     return {"reachable": True, "version": version, "error": None}
@@ -1405,7 +1579,9 @@ def set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) ->
     )
 
 
-def set_download_bandwidth(gid: str, cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
+def set_download_bandwidth(
+    gid: str, cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5
+) -> None:
     aria_rpc(
         "aria2.changeOption",
         [gid, {"max-download-limit": _aria_speed_value(cap_bytes_per_sec)}],
@@ -1472,7 +1648,11 @@ _SAFE_ARIA2_OPTIONS = {
 def change_aria2_options(options: dict[str, str], port: int = 6800) -> dict[str, Any]:
     rejected = [k for k in options if k not in _SAFE_ARIA2_OPTIONS]
     if rejected:
-        return {"ok": False, "error": "rejected_options", "message": f"unsafe options: {rejected}"}
+        return {
+            "ok": False,
+            "error": "rejected_options",
+            "message": f"unsafe options: {rejected}",
+        }
     if not options:
         return {"ok": False, "error": "empty_options", "message": "no options provided"}
     before = current_global_options(port=port)
@@ -1499,7 +1679,11 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
         queue_items = load_queue()
     active_jobs = active_gids(port=port, timeout=5)
     gids = [str(info.get("gid") or "") for info in active_jobs if info.get("gid")]
-    queue_gids = [str(item.get("gid") or "") for item in queue_items if item.get("gid") and item.get("status") in {"downloading", "paused"}]
+    queue_gids = [
+        str(item.get("gid") or "")
+        for item in queue_items
+        if item.get("gid") and item.get("status") in {"downloading", "paused"}
+    ]
     if not gids and not state.get("active_gid") and not queue_gids:
         return {"paused": False, "reason": "no_active_transfer"}
     before = {"state": state, "active": active_jobs}
@@ -1540,13 +1724,21 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         state = load_state()
         queue_items = load_queue()
     active_jobs = active_gids(port=port, timeout=5)
-    queued_items = [item for item in queue_items if item.get("gid") and item.get("status") == "paused"]
+    queued_items = [
+        item
+        for item in queue_items
+        if item.get("gid") and item.get("status") == "paused"
+    ]
     gids = [str(info.get("gid") or "") for info in active_jobs if info.get("gid")]
     if not gids and not state.get("active_gid") and not queued_items:
         return {"resumed": False, "reason": "no_active_transfer"}
     before = {"state": state, "active": active_jobs}
     resumed: list[str] = []
-    resume_targets = gids or [str(item.get("gid") or "") for item in queued_items if item.get("gid")] or [str(state.get("active_gid") or "")]
+    resume_targets = (
+        gids
+        or [str(item.get("gid") or "") for item in queued_items if item.get("gid")]
+        or [str(state.get("active_gid") or "")]
+    )
     for gid in resume_targets:
         if not gid:
             continue
@@ -1565,7 +1757,11 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
                 item.pop("live_status", None)
         save_state(state)
         save_queue(items)
-    payload = {"resumed": bool(resumed), "gids": resumed, "result": {"resumed": resumed}}
+    payload = {
+        "resumed": bool(resumed),
+        "gids": resumed,
+        "result": {"resumed": resumed},
+    }
     record_action(
         action="resume",
         target="active_transfer",
@@ -1578,7 +1774,9 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
     return payload
 
 
-def _find_queue_item_by_id(item_id: str) -> tuple[list[dict[str, Any]], dict[str, Any] | None, int]:
+def _find_queue_item_by_id(
+    item_id: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None, int]:
     items = load_queue()
     for idx, item in enumerate(items):
         if item.get("id") == item_id:
@@ -1590,9 +1788,17 @@ def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         if item.get("status") not in {"queued", "downloading"}:
-            return {"ok": False, "error": "invalid_state", "message": f"cannot pause item in status '{item.get('status')}'"}
+            return {
+                "ok": False,
+                "error": "invalid_state",
+                "message": f"cannot pause item in status '{item.get('status')}'",
+            }
         before = dict(item)
         gid = str(item.get("gid") or "")
     if gid:
@@ -1603,7 +1809,11 @@ def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         item["status"] = "paused"
         item["live_status"] = "paused"
         save_queue(items)
@@ -1623,9 +1833,17 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         if item.get("status") != "paused":
-            return {"ok": False, "error": "invalid_state", "message": f"cannot resume item in status '{item.get('status')}'"}
+            return {
+                "ok": False,
+                "error": "invalid_state",
+                "message": f"cannot resume item in status '{item.get('status')}'",
+            }
         before = dict(item)
         gid = str(item.get("gid") or "")
     rpc_ok = False
@@ -1638,7 +1856,11 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         if gid and rpc_ok:
             item["status"] = "downloading"
             item.pop("live_status", None)
@@ -1664,10 +1886,18 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         before = dict(item)
         gid = str(item.get("gid") or "")
-        should_remove_aria2 = gid and item.get("status") in {"downloading", "queued", "paused"}
+        should_remove_aria2 = gid and item.get("status") in {
+            "downloading",
+            "queued",
+            "paused",
+        }
     if should_remove_aria2:
         try:
             aria_rpc("aria2.remove", [gid], port=port, timeout=5)
@@ -1679,7 +1909,11 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         items.pop(idx)
         save_queue(items)
         record_action(
@@ -1698,9 +1932,17 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is None:
-            return {"ok": False, "error": "not_found", "message": f"item {item_id} not found"}
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
         if item.get("status") not in {"error", "failed", "stopped"}:
-            return {"ok": False, "error": "invalid_state", "message": f"cannot retry item in status '{item.get('status')}'"}
+            return {
+                "ok": False,
+                "error": "invalid_state",
+                "message": f"cannot retry item in status '{item.get('status')}'",
+            }
         before = dict(item)
         item["status"] = "queued"
         item["gid"] = None
@@ -1777,7 +2019,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         pass
     with storage_locked():
         state = load_state()
-        probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(port=port, state=state, force=True)
+        probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(
+            port=port, state=state, force=True
+        )
         items = load_queue()
         state["running"] = True
         state["stop_requested"] = False
@@ -1794,7 +2038,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
 
     limit = max_simultaneous_downloads()
 
-    def _finalize_primary_state(items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]]) -> None:
+    def _finalize_primary_state(
+        items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]]
+    ) -> None:
         current = load_state()
         current["running"] = bool(current.get("running"))
         current["paused"] = bool(current.get("paused"))
@@ -1803,7 +2049,8 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             best = sorted(
                 active_infos,
                 key=lambda info: (
-                    float(info.get("completedLength") or 0) / max(float(info.get("totalLength") or 1), 1.0),
+                    float(info.get("completedLength") or 0)
+                    / max(float(info.get("totalLength") or 1), 1.0),
                     float(info.get("completedLength") or 0),
                     float(info.get("downloadSpeed") or 0),
                 ),
@@ -1811,7 +2058,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             )[0]
             current["active_gid"] = best.get("gid")
             match = _queue_item_for_active_info(best, items_snapshot)
-            current["active_url"] = match.get("url") if match else _active_item_url(best)
+            current["active_url"] = (
+                match.get("url") if match else _active_item_url(best)
+            )
         else:
             current["active_gid"] = None
             current["active_url"] = None
@@ -1822,7 +2071,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             if key in info:
                 item[key] = info.get(key)
 
-    def _queued_info(item: dict[str, Any], gid: str, status_name: str) -> dict[str, Any]:
+    def _queued_info(
+        item: dict[str, Any], gid: str, status_name: str
+    ) -> dict[str, Any]:
         return {
             "gid": gid,
             "status": status_name,
@@ -1834,7 +2085,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
 
     _MAX_RPC_FAILURES = 5
 
-    def _poll_tracked_jobs(items_snapshot: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _poll_tracked_jobs(
+        items_snapshot: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         running_infos: list[dict[str, Any]] = []
         for item in items_snapshot:
             if item.get("status") in {"done", "error"}:
@@ -1851,7 +2104,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 if rpc_failures >= _MAX_RPC_FAILURES:
                     item["status"] = "error"
                     item["error_code"] = "rpc_unreachable"
-                    item["error_message"] = f"aria2 RPC unreachable after {rpc_failures} consecutive attempts"
+                    item["error_message"] = (
+                        f"aria2 RPC unreachable after {rpc_failures} consecutive attempts"
+                    )
                     item.pop("live_status", None)
                     record_action(
                         action="error",
@@ -1860,7 +2115,12 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         reason="rpc_unreachable",
                         before={"item": before_item},
                         after={"item": dict(item)},
-                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "rpc_failures": rpc_failures},
+                        detail={
+                            "item_id": item.get("id"),
+                            "gid": gid,
+                            "url": item.get("url"),
+                            "rpc_failures": rpc_failures,
+                        },
                     )
                 continue
             remote_status = str(info.get("status") or "")
@@ -1876,7 +2136,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 running_infos.append(info)
                 log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap_mbps)
                 if info.get("errorCode") and info["errorCode"] != "0":
-                    cap_local = max(int(_BYTES_PER_MEGABIT), int(cap_bytes_per_sec * 0.75))
+                    cap_local = max(
+                        int(_BYTES_PER_MEGABIT), int(cap_bytes_per_sec * 0.75)
+                    )
                     set_bandwidth(cap_local, port=port)
                 continue
             if remote_status == "waiting":
@@ -1902,7 +2164,12 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     reason="download_complete",
                     before={"item": before_item},
                     after={"item": dict(item), "post_action": item.get("post_action")},
-                    detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "result": item.get("post_action")},
+                    detail={
+                        "item_id": item.get("id"),
+                        "gid": gid,
+                        "url": item.get("url"),
+                        "result": item.get("post_action"),
+                    },
                 )
                 continue
             if remote_status == "error":
@@ -1915,8 +2182,18 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     outcome="failed",
                     reason="download_error",
                     before={"item": before_item},
-                    after={"item": dict(item), "error_code": item.get("error_code"), "error_message": item.get("error_message")},
-                    detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "error_code": item.get("error_code"), "error_message": item.get("error_message")},
+                    after={
+                        "item": dict(item),
+                        "error_code": item.get("error_code"),
+                        "error_message": item.get("error_message"),
+                    },
+                    detail={
+                        "item_id": item.get("id"),
+                        "gid": gid,
+                        "url": item.get("url"),
+                        "error_code": item.get("error_code"),
+                        "error_message": item.get("error_message"),
+                    },
                 )
                 continue
             if remote_status == "removed":
@@ -1959,7 +2236,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             _finalize_primary_state(items, running_infos)
 
             state = load_state()
-            probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(port=port, state=state)
+            probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(
+                port=port, state=state
+            )
             state = load_state()
             occupied = len(running_infos)
             current_running_infos = list(running_infos)
@@ -1981,7 +2260,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                             try:
                                 aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
                                 try:
-                                    set_download_bandwidth(gid, cap_bytes_per_sec, port=port, timeout=5)
+                                    set_download_bandwidth(
+                                        gid, cap_bytes_per_sec, port=port, timeout=5
+                                    )
                                 except Exception:
                                     pass
                                 item["status"] = "queued"
@@ -1992,10 +2273,21 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                                     outcome="changed",
                                     reason="download_resumed",
                                     before={"item": before_item},
-                                    after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
-                                    detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap_mbps},
+                                    after={
+                                        "item": dict(item),
+                                        "gid": gid,
+                                        "cap_mbps": cap_mbps,
+                                    },
+                                    detail={
+                                        "item_id": item.get("id"),
+                                        "gid": gid,
+                                        "url": item.get("url"),
+                                        "cap_mbps": cap_mbps,
+                                    },
                                 )
-                                current_running_infos.append(_queued_info(item, gid, "waiting"))
+                                current_running_infos.append(
+                                    _queued_info(item, gid, "waiting")
+                                )
                                 allocated += 1
                                 continue
                             except Exception:
@@ -2004,7 +2296,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     before_item = dict(item)
                     item["status"] = "downloading"
                     item.pop("live_status", None)
-                    gid = add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
+                    gid = add_download(
+                        item, cap_bytes_per_sec=cap_bytes_per_sec, port=port
+                    )
                     item["gid"] = gid
                     record_action(
                         action="run",
@@ -2013,14 +2307,22 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         reason="download_started",
                         before={"item": before_item},
                         after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
-                        detail={"item_id": item.get("id"), "gid": gid, "url": item.get("url"), "cap_mbps": cap_mbps},
+                        detail={
+                            "item_id": item.get("id"),
+                            "gid": gid,
+                            "url": item.get("url"),
+                            "cap_mbps": cap_mbps,
+                        },
                     )
                     current_running_infos.append(_queued_info(item, gid, "waiting"))
                     allocated += 1
             save_queue(items)
             _finalize_primary_state(items, current_running_infos)
 
-            if not any(item.get("status") in {"queued", "downloading", "paused"} for item in items):
+            if not any(
+                item.get("status") in {"queued", "downloading", "paused"}
+                for item in items
+            ):
                 current = load_state()
                 current["running"] = False
                 current["stop_requested"] = False

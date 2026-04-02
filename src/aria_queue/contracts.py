@@ -5,7 +5,16 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
-from .core import aria_rpc, config_dir, ensure_aria_daemon, get_active_progress, load_state, queue_path, storage_locked, summarize_queue
+from .core import (
+    aria_rpc,
+    config_dir,
+    ensure_aria_daemon,
+    get_active_progress,
+    load_state,
+    queue_path,
+    storage_locked,
+    summarize_queue,
+)
 
 
 DEFAULT_DECLARATION = {
@@ -16,14 +25,54 @@ DEFAULT_DECLARATION = {
             {"name": "queue_readable", "class": "integrity", "blocking": "hard"},
         ],
         "preferences": [
-            {"name": "post_action_rule", "value": "pending", "options": ["pending"], "rationale": "default placeholder"},
-            {"name": "auto_preflight_on_run", "value": False, "options": [True, False], "rationale": "default off"},
-            {"name": "duplicate_active_transfer_action", "value": "remove", "options": ["remove", "pause", "ignore"], "rationale": "remove duplicate live jobs by default"},
-            {"name": "max_simultaneous_downloads", "value": 1, "options": [1], "rationale": "1 preserves the sequential default"},
-            {"name": "bandwidth_free_percent", "value": 20, "options": [10, 20, 30, 50], "rationale": "reserve 20% of measured bandwidth for other traffic"},
-            {"name": "bandwidth_free_absolute_mbps", "value": 0, "options": [0, 1, 2, 5, 10], "rationale": "absolute minimum free bandwidth in Mbps (0 = use percent only)"},
-            {"name": "bandwidth_floor_mbps", "value": 2, "options": [1, 2, 5], "rationale": "minimum download cap when probe is unavailable or bandwidth is very low"},
-            {"name": "bandwidth_probe_interval_seconds", "value": 180, "options": [60, 120, 180, 300], "rationale": "seconds between automatic bandwidth probes"}
+            {
+                "name": "post_action_rule",
+                "value": "pending",
+                "options": ["pending"],
+                "rationale": "default placeholder",
+            },
+            {
+                "name": "auto_preflight_on_run",
+                "value": False,
+                "options": [True, False],
+                "rationale": "default off",
+            },
+            {
+                "name": "duplicate_active_transfer_action",
+                "value": "remove",
+                "options": ["remove", "pause", "ignore"],
+                "rationale": "remove duplicate live jobs by default",
+            },
+            {
+                "name": "max_simultaneous_downloads",
+                "value": 1,
+                "options": [1],
+                "rationale": "1 preserves the sequential default",
+            },
+            {
+                "name": "bandwidth_free_percent",
+                "value": 20,
+                "options": [10, 20, 30, 50],
+                "rationale": "reserve 20% of measured bandwidth for other traffic",
+            },
+            {
+                "name": "bandwidth_free_absolute_mbps",
+                "value": 0,
+                "options": [0, 1, 2, 5, 10],
+                "rationale": "absolute minimum free bandwidth in Mbps (0 = use percent only)",
+            },
+            {
+                "name": "bandwidth_floor_mbps",
+                "value": 2,
+                "options": [1, 2, 5],
+                "rationale": "minimum download cap when probe is unavailable or bandwidth is very low",
+            },
+            {
+                "name": "bandwidth_probe_interval_seconds",
+                "value": 180,
+                "options": [60, 120, 180, 300],
+                "rationale": "seconds between automatic bandwidth probes",
+            },
         ],
         "policies": [],
     },
@@ -42,7 +91,9 @@ def ensure_declaration() -> dict[str, Any]:
         path = declaration_path()
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(DEFAULT_DECLARATION, indent=2) + "\n", encoding="utf-8")
+            path.write_text(
+                json.dumps(DEFAULT_DECLARATION, indent=2) + "\n", encoding="utf-8"
+            )
         return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -95,7 +146,14 @@ def preflight() -> dict[str, Any]:
             satisfied = not state.get("paused", False)
             if not satisfied:
                 warnings.append({"name": name, "message": "queue is paused"})
-        gates.append({"name": name, "satisfied": satisfied, "blocking": gate.get("blocking", "hard"), "class": gate.get("class", "readiness")})
+        gates.append(
+            {
+                "name": name,
+                "satisfied": satisfied,
+                "blocking": gate.get("blocking", "hard"),
+                "class": gate.get("class", "readiness"),
+            }
+        )
         if not satisfied and gate.get("blocking", "hard") == "hard":
             failures.append(name)
 
@@ -167,7 +225,11 @@ def run_ucc(port: int = 6800) -> dict[str, Any]:
             reason="changed" if changed else "converged",
             observed_before={"items": before},
             observed_after={"items": after},
-            diff={"count_delta": len(after) - len(before), "summary": summarize_queue(after), "active": active},
+            diff={
+                "count_delta": len(after) - len(before),
+                "summary": summarize_queue(after),
+                "active": active,
+            },
         ).to_dict(),
         "preflight": pf,
     }

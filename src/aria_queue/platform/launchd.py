@@ -24,7 +24,14 @@ def aria2_session_dir() -> Path:
 def _launchctl_list(label: str) -> bool:
     if shutil.which("launchctl") is None:
         return False
-    return subprocess.call(["launchctl", "list", label], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+    return (
+        subprocess.call(
+            ["launchctl", "list", label],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    )
 
 
 def _launchctl_unload(plist: Path) -> None:
@@ -98,7 +105,16 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
     ]
     if dry_run:
         return commands
-    subprocess.run(["mkdir", "-p", str(aria2_session_dir()), str(Path.home() / "Downloads"), str(launch_agents_dir())], check=True)
+    subprocess.run(
+        [
+            "mkdir",
+            "-p",
+            str(aria2_session_dir()),
+            str(Path.home() / "Downloads"),
+            str(launch_agents_dir()),
+        ],
+        check=True,
+    )
     (aria2_session_dir() / "session.txt").touch(exist_ok=True)
     aria2_plist_path().write_text(plist, encoding="utf-8")
     _launchctl_load(aria2_plist_path())
@@ -106,7 +122,11 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
 
 
 def uninstall_aria2_launchd(dry_run: bool = False) -> list[str]:
-    commands = [f"launchctl unload {aria2_plist_path()}", f"rm -f {aria2_plist_path()}", f"rm -rf {aria2_session_dir()}"]
+    commands = [
+        f"launchctl unload {aria2_plist_path()}",
+        f"rm -f {aria2_plist_path()}",
+        f"rm -rf {aria2_session_dir()}",
+    ]
     if dry_run:
         return commands
     _launchctl_unload(aria2_plist_path())

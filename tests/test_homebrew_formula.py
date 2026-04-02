@@ -30,7 +30,9 @@ class HomebrewFormulaScriptTests(unittest.TestCase):
         self.assertIn('url "https://example.invalid/v0.1.2.tar.gz"', formula)
         self.assertIn('sha256 "abc123"', formula)
         self.assertIn('version "0.1.2"', formula)
-        self.assertIn('head "https://github.com/bonomani/ariaflow.git", branch: "main"', formula)
+        self.assertIn(
+            'head "https://github.com/bonomani/ariaflow.git", branch: "main"', formula
+        )
         self.assertIn('PYTHONPATH="#{libexec}/src:${PYTHONPATH}"', formula)
         self.assertNotIn("#{PYTHONPATH}", formula)
 

@@ -50,6 +50,7 @@ from .api import (
     ucc_record,
 )
 from .core import cleanup_queue_state
+
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 STATUS_CACHE_TTL = 2.0
 
@@ -64,7 +65,9 @@ def _error_payload(error: str, message: str, **detail: object) -> dict[str, obje
     return payload
 
 
-def _parse_add_items(payload: object) -> tuple[list[dict[str, str | None]] | None, dict[str, object] | None]:
+def _parse_add_items(
+    payload: object,
+) -> tuple[list[dict[str, str | None]] | None, dict[str, object] | None]:
     if not isinstance(payload, dict):
         return None, _error_payload("invalid_payload", "expected a JSON object")
     raw_items = payload.get("items")
@@ -74,14 +77,22 @@ def _parse_add_items(payload: object) -> tuple[list[dict[str, str | None]] | Non
     items: list[dict[str, str | None]] = []
     for index, raw_item in enumerate(raw_items):
         if not isinstance(raw_item, dict):
-            return None, _error_payload("invalid_item", f"items[{index}] must be an object", index=index)
+            return None, _error_payload(
+                "invalid_item", f"items[{index}] must be an object", index=index
+            )
         url = str(raw_item.get("url", "")).strip()
         if not url:
-            return None, _error_payload("invalid_item", f"items[{index}].url must be a non-empty string", index=index)
+            return None, _error_payload(
+                "invalid_item",
+                f"items[{index}].url must be a non-empty string",
+                index=index,
+            )
         output = raw_item.get("output")
         output_value = str(output).strip() if output is not None else ""
         post_action_rule = raw_item.get("post_action_rule")
-        post_action_value = str(post_action_rule).strip() if post_action_rule is not None else ""
+        post_action_value = (
+            str(post_action_rule).strip() if post_action_rule is not None else ""
+        )
         items.append(
             {
                 "url": url,
@@ -92,7 +103,9 @@ def _parse_add_items(payload: object) -> tuple[list[dict[str, str | None]] | Non
     return items, None
 
 
-def _resolve_auto_preflight_override(payload: object) -> tuple[bool | None, dict[str, object] | None]:
+def _resolve_auto_preflight_override(
+    payload: object,
+) -> tuple[bool | None, dict[str, object] | None]:
     if not isinstance(payload, dict):
         return None, _error_payload("invalid_payload", "expected a JSON object")
     raw_value = payload.get("auto_preflight_on_run")
@@ -121,6 +134,7 @@ def _lifecycle_payload() -> dict[str, object]:
     lifecycle = status_all()
     lifecycle.update(_session_fields())
     return lifecycle
+
 
 # Deprecated dashboard snapshot retained only as a reference during the
 # API-only transition. ariaflow does not serve this HTML.
@@ -1857,8 +1871,9 @@ API_ONLY_HTML = """<!doctype html>
 
 def _find_openapi_spec() -> Path | None:
     candidates = [
-        Path(__file__).resolve().parent / "openapi.yaml",          # package data
-        Path(__file__).resolve().parent.parent.parent / "openapi.yaml",  # dev source tree
+        Path(__file__).resolve().parent / "openapi.yaml",  # package data
+        Path(__file__).resolve().parent.parent.parent
+        / "openapi.yaml",  # dev source tree
     ]
     for p in candidates:
         if p.exists():
@@ -1907,7 +1922,11 @@ def _run_tests() -> dict[str, object]:
             if " ... " in line:
                 name, _, status = line.rpartition(" ... ")
                 tests.append({"name": name.strip(), "status": status.strip()})
-            elif line.startswith("Ran ") or line.startswith("OK") or line.startswith("FAILED"):
+            elif (
+                line.startswith("Ran ")
+                or line.startswith("OK")
+                or line.startswith("FAILED")
+            ):
                 summary += line + "\n"
         passed = sum(1 for t in tests if t["status"] == "ok")
         failed = sum(1 for t in tests if t["status"] != "ok")
@@ -1934,7 +1953,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def _status_payload(self, force: bool = False) -> dict:
         now = time.time()
         cached = STATUS_CACHE.get("payload")
-        if not force and cached is not None and now - float(STATUS_CACHE.get("ts", 0.0)) < STATUS_CACHE_TTL:
+        if (
+            not force
+            and cached is not None
+            and now - float(STATUS_CACHE.get("ts", 0.0)) < STATUS_CACHE_TTL
+        ):
             return cached  # type: ignore[return-value]
 
         try:
@@ -2006,7 +2029,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/openapi.yaml":
             spec_path = _find_openapi_spec()
             if spec_path is None:
-                self._send_json({"error": "not_found", "message": "openapi.yaml not found"}, status=404)
+                self._send_json(
+                    {"error": "not_found", "message": "openapi.yaml not found"},
+                    status=404,
+                )
                 return
             body = spec_path.read_bytes()
             self.send_response(HTTPStatus.OK)
@@ -2037,7 +2063,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/log":
             limit = 120
-            query = dict(part.split("=", 1) if "=" in part else (part, "") for part in parsed.query.split("&") if part)
+            query = dict(
+                part.split("=", 1) if "=" in part else (part, "")
+                for part in parsed.query.split("&")
+                if part
+            )
             try:
                 limit = max(1, min(500, int(query.get("limit", "120"))))
             except ValueError:
@@ -2053,7 +2083,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/lifecycle":
             self._send_json(_lifecycle_payload())
             return
-        if path.startswith("/api/item/") and path.endswith("/files") and path.count("/") == 4:
+        if (
+            path.startswith("/api/item/")
+            and path.endswith("/files")
+            and path.count("/") == 4
+        ):
             item_id = path.split("/")[3]
             result = get_item_files(item_id)
             if not result.get("ok", True):
@@ -2071,7 +2105,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         try:
             payload = json.loads(raw or "{}")
         except json.JSONDecodeError:
-            self._send_json(_error_payload("invalid_json", "request body must be valid JSON"), status=400)
+            self._send_json(
+                _error_payload("invalid_json", "request body must be valid JSON"),
+                status=400,
+            )
             return
 
         if path == "/api/bandwidth/probe":
@@ -2108,7 +2145,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 outcome="converged" if result.get("status") == "pass" else "blocked",
                 reason=result.get("status", "unknown"),
                 before=before,
-                after={"state": load_state(), "queue": summarize_queue(load_queue()), "preflight": result},
+                after={
+                    "state": load_state(),
+                    "queue": summarize_queue(load_queue()),
+                    "preflight": result,
+                },
                 detail=result,
             )
             self._invalidate_status_cache()
@@ -2117,12 +2158,19 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
         if path == "/api/run":
             if not isinstance(payload, dict):
-                self._send_json(_error_payload("invalid_payload", "expected a JSON object"), status=400)
+                self._send_json(
+                    _error_payload("invalid_payload", "expected a JSON object"),
+                    status=400,
+                )
                 return
             action = str(payload.get("action", "")).strip().lower()
             if action not in {"start", "stop"}:
                 self._send_json(
-                    _error_payload("invalid_action", "action must be 'start' or 'stop'", action=action or None),
+                    _error_payload(
+                        "invalid_action",
+                        "action must be 'start' or 'stop'",
+                        action=action or None,
+                    ),
                     status=400,
                 )
                 return
@@ -2140,16 +2188,24 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 if override_error is not None:
                     self._send_json(override_error, status=400)
                     return
-                effective_auto_preflight = auto_preflight_on_run() if override is None else override
+                effective_auto_preflight = (
+                    auto_preflight_on_run() if override is None else override
+                )
                 if effective_auto_preflight:
                     preflight_result = preflight()
                     record_action(
                         action="preflight",
                         target="system",
-                        outcome="converged" if preflight_result.get("status") == "pass" else "blocked",
+                        outcome="converged"
+                        if preflight_result.get("status") == "pass"
+                        else "blocked",
                         reason=preflight_result.get("status", "unknown"),
                         before=before,
-                        after={"state": load_state(), "queue": summarize_queue(load_queue()), "preflight": preflight_result},
+                        after={
+                            "state": load_state(),
+                            "queue": summarize_queue(load_queue()),
+                            "preflight": preflight_result,
+                        },
                         detail=preflight_result,
                     )
                     if preflight_result.get("exit_code") != 0:
@@ -2167,7 +2223,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                             outcome="blocked",
                             reason="preflight_blocked",
                             before=before,
-                            after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": blocked},
+                            after={
+                                "state": load_state(),
+                                "queue": summarize_queue(load_queue()),
+                                "runner": blocked,
+                            },
                             detail=blocked,
                         )
                         self._invalidate_status_cache()
@@ -2183,10 +2243,16 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             record_action(
                 action="run",
                 target="queue",
-                outcome="changed" if result.get("started") or result.get("stopped") else "unchanged",
+                outcome="changed"
+                if result.get("started") or result.get("stopped")
+                else "unchanged",
                 reason=result.get("reason", "unknown"),
                 before=before,
-                after={"state": load_state(), "queue": summarize_queue(load_queue()), "runner": response},
+                after={
+                    "state": load_state(),
+                    "queue": summarize_queue(load_queue()),
+                    "runner": response,
+                },
                 detail=response,
             )
             self._invalidate_status_cache()
@@ -2203,7 +2269,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 observation=result.get("result", {}).get("observation", "unknown"),
                 reason=result.get("result", {}).get("reason", "unknown"),
                 before=before,
-                after={"state": load_state(), "queue": summarize_queue(load_queue()), "ucc": result},
+                after={
+                    "state": load_state(),
+                    "queue": summarize_queue(load_queue()),
+                    "ucc": result,
+                },
                 detail=result,
             )
             self._invalidate_status_cache()
@@ -2278,7 +2348,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                         )
                     }
                 else:
-                    self._send_json({"error": "unsupported_action", "target": target, "action": action}, status=400)
+                    self._send_json(
+                        {
+                            "error": "unsupported_action",
+                            "target": target,
+                            "action": action,
+                        },
+                        status=400,
+                    )
                     return
             except Exception as exc:
                 record_action(
@@ -2287,11 +2364,18 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                     outcome="failed",
                     reason="exception",
                     before=before,
-                    after={"lifecycle": status_all(), "target": target, "action": action},
+                    after={
+                        "lifecycle": status_all(),
+                        "target": target,
+                        "action": action,
+                    },
                     detail={"error": str(exc), "target": target, "action": action},
                 )
                 self._invalidate_status_cache()
-                self._send_json({"error": "lifecycle_action_failed", "message": str(exc)}, status=500)
+                self._send_json(
+                    {"error": "lifecycle_action_failed", "message": str(exc)},
+                    status=500,
+                )
                 return
             record_action(
                 action="lifecycle_action",
@@ -2299,17 +2383,32 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 outcome="changed",
                 reason=action or "lifecycle_action",
                 before=before,
-                after={"lifecycle": status_all(), "target": target, "action": action, "result": result},
+                after={
+                    "lifecycle": status_all(),
+                    "target": target,
+                    "action": action,
+                    "result": result,
+                },
                 detail={"target": target, "action": action, "result": result},
             )
             self._invalidate_status_cache()
-            self._send_json({"ok": True, "target": target, "action": action, "lifecycle": _lifecycle_payload(), "result": result})
+            self._send_json(
+                {
+                    "ok": True,
+                    "target": target,
+                    "action": action,
+                    "lifecycle": _lifecycle_payload(),
+                    "result": result,
+                }
+            )
             return
 
         if path == "/api/session":
             action = str(payload.get("action", "")).strip()
             if action != "new":
-                self._send_json({"error": "unsupported_action", "action": action}, status=400)
+                self._send_json(
+                    {"error": "unsupported_action", "action": action}, status=400
+                )
                 return
             before = {"state": load_state(), "queue": summarize_queue(load_queue())}
             state = start_new_state_session(reason="manual_new_session")
@@ -2323,7 +2422,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 reason="new_session",
                 before=before,
                 after=after,
-                detail={"session_id": state.get("session_id"), "session_started_at": state.get("session_started_at")},
+                detail={
+                    "session_id": state.get("session_id"),
+                    "session_started_at": state.get("session_started_at"),
+                },
             )
             self._send_json(result)
             return
@@ -2342,7 +2444,13 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
         if path == "/api/aria2/options":
             if not isinstance(payload, dict) or not payload:
-                self._send_json(_error_payload("invalid_payload", "expected a JSON object with option key-value pairs"), status=400)
+                self._send_json(
+                    _error_payload(
+                        "invalid_payload",
+                        "expected a JSON object with option key-value pairs",
+                    ),
+                    status=400,
+                )
                 return
             options = {str(k): str(v) for k, v in payload.items()}
             result = change_aria2_options(options)
@@ -2352,16 +2460,28 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(result)
             return
 
-        if path.startswith("/api/item/") and path.endswith("/files") and path.count("/") == 4:
+        if (
+            path.startswith("/api/item/")
+            and path.endswith("/files")
+            and path.count("/") == 4
+        ):
             item_id = path.split("/")[3]
             select = payload.get("select") if isinstance(payload, dict) else None
             if not isinstance(select, list) or not select:
-                self._send_json(_error_payload("invalid_payload", "expected {select: [1, 3, 5]}"), status=400)
+                self._send_json(
+                    _error_payload("invalid_payload", "expected {select: [1, 3, 5]}"),
+                    status=400,
+                )
                 return
             try:
                 indices = [int(i) for i in select]
             except (ValueError, TypeError):
-                self._send_json(_error_payload("invalid_payload", "select must be a list of integers"), status=400)
+                self._send_json(
+                    _error_payload(
+                        "invalid_payload", "select must be a list of integers"
+                    ),
+                    status=400,
+                )
                 return
             result = select_item_files(item_id, indices)
             if not result.get("ok", True):
@@ -2384,7 +2504,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             }
             handler = item_actions.get(action)
             if handler is None:
-                self._send_json(_error_payload("invalid_action", f"unknown item action: {action}"), status=400)
+                self._send_json(
+                    _error_payload("invalid_action", f"unknown item action: {action}"),
+                    status=400,
+                )
                 return
             try:
                 result = handler(item_id)

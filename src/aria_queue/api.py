@@ -32,7 +32,12 @@ from .core import (
     stop_background_process,
     summarize_queue,
 )
-from .install import homebrew_install_ariaflow, homebrew_uninstall_ariaflow, status_all, ucc_record
+from .install import (
+    homebrew_install_ariaflow,
+    homebrew_uninstall_ariaflow,
+    status_all,
+    ucc_record,
+)
 from .platform.launchd import (
     install_aria2_launchd,
     is_macos,

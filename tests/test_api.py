@@ -3,6 +3,7 @@
 Every test spins up a real HTTP server and makes real requests.
 aria2 RPC is mocked where needed to avoid requiring a running daemon.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,11 +20,13 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from aria_queue.core import load_queue, load_state, save_queue, save_state  # noqa: E402
+from aria_queue.core import load_queue, save_queue  # noqa: E402
 from aria_queue.webapp import serve  # noqa: E402
 
 
-def _request(url: str, method: str = "GET", payload: dict | None = None, timeout: int = 5) -> tuple[int, dict]:
+def _request(
+    url: str, method: str = "GET", payload: dict | None = None, timeout: int = 5
+) -> tuple[int, dict]:
     data = None
     headers = {}
     if payload is not None:
@@ -39,8 +42,13 @@ def _request(url: str, method: str = "GET", payload: dict | None = None, timeout
         return exc.code, body
 
 
-def _raw_request(url: str, method: str = "GET", data: bytes | None = None,
-                 content_type: str | None = None, timeout: int = 5) -> tuple[int, bytes, dict[str, str]]:
+def _raw_request(
+    url: str,
+    method: str = "GET",
+    data: bytes | None = None,
+    content_type: str | None = None,
+    timeout: int = 5,
+) -> tuple[int, bytes, dict[str, str]]:
     headers = {}
     if content_type:
         headers["Content-Type"] = content_type
@@ -75,8 +83,8 @@ class APIServerMixin:
 # 1. Status & Queue Read Endpoints
 # ──────────────────────────────────────────────────────
 
-class TestStatusEndpoint(APIServerMixin, unittest.TestCase):
 
+class TestStatusEndpoint(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -90,17 +98,27 @@ class TestStatusEndpoint(APIServerMixin, unittest.TestCase):
             self.assertIn(key, body)
 
     def test_status_summary_counts_match_items(self) -> None:
-        _request(f"{self.base}/api/add", "POST", {"items": [
-            {"url": "https://example.com/a.bin"},
-            {"url": "https://example.com/b.bin"},
-        ]})
+        _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [
+                    {"url": "https://example.com/a.bin"},
+                    {"url": "https://example.com/b.bin"},
+                ]
+            },
+        )
         code, body = _request(f"{self.base}/api/status")
         self.assertEqual(body["summary"]["queued"], 2)
         self.assertEqual(body["summary"]["total"], 2)
         self.assertEqual(len(body["items"]), 2)
 
     def test_status_includes_session_info(self) -> None:
-        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/x.bin"}]})
+        _request(
+            f"{self.base}/api/add",
+            "POST",
+            {"items": [{"url": "https://example.com/x.bin"}]},
+        )
         code, body = _request(f"{self.base}/api/status")
         self.assertIn("session_id", body["state"])
         self.assertIsNotNone(body["state"]["session_id"])
@@ -115,8 +133,8 @@ class TestStatusEndpoint(APIServerMixin, unittest.TestCase):
 # 2. Add Endpoint
 # ──────────────────────────────────────────────────────
 
-class TestAddEndpoint(APIServerMixin, unittest.TestCase):
 
+class TestAddEndpoint(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -124,9 +142,13 @@ class TestAddEndpoint(APIServerMixin, unittest.TestCase):
         self.stop_server()
 
     def test_add_single_item(self) -> None:
-        code, body = _request(f"{self.base}/api/add", "POST", {
-            "items": [{"url": "https://example.com/file.bin"}],
-        })
+        code, body = _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [{"url": "https://example.com/file.bin"}],
+            },
+        )
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertEqual(body["count"], 1)
@@ -135,32 +157,54 @@ class TestAddEndpoint(APIServerMixin, unittest.TestCase):
         self.assertIn("id", body["added"][0])
 
     def test_add_multiple_items(self) -> None:
-        code, body = _request(f"{self.base}/api/add", "POST", {
-            "items": [
-                {"url": "https://example.com/one.bin"},
-                {"url": "https://example.com/two.bin"},
-                {"url": "https://example.com/three.bin"},
-            ],
-        })
+        code, body = _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [
+                    {"url": "https://example.com/one.bin"},
+                    {"url": "https://example.com/two.bin"},
+                    {"url": "https://example.com/three.bin"},
+                ],
+            },
+        )
         self.assertEqual(body["count"], 3)
         urls = [item["url"] for item in body["added"]]
         self.assertIn("https://example.com/one.bin", urls)
         self.assertIn("https://example.com/three.bin", urls)
 
     def test_add_with_output_and_post_action(self) -> None:
-        code, body = _request(f"{self.base}/api/add", "POST", {
-            "items": [{"url": "https://example.com/file.bin", "output": "custom.bin", "post_action_rule": "pending"}],
-        })
+        code, body = _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [
+                    {
+                        "url": "https://example.com/file.bin",
+                        "output": "custom.bin",
+                        "post_action_rule": "pending",
+                    }
+                ],
+            },
+        )
         self.assertEqual(body["added"][0]["output"], "custom.bin")
         self.assertEqual(body["added"][0]["post_action_rule"], "pending")
 
     def test_add_duplicate_url_returns_same_id(self) -> None:
-        _, first = _request(f"{self.base}/api/add", "POST", {
-            "items": [{"url": "https://example.com/dup.bin"}],
-        })
-        _, second = _request(f"{self.base}/api/add", "POST", {
-            "items": [{"url": "https://example.com/dup.bin"}],
-        })
+        _, first = _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [{"url": "https://example.com/dup.bin"}],
+            },
+        )
+        _, second = _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [{"url": "https://example.com/dup.bin"}],
+            },
+        )
         self.assertEqual(first["added"][0]["id"], second["added"][0]["id"])
 
     def test_add_empty_items_returns_400(self) -> None:
@@ -168,7 +212,9 @@ class TestAddEndpoint(APIServerMixin, unittest.TestCase):
         self.assertEqual(code, 400)
 
     def test_add_missing_items_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/add", "POST", {"url": "https://example.com/x"})
+        code, body = _request(
+            f"{self.base}/api/add", "POST", {"url": "https://example.com/x"}
+        )
         self.assertEqual(code, 400)
 
     def test_add_invalid_json_returns_400(self) -> None:
@@ -189,13 +235,17 @@ class TestAddEndpoint(APIServerMixin, unittest.TestCase):
 # 3. Per-item Actions
 # ──────────────────────────────────────────────────────
 
-class TestPerItemActions(APIServerMixin, unittest.TestCase):
 
+class TestPerItemActions(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
-        _, added = _request(f"{self.base}/api/add", "POST", {
-            "items": [{"url": "https://example.com/item.bin"}],
-        })
+        _, added = _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [{"url": "https://example.com/item.bin"}],
+            },
+        )
         self.item_id = added["added"][0]["id"]
 
     def tearDown(self) -> None:
@@ -334,13 +384,17 @@ class TestPerItemActions(APIServerMixin, unittest.TestCase):
 # 4. File Selection (Torrent/Metalink)
 # ──────────────────────────────────────────────────────
 
-class TestFileSelection(APIServerMixin, unittest.TestCase):
 
+class TestFileSelection(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
-        _, added = _request(f"{self.base}/api/add", "POST", {
-            "items": [{"url": "https://example.com/archive.torrent"}],
-        })
+        _, added = _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [{"url": "https://example.com/archive.torrent"}],
+            },
+        )
         self.item_id = added["added"][0]["id"]
 
     def tearDown(self) -> None:
@@ -356,8 +410,18 @@ class TestFileSelection(APIServerMixin, unittest.TestCase):
         items[0]["gid"] = "gid-torrent"
         save_queue(items)
         files = [
-            {"index": "1", "path": "/downloads/file1.mkv", "length": "1000000", "selected": "true"},
-            {"index": "2", "path": "/downloads/file2.nfo", "length": "500", "selected": "true"},
+            {
+                "index": "1",
+                "path": "/downloads/file1.mkv",
+                "length": "1000000",
+                "selected": "true",
+            },
+            {
+                "index": "2",
+                "path": "/downloads/file2.nfo",
+                "length": "500",
+                "selected": "true",
+            },
         ]
         with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
             code, body = _request(f"{self.base}/api/item/{self.item_id}/files")
@@ -384,7 +448,12 @@ class TestFileSelection(APIServerMixin, unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertEqual(body["selected"], [1, 3, 5])
-        rpc.assert_any_call("aria2.changeOption", ["gid-torrent", {"select-file": "1,3,5"}], port=6800, timeout=5)
+        rpc.assert_any_call(
+            "aria2.changeOption",
+            ["gid-torrent", {"select-file": "1,3,5"}],
+            port=6800,
+            timeout=5,
+        )
         rpc.assert_any_call("aria2.unpause", ["gid-torrent"], port=6800, timeout=5)
 
     def test_select_files_empty_returns_400(self) -> None:
@@ -416,8 +485,8 @@ class TestFileSelection(APIServerMixin, unittest.TestCase):
 # 5. aria2 Options Proxy
 # ──────────────────────────────────────────────────────
 
-class TestAria2Options(APIServerMixin, unittest.TestCase):
 
+class TestAria2Options(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -425,38 +494,58 @@ class TestAria2Options(APIServerMixin, unittest.TestCase):
         self.stop_server()
 
     def test_safe_option_accepted(self) -> None:
-        with patch("aria_queue.core.aria_rpc"), \
-             patch("aria_queue.core.current_global_options", return_value={}):
-            code, body = _request(f"{self.base}/api/aria2/options", "POST", {
-                "max-concurrent-downloads": "5",
-            })
+        with (
+            patch("aria_queue.core.aria_rpc"),
+            patch("aria_queue.core.current_global_options", return_value={}),
+        ):
+            code, body = _request(
+                f"{self.base}/api/aria2/options",
+                "POST",
+                {
+                    "max-concurrent-downloads": "5",
+                },
+            )
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertIn("max-concurrent-downloads", body["applied"])
 
     def test_multiple_safe_options(self) -> None:
-        with patch("aria_queue.core.aria_rpc"), \
-             patch("aria_queue.core.current_global_options", return_value={}):
-            code, body = _request(f"{self.base}/api/aria2/options", "POST", {
-                "max-concurrent-downloads": "3",
-                "split": "4",
-                "timeout": "30",
-            })
+        with (
+            patch("aria_queue.core.aria_rpc"),
+            patch("aria_queue.core.current_global_options", return_value={}),
+        ):
+            code, body = _request(
+                f"{self.base}/api/aria2/options",
+                "POST",
+                {
+                    "max-concurrent-downloads": "3",
+                    "split": "4",
+                    "timeout": "30",
+                },
+            )
         self.assertEqual(code, 200)
         self.assertEqual(len(body["applied"]), 3)
 
     def test_unsafe_option_rejected(self) -> None:
-        code, body = _request(f"{self.base}/api/aria2/options", "POST", {
-            "dir": "/tmp/evil",
-        })
+        code, body = _request(
+            f"{self.base}/api/aria2/options",
+            "POST",
+            {
+                "dir": "/tmp/evil",
+            },
+        )
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "rejected_options")
 
     def test_mixed_safe_unsafe_rejected(self) -> None:
-        code, body = _request(f"{self.base}/api/aria2/options", "POST", {
-            "max-concurrent-downloads": "3",
-            "enable-rpc": "false",
-        })
+        code, body = _request(
+            f"{self.base}/api/aria2/options",
+            "POST",
+            {
+                "max-concurrent-downloads": "3",
+                "enable-rpc": "false",
+            },
+        )
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "rejected_options")
 
@@ -480,8 +569,10 @@ class TestAria2Options(APIServerMixin, unittest.TestCase):
             "timeout": "60",
             "connect-timeout": "30",
         }
-        with patch("aria_queue.core.aria_rpc"), \
-             patch("aria_queue.core.current_global_options", return_value={}):
+        with (
+            patch("aria_queue.core.aria_rpc"),
+            patch("aria_queue.core.current_global_options", return_value={}),
+        ):
             code, body = _request(f"{self.base}/api/aria2/options", "POST", all_safe)
         self.assertEqual(code, 200)
         self.assertEqual(len(body["applied"]), 8)
@@ -491,8 +582,8 @@ class TestAria2Options(APIServerMixin, unittest.TestCase):
 # 5b. Bandwidth Status & Probe
 # ──────────────────────────────────────────────────────
 
-class TestBandwidth(APIServerMixin, unittest.TestCase):
 
+class TestBandwidth(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -520,13 +611,19 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
     def test_bandwidth_status_includes_probe_info(self) -> None:
         # After a manual probe, status should show results
         probe_result = {
-            "source": "networkquality", "reason": "probe_complete",
-            "downlink_mbps": 100.0, "uplink_mbps": 20.0,
-            "cap_mbps": 80.0, "cap_bytes_per_sec": 10000000,
-            "interface_name": "en0", "responsiveness_rpm": 1500.0,
+            "source": "networkquality",
+            "reason": "probe_complete",
+            "downlink_mbps": 100.0,
+            "uplink_mbps": 20.0,
+            "cap_mbps": 80.0,
+            "cap_bytes_per_sec": 10000000,
+            "interface_name": "en0",
+            "responsiveness_rpm": 1500.0,
         }
-        with patch("aria_queue.core.probe_bandwidth", return_value=probe_result), \
-             patch("aria_queue.core.set_bandwidth"):
+        with (
+            patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
+            patch("aria_queue.core.set_bandwidth"),
+        ):
             _request(f"{self.base}/api/bandwidth/probe", "POST")
         code, body = _request(f"{self.base}/api/bandwidth")
         self.assertEqual(body["downlink_mbps"], 100.0)
@@ -536,13 +633,18 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
 
     def test_manual_probe(self) -> None:
         probe_result = {
-            "source": "networkquality", "reason": "probe_complete",
-            "downlink_mbps": 50.0, "uplink_mbps": 10.0,
-            "cap_mbps": 40.0, "cap_bytes_per_sec": 5000000,
+            "source": "networkquality",
+            "reason": "probe_complete",
+            "downlink_mbps": 50.0,
+            "uplink_mbps": 10.0,
+            "cap_mbps": 40.0,
+            "cap_bytes_per_sec": 5000000,
             "interface_name": "en1",
         }
-        with patch("aria_queue.core.probe_bandwidth", return_value=probe_result), \
-             patch("aria_queue.core.set_bandwidth"):
+        with (
+            patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
+            patch("aria_queue.core.set_bandwidth"),
+        ):
             code, body = _request(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
@@ -580,8 +682,8 @@ class TestBandwidth(APIServerMixin, unittest.TestCase):
 # 6. Engine Control (Run/Pause/Resume)
 # ──────────────────────────────────────────────────────
 
-class TestEngineControl(APIServerMixin, unittest.TestCase):
 
+class TestEngineControl(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -589,10 +691,14 @@ class TestEngineControl(APIServerMixin, unittest.TestCase):
         self.stop_server()
 
     def test_run_start(self) -> None:
-        code, body = _request(f"{self.base}/api/run", "POST", {
-            "action": "start",
-            "auto_preflight_on_run": False,
-        })
+        code, body = _request(
+            f"{self.base}/api/run",
+            "POST",
+            {
+                "action": "start",
+                "auto_preflight_on_run": False,
+            },
+        )
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertEqual(body["action"], "start")
@@ -621,29 +727,53 @@ class TestEngineControl(APIServerMixin, unittest.TestCase):
         self.assertIn("resumed", resumed)
 
     def test_preflight(self) -> None:
-        with patch("aria_queue.webapp.preflight", return_value={
-            "contract": "UCC", "version": "2.0",
-            "gates": [], "preferences": [], "policies": [],
-            "warnings": [], "hard_failures": [],
-            "status": "pass", "exit_code": 0,
-        }), patch("aria_queue.webapp.aria_status", return_value={}), \
-             patch("aria_queue.webapp.current_bandwidth", return_value={}):
+        with (
+            patch(
+                "aria_queue.webapp.preflight",
+                return_value={
+                    "contract": "UCC",
+                    "version": "2.0",
+                    "gates": [],
+                    "preferences": [],
+                    "policies": [],
+                    "warnings": [],
+                    "hard_failures": [],
+                    "status": "pass",
+                    "exit_code": 0,
+                },
+            ),
+            patch("aria_queue.webapp.aria_status", return_value={}),
+            patch("aria_queue.webapp.current_bandwidth", return_value={}),
+        ):
             code, body = _request(f"{self.base}/api/preflight", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["status"], "pass")
         self.assertIn("gates", body)
 
     def test_preflight_blocked_start(self) -> None:
-        with patch("aria_queue.webapp.auto_preflight_on_run", return_value=False), \
-             patch("aria_queue.webapp.preflight", return_value={
-                 "status": "fail", "exit_code": 1,
-                 "gates": [], "preferences": [], "policies": [],
-                 "warnings": [], "hard_failures": ["aria2_available"],
-             }):
-            code, body = _request(f"{self.base}/api/run", "POST", {
-                "action": "start",
-                "auto_preflight_on_run": True,
-            })
+        with (
+            patch("aria_queue.webapp.auto_preflight_on_run", return_value=False),
+            patch(
+                "aria_queue.webapp.preflight",
+                return_value={
+                    "status": "fail",
+                    "exit_code": 1,
+                    "gates": [],
+                    "preferences": [],
+                    "policies": [],
+                    "warnings": [],
+                    "hard_failures": ["aria2_available"],
+                },
+            ),
+        ):
+            code, body = _request(
+                f"{self.base}/api/run",
+                "POST",
+                {
+                    "action": "start",
+                    "auto_preflight_on_run": True,
+                },
+            )
         self.assertEqual(code, 409)
         self.assertEqual(body["error"], "preflight_blocked")
 
@@ -652,8 +782,8 @@ class TestEngineControl(APIServerMixin, unittest.TestCase):
 # 7. Declaration / Config
 # ──────────────────────────────────────────────────────
 
-class TestDeclaration(APIServerMixin, unittest.TestCase):
 
+class TestDeclaration(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -681,12 +811,14 @@ class TestDeclaration(APIServerMixin, unittest.TestCase):
 
     def test_save_declaration_roundtrip(self) -> None:
         _, original = _request(f"{self.base}/api/declaration")
-        original["uic"]["preferences"].append({
-            "name": "test_pref",
-            "value": True,
-            "options": [True, False],
-            "rationale": "test",
-        })
+        original["uic"]["preferences"].append(
+            {
+                "name": "test_pref",
+                "value": True,
+                "options": [True, False],
+                "rationale": "test",
+            }
+        )
         _request(f"{self.base}/api/declaration", "POST", original)
         _, reloaded = _request(f"{self.base}/api/declaration")
         pref_names = [p["name"] for p in reloaded["uic"]["preferences"]]
@@ -697,8 +829,8 @@ class TestDeclaration(APIServerMixin, unittest.TestCase):
 # 8. Session Management
 # ──────────────────────────────────────────────────────
 
-class TestSession(APIServerMixin, unittest.TestCase):
 
+class TestSession(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -707,9 +839,13 @@ class TestSession(APIServerMixin, unittest.TestCase):
 
     def test_new_session(self) -> None:
         # Create initial session via add
-        _request(f"{self.base}/api/add", "POST", {
-            "items": [{"url": "https://example.com/x.bin"}],
-        })
+        _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [{"url": "https://example.com/x.bin"}],
+            },
+        )
         _, status_before = _request(f"{self.base}/api/status")
         old_session = status_before["state"]["session_id"]
 
@@ -720,7 +856,11 @@ class TestSession(APIServerMixin, unittest.TestCase):
         self.assertNotEqual(old_session, new_session)
 
     def test_new_session_closes_previous(self) -> None:
-        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/y.bin"}]})
+        _request(
+            f"{self.base}/api/add",
+            "POST",
+            {"items": [{"url": "https://example.com/y.bin"}]},
+        )
         _request(f"{self.base}/api/session", "POST", {"action": "new"})
         # Check the log for close action
         _, log = _request(f"{self.base}/api/log?limit=10")
@@ -732,8 +872,8 @@ class TestSession(APIServerMixin, unittest.TestCase):
 # 9. Action Log
 # ──────────────────────────────────────────────────────
 
-class TestActionLog(APIServerMixin, unittest.TestCase):
 
+class TestActionLog(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -749,18 +889,30 @@ class TestActionLog(APIServerMixin, unittest.TestCase):
     def test_log_custom_limit(self) -> None:
         # Add items to generate log entries
         for i in range(5):
-            _request(f"{self.base}/api/add", "POST", {"items": [{"url": f"https://example.com/{i}.bin"}]})
+            _request(
+                f"{self.base}/api/add",
+                "POST",
+                {"items": [{"url": f"https://example.com/{i}.bin"}]},
+            )
         code, body = _request(f"{self.base}/api/log?limit=3")
         self.assertLessEqual(len(body["items"]), 3)
 
     def test_log_entries_have_timestamps(self) -> None:
-        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/log.bin"}]})
+        _request(
+            f"{self.base}/api/add",
+            "POST",
+            {"items": [{"url": "https://example.com/log.bin"}]},
+        )
         _, body = _request(f"{self.base}/api/log?limit=5")
         for entry in body["items"]:
             self.assertIn("timestamp", entry)
 
     def test_log_records_add_action(self) -> None:
-        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/tracked.bin"}]})
+        _request(
+            f"{self.base}/api/add",
+            "POST",
+            {"items": [{"url": "https://example.com/tracked.bin"}]},
+        )
         _, body = _request(f"{self.base}/api/log?limit=5")
         actions = [e.get("action") for e in body["items"]]
         self.assertIn("add", actions)
@@ -770,8 +922,8 @@ class TestActionLog(APIServerMixin, unittest.TestCase):
 # 10. Lifecycle
 # ──────────────────────────────────────────────────────
 
-class TestLifecycle(APIServerMixin, unittest.TestCase):
 
+class TestLifecycle(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -787,10 +939,14 @@ class TestLifecycle(APIServerMixin, unittest.TestCase):
 
     def test_lifecycle_action_non_macos(self) -> None:
         with patch("aria_queue.webapp.is_macos", return_value=False):
-            code, body = _request(f"{self.base}/api/lifecycle/action", "POST", {
-                "target": "ariaflow",
-                "action": "install",
-            })
+            code, body = _request(
+                f"{self.base}/api/lifecycle/action",
+                "POST",
+                {
+                    "target": "ariaflow",
+                    "action": "install",
+                },
+            )
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "macos_only")
 
@@ -799,8 +955,8 @@ class TestLifecycle(APIServerMixin, unittest.TestCase):
 # 11. UCC Endpoint
 # ──────────────────────────────────────────────────────
 
-class TestUCC(APIServerMixin, unittest.TestCase):
 
+class TestUCC(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -808,13 +964,24 @@ class TestUCC(APIServerMixin, unittest.TestCase):
         self.stop_server()
 
     def test_ucc_returns_structured_result(self) -> None:
-        with patch("aria_queue.contracts.preflight", return_value={
-            "contract": "UCC", "version": "2.0",
-            "gates": [], "preferences": [], "policies": [],
-            "warnings": [], "hard_failures": [],
-            "status": "pass", "exit_code": 0,
-        }), patch("aria_queue.core.process_queue", return_value=[]), \
-             patch("aria_queue.core.get_active_progress", return_value=None):
+        with (
+            patch(
+                "aria_queue.contracts.preflight",
+                return_value={
+                    "contract": "UCC",
+                    "version": "2.0",
+                    "gates": [],
+                    "preferences": [],
+                    "policies": [],
+                    "warnings": [],
+                    "hard_failures": [],
+                    "status": "pass",
+                    "exit_code": 0,
+                },
+            ),
+            patch("aria_queue.core.process_queue", return_value=[]),
+            patch("aria_queue.core.get_active_progress", return_value=None),
+        ):
             code, body = _request(f"{self.base}/api/ucc", "POST")
         self.assertEqual(code, 200)
         self.assertIn("meta", body)
@@ -827,8 +994,8 @@ class TestUCC(APIServerMixin, unittest.TestCase):
 # 12. Meta Endpoints (Docs, OpenAPI, Tests)
 # ──────────────────────────────────────────────────────
 
-class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
 
+class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -860,8 +1027,8 @@ class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
 # 13. Error Handling & Edge Cases
 # ──────────────────────────────────────────────────────
 
-class TestErrorHandling(APIServerMixin, unittest.TestCase):
 
+class TestErrorHandling(APIServerMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.base = self.start_server()
 
@@ -899,9 +1066,15 @@ class TestErrorHandling(APIServerMixin, unittest.TestCase):
         results: list[tuple[int, dict]] = []
 
         def add_item() -> None:
-            r = _request(f"{self.base}/api/add", "POST", {
-                "items": [{"url": f"https://example.com/concurrent-{time.time()}.bin"}],
-            })
+            r = _request(
+                f"{self.base}/api/add",
+                "POST",
+                {
+                    "items": [
+                        {"url": f"https://example.com/concurrent-{time.time()}.bin"}
+                    ],
+                },
+            )
             results.append(r)
 
         threads = [threading.Thread(target=add_item) for _ in range(5)]

@@ -81,7 +81,15 @@ def brew_is_installed(package: str) -> bool:
                 break
     if brew is None:
         return False
-    return Path(brew).exists() and subprocess.call([brew, "list", package], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+    return (
+        Path(brew).exists()
+        and subprocess.call(
+            [brew, "list", package],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        == 0
+    )
 
 
 def brew_package_version(package: str) -> str | None:
@@ -216,10 +224,14 @@ def status_all() -> dict[str, dict[str, object]]:
         "networkquality": ucc_record(
             target="networkquality",
             observed=True,
-            outcome="converged" if networkquality["installed"] and networkquality["usable"] else "unchanged",
+            outcome="converged"
+            if networkquality["installed"] and networkquality["usable"]
+            else "unchanged",
             completion="complete",
             reason=networkquality.get("reason", "unknown"),
-            detail=str(networkquality.get("message") or "networkquality status unavailable"),
+            detail=str(
+                networkquality.get("message") or "networkquality status unavailable"
+            ),
         ),
         "aria2-launchd": ucc_record(
             target="aria2-launchd",
