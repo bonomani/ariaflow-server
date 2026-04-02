@@ -1881,6 +1881,76 @@ def _find_openapi_spec() -> Path | None:
     return None
 
 
+def _api_discovery() -> dict[str, object]:
+    return {
+        "name": "ariaflow",
+        "version": __version__,
+        "docs": "/api/docs",
+        "openapi": "/api/openapi.yaml",
+        "endpoints": {
+            "GET": [
+                {"path": "/api", "description": "API discovery (this endpoint)"},
+                {"path": "/api/status", "description": "Queue items, state, summary"},
+                {
+                    "path": "/api/bandwidth",
+                    "description": "Bandwidth status, config, last probe",
+                },
+                {
+                    "path": "/api/log",
+                    "description": "Action log entries",
+                    "params": "?limit=120",
+                },
+                {
+                    "path": "/api/declaration",
+                    "description": "UIC declaration (gates, preferences)",
+                },
+                {"path": "/api/options", "description": "Alias for /api/declaration"},
+                {"path": "/api/lifecycle", "description": "Install/service status"},
+                {
+                    "path": "/api/item/{id}/files",
+                    "description": "List torrent/metalink files",
+                },
+                {"path": "/api/docs", "description": "Swagger UI"},
+                {"path": "/api/openapi.yaml", "description": "OpenAPI 3.0 spec"},
+                {"path": "/api/tests", "description": "Run test suite"},
+            ],
+            "POST": [
+                {"path": "/api/add", "description": "Enqueue URLs"},
+                {"path": "/api/run", "description": "Start/stop queue processor"},
+                {"path": "/api/preflight", "description": "Run preflight checks"},
+                {"path": "/api/ucc", "description": "Execute UCC cycle"},
+                {"path": "/api/pause", "description": "Pause all active transfers"},
+                {"path": "/api/resume", "description": "Resume all paused transfers"},
+                {"path": "/api/session", "description": "Create new session"},
+                {"path": "/api/declaration", "description": "Save UIC declaration"},
+                {
+                    "path": "/api/bandwidth/probe",
+                    "description": "Run bandwidth probe manually",
+                },
+                {
+                    "path": "/api/aria2/options",
+                    "description": "Change aria2 global options (safe subset)",
+                },
+                {"path": "/api/item/{id}/pause", "description": "Pause a queue item"},
+                {
+                    "path": "/api/item/{id}/resume",
+                    "description": "Resume a paused item",
+                },
+                {"path": "/api/item/{id}/remove", "description": "Remove a queue item"},
+                {"path": "/api/item/{id}/retry", "description": "Retry a failed item"},
+                {
+                    "path": "/api/item/{id}/files",
+                    "description": "Select torrent/metalink files",
+                },
+                {
+                    "path": "/api/lifecycle/action",
+                    "description": "Install/uninstall components (macOS)",
+                },
+            ],
+        },
+    }
+
+
 def _swagger_ui_html() -> str:
     return """<!DOCTYPE html>
 <html lang="en">
@@ -2054,6 +2124,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api/tests":
             result = _run_tests()
             self._send_json(result)
+            return
+        if path == "/api":
+            self._send_json(_api_discovery())
             return
         if path == "/api/bandwidth":
             self._send_json(bandwidth_status())
