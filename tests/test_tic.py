@@ -6,6 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import IsolatedTestCase
 
 from aria_queue.contracts import preflight, run_ucc
@@ -905,7 +908,7 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
     def test_add_download_sets_pause_metadata_for_torrent(self) -> None:
         from aria_queue.core import add_download
 
-        item = {"url": "https://example.com/file.torrent"}
+        item = {"url": "https://example.com/file.torrent", "mode": "torrent"}
         with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             gid = add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]
@@ -916,7 +919,7 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
     def test_add_download_no_pause_metadata_for_http(self) -> None:
         from aria_queue.core import add_download
 
-        item = {"url": "https://example.com/file.zip"}
+        item = {"url": "https://example.com/file.zip", "mode": "http"}
         with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
             add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]

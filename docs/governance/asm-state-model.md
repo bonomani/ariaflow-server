@@ -34,13 +34,12 @@ Stored fields: `running`, `paused`, `stop_requested`
 | `queued` | stable | Ready for scheduling |
 | `downloading` | transitional | Active transfer in progress |
 | `paused` | stable | Transfer suspended |
-| `complete` | terminal | Transfer finished successfully |
-| `done` | terminal | Post-action applied |
-| `error` | terminal | Transfer failed |
-| `failed` | terminal | Permanent failure |
-| `removed` | terminal | Removed from queue |
-| `stopped` | terminal | Stopped by user or engine shutdown |
-| `skipped` | terminal | Skipped (e.g. duplicate) |
+| `done` | terminal | Transfer completed successfully |
+| `error` | terminal | Transfer failed (retryable) |
+| `stopped` | terminal | Stopped by engine shutdown |
+| `cancelled` | terminal | Cancelled by user (archived) |
+
+Download modes: `http`, `magnet`, `torrent`, `metalink`, `mirror`, `torrent_data`, `metalink_data`
 
 Live sub-state (aria2): `active`, `waiting` (mapped via `live_status` field)
 
@@ -89,18 +88,18 @@ stop_requested → idle   drain complete
 ### Job transitions
 
 ```
-pending → queued        added to queue
+discovering → queued    mode detected (synchronous)
 queued → downloading    scheduler picks job
-downloading → complete  aria2 reports success
+downloading → done      aria2 reports success
 downloading → error     aria2 reports failure
 downloading → stopped   run stops mid-transfer
 downloading → paused    pause command
-paused → queued         resume command
-queued → skipped        duplicate detected
-queued → removed        user removes
-complete → done         post-action applied
-error → failed          no recovery possible
+paused → queued         resume command (no gid)
+paused → downloading    resume command (with gid)
+queued → cancelled      user removes (archived)
+paused → cancelled      user removes (archived)
 error → queued          retry (re-queue)
+error → cancelled       user removes (archived)
 ```
 
 ## 4. Coherence Rules

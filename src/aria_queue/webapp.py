@@ -132,11 +132,28 @@ def _parse_add_items(
         post_action_value = (
             str(post_action_rule).strip() if post_action_rule is not None else ""
         )
+        mirrors_raw = raw_item.get("mirrors")
+        mirrors = (
+            [str(m).strip() for m in mirrors_raw if str(m).strip()]
+            if isinstance(mirrors_raw, list)
+            else None
+        )
+        torrent_data = raw_item.get("torrent_data")
+        metalink_data = raw_item.get("metalink_data")
+        priority_raw = raw_item.get("priority", 0)
+        try:
+            priority_val = int(priority_raw)
+        except (TypeError, ValueError):
+            priority_val = 0
         items.append(
             {
                 "url": url,
                 "output": output_value or None,
                 "post_action_rule": post_action_value or None,
+                "mirrors": mirrors,
+                "torrent_data": str(torrent_data) if torrent_data else None,
+                "metalink_data": str(metalink_data) if metalink_data else None,
+                "priority": priority_val,
             }
         )
     return items, None
@@ -2399,6 +2416,10 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                     item["url"],
                     output=item["output"],
                     post_action_rule=item["post_action_rule"],
+                    mirrors=item.get("mirrors"),
+                    torrent_data=item.get("torrent_data"),
+                    metalink_data=item.get("metalink_data"),
+                    priority=item.get("priority", 0),
                 ).__dict__
                 for item in items
             ]

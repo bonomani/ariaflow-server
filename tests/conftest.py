@@ -18,8 +18,10 @@ from pathlib import Path
 from typing import Any
 import unittest
 
-# Ensure src/ is importable
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+# Ensure src/ and tests/ are importable
+_project_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_project_root / "src"))
+sys.path.insert(0, str(_project_root / "tests"))
 
 
 # ── HTTP helpers ──

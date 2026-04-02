@@ -552,6 +552,67 @@ def stop_background_process(port: int = 6800) -> dict[str, Any]:
     return {"stopped": True, "reason": "stopping"}
 
 
+# Valid queue item statuses:
+#   discovering  — auto-detecting download mode (trying protocols)
+#   queued       — ready for scheduling
+#   downloading  — active transfer in progress
+#   paused       — transfer suspended by user or engine
+#   done         — transfer completed successfully
+#   error        — transfer failed (retryable)
+#   stopped      — stopped by engine shutdown
+#   cancelled    — cancelled by user (archived)
+ITEM_STATUSES = {
+    "discovering",
+    "queued",
+    "downloading",
+    "paused",
+    "done",
+    "error",
+    "stopped",
+    "cancelled",
+}
+
+# Download modes:
+#   http       — HTTP/HTTPS/FTP (aria2.addUri)
+#   magnet     — magnet link (aria2.addUri)
+#   torrent    — .torrent URL, pauses for file selection (aria2.addUri + pause-metadata)
+#   metalink   — .metalink/.meta4 URL, pauses for file selection (aria2.addUri + pause-metadata)
+#   mirror     — multiple URLs for same file (aria2.addUri([url1, url2, ...]))
+#   torrent_data — direct .torrent file upload (aria2.addTorrent(base64))
+#   metalink_data — direct metalink XML upload (aria2.addMetalink(base64))
+DOWNLOAD_MODES = {
+    "http",
+    "magnet",
+    "torrent",
+    "metalink",
+    "mirror",
+    "torrent_data",
+    "metalink_data",
+}
+
+
+def detect_download_mode(
+    url: str,
+    mirrors: list[str] | None = None,
+    torrent_data: str | None = None,
+    metalink_data: str | None = None,
+) -> str:
+    if torrent_data:
+        return "torrent_data"
+    if metalink_data:
+        return "metalink_data"
+    if mirrors and len(mirrors) > 1:
+        return "mirror"
+    lower = url.lower().rstrip("?&#")
+    if lower.startswith("magnet:"):
+        return "magnet"
+    if lower.endswith(".torrent"):
+        return "torrent"
+    if lower.endswith(".metalink") or lower.endswith(".meta4"):
+        return "metalink"
+    return "http"
+
+
 @dataclass
 class QueueItem:
     id: str
@@ -560,6 +621,10 @@ class QueueItem:
     post_action_rule: str = "pending"
     status: str = "queued"
     priority: int = 0
+    mode: str = "http"
+    mirrors: list[str] | None = None
+    torrent_data: str | None = None
+    metalink_data: str | None = None
     created_at: str = ""
     gid: str | None = None
     session_id: str | None = None
@@ -573,6 +638,7 @@ class QueueItem:
     completed_at: str | None = None
     error_at: str | None = None
     removed_at: str | None = None
+    cancelled_at: str | None = None
     session_history: list[dict[str, str]] | None = None
 
 
@@ -1200,7 +1266,13 @@ def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str
 
 
 def add_queue_item(
-    url: str, output: str | None = None, post_action_rule: str | None = None
+    url: str,
+    output: str | None = None,
+    post_action_rule: str | None = None,
+    mirrors: list[str] | None = None,
+    torrent_data: str | None = None,
+    metalink_data: str | None = None,
+    priority: int = 0,
 ) -> QueueItem:
     from .contracts import load_declaration
 
@@ -1269,11 +1341,25 @@ def add_queue_item(
 
         now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         sid = state.get("session_id")
+        mode = detect_download_mode(
+            url,
+            mirrors=mirrors,
+            torrent_data=torrent_data,
+            metalink_data=metalink_data,
+        )
+        # discovering → queued: mode detection is synchronous
+        resolved_status = "queued"
         item = QueueItem(
             id=str(uuid4()),
             url=url,
             output=resolved_output,
             post_action_rule=resolved_post_action_rule,
+            status=resolved_status,
+            priority=priority,
+            mode=mode,
+            mirrors=mirrors,
+            torrent_data=torrent_data,
+            metalink_data=metalink_data,
             created_at=now,
             session_id=sid,
             session_history=[{"session_id": sid, "joined_at": now, "reason": "created"}]
@@ -1603,14 +1689,42 @@ def _is_metadata_url(url: str) -> bool:
 
 
 def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
+
     options: dict[str, str] = {
         "max-download-limit": _aria_speed_value(cap_bytes_per_sec),
         "allow-overwrite": "true",
         "continue": "true",
     }
+    mode = str(item.get("mode") or "http")
     url = str(item.get("url") or "")
-    if _is_metadata_url(url):
+
+    if mode == "torrent_data":
+        data_b64 = item.get("torrent_data") or ""
+        if not data_b64:
+            raise RuntimeError("torrent_data mode but no torrent_data provided")
         options["pause-metadata"] = "true"
+        result = aria_rpc("aria2.addTorrent", [data_b64, [], options], port=port)
+        return result["result"]
+
+    if mode == "metalink_data":
+        data_b64 = item.get("metalink_data") or ""
+        if not data_b64:
+            raise RuntimeError("metalink_data mode but no metalink_data provided")
+        result = aria_rpc("aria2.addMetalink", [data_b64, options], port=port)
+        gids = result.get("result", [])
+        return gids[0] if isinstance(gids, list) and gids else str(gids)
+
+    if mode == "mirror":
+        mirrors = item.get("mirrors") or []
+        uris = [url] + [str(m) for m in mirrors if str(m) != url]
+        if not uris:
+            uris = [url]
+        result = aria_rpc("aria2.addUri", [uris, options], port=port)
+        return result["result"]
+
+    if mode in ("torrent", "metalink", "magnet"):
+        options["pause-metadata"] = "true"
+
     uris = [url]
     result = aria_rpc("aria2.addUri", [uris, options], port=port)
     return result["result"]
@@ -2147,8 +2261,10 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "message": f"item {item_id} not found",
             }
         removed_item = dict(item)
-        removed_item["removed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        removed_item["status"] = "removed"
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        removed_item["cancelled_at"] = now
+        removed_item["removed_at"] = now
+        removed_item["status"] = "cancelled"
         items.pop(idx)
         save_queue(items)
         archive_item(removed_item)

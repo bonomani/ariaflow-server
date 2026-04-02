@@ -11,6 +11,10 @@ import json
 import unittest
 from unittest.mock import patch
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import IsolatedTestCase
 
 from aria_queue.core import (

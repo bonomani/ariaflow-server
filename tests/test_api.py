@@ -13,6 +13,10 @@ import urllib.request
 import unittest
 from unittest.mock import patch
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from conftest import APIServerPerTestCase, raw_request, request_json
 
 from aria_queue.core import load_queue, save_queue
