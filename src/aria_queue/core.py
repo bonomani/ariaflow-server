@@ -489,7 +489,7 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
         state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         save_state(state)
 
-    def _runner() -> None:
+    def _scheduler() -> None:
         try:
             process_queue(port=port)
         except Exception as exc:
@@ -507,7 +507,7 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
             current["active_url"] = None
             save_state(current)
 
-    thread = threading.Thread(target=_runner, daemon=True)
+    thread = threading.Thread(target=_scheduler, daemon=True)
     thread.start()
     return {"started": True, "reason": "background"}
 
@@ -556,10 +556,10 @@ def stop_background_process(port: int = 6800) -> dict[str, Any]:
 #   discovering  — auto-detecting download mode (trying protocols)
 #   queued       — ready for scheduling
 #   downloading  — active transfer in progress
-#   paused       — transfer suspended by user or engine
+#   paused       — transfer suspended by user or af-scheduler
 #   done         — transfer completed successfully
 #   error        — transfer failed (retryable)
-#   stopped      — stopped by engine shutdown
+#   stopped      — stopped by af-scheduler shutdown
 #   cancelled    — cancelled by user (archived)
 ITEM_STATUSES = {
     "discovering",

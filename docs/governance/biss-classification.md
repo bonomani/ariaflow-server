@@ -4,7 +4,7 @@
 
 | Boundary | Type | Direction | Classification | Notes |
 |---|---|---|---|---|
-| aria2 RPC | tool-to-tool | outbound | execution | Engine → aria2 daemon via JSON-RPC |
+| aria2 RPC | tool-to-tool | outbound | execution | Scheduler → aria2 daemon via JSON-RPC |
 | HTTP API | system-to-user | inbound | query / command | External clients → engine REST API |
 | Queue file | system-to-storage | internal | state persistence | JSON file read/write for queue state |
 | Declaration file | system-to-storage | internal | contract persistence | UCC declaration stored as JSON |
@@ -14,7 +14,7 @@
 
 ## Interaction Classes
 
-- **execution**: the engine delegates download work to aria2 via RPC
+- **execution**: the scheduler delegates download work to aria2 via RPC
 - **query/command**: external clients read state or issue commands via HTTP
 - **state persistence**: queue and declaration files are the source of truth
 - **discovery**: Bonjour advertises the service for local network clients

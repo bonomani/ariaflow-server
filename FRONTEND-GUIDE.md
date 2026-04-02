@@ -162,7 +162,7 @@ The response always includes:
   "items": [...],
   "state": { "running": false, "paused": false, "session_id": "..." },
   "summary": { "total": 5, "queued": 2, "downloading": 1, "paused": 0, "done": 1, "error": 1, "stopped": 0, "cancelled": 0, "discovering": 0 },
-  "backend": { "version": "0.1.58", "schema_version": "1" },
+  "ariaflow": { "version": "0.1.58", "schema_version": "1" },
   "_rev": 42,
   "_schema": "1",
   "_request_id": "uuid"
@@ -227,7 +227,7 @@ Every item tracks its full lifecycle:
 | Timestamp | Set when |
 |---|---|
 | `created_at` | Item added to queue |
-| `paused_at` | User or engine pauses |
+| `paused_at` | User or af-scheduler pauses |
 | `resumed_at` | User resumes |
 | `completed_at` | Download finishes successfully |
 | `error_at` | Download fails |

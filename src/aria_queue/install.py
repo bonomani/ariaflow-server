@@ -216,9 +216,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2_installed else "missing",
             detail=(
-                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; runtime engine dependency"
+                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; runtime download dependency"
                 if aria2_installed
-                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; runtime engine dependency"
+                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; runtime download dependency"
             ),
         ),
         "networkquality": ucc_record(

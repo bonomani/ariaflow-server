@@ -45,7 +45,7 @@ python -m aria_queue add <url>
 - Allow operators to raise concurrency explicitly when they need it.
 - Start with a conservative bandwidth cap derived from a short probe.
 - Lower the cap when aria2 reports retries or errors.
-- Keep post-download handling policy-driven and separate from the queue engine.
+- Keep post-download handling policy-driven and separate from the queue scheduler.
 - Emit a structured UCC result for each run.
 
 ## Storage
@@ -80,7 +80,7 @@ This is still a minimal compliance layer, not a full framework implementation.
 
 The intended macOS installation path is a Homebrew tap.
 
-- `ariaflow` installs the headless engine
+- `ariaflow` installs the headless scheduler
 - `ariaflow-web` installs the local frontend
 - both are meant to run on the same Mac
 
@@ -90,10 +90,10 @@ backend over the local `/api/*` HTTP surface.
 `ariaflow` is API-only. It exposes a small landing page at `/` to explain the
 boundary, but the dashboard routes are not hosted here.
 
-`ariaflow` depends on `aria2` as the runtime engine and the default Homebrew
+`ariaflow` depends on `aria2` as the runtime download engine and the default Homebrew
 service bootstraps the local aria2 RPC daemon automatically. `aria2-launchd`
 remains available as an optional advanced integration. `ariaflow-web` depends on
-a running `ariaflow` backend and connects to it through `ARIAFLOW_API_URL`.
+a running `ariaflow` af-api and connects to it through `ARIAFLOW_API_URL`.
 
 The intended Brew-only happy path is:
 

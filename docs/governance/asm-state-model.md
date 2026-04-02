@@ -1,6 +1,6 @@
 # ASM State Model — Ariaflow
 
-Profile: ariaflow-engine
+Profile: ariaflow-scheduler
 ASM ref: asm@dca032b
 
 ## 1. State Axes
@@ -36,7 +36,7 @@ Stored fields: `running`, `paused`, `stop_requested`
 | `paused` | stable | Transfer suspended |
 | `done` | terminal | Transfer completed successfully |
 | `error` | terminal | Transfer failed (retryable) |
-| `stopped` | terminal | Stopped by engine shutdown |
+| `stopped` | terminal | Stopped by af-scheduler shutdown |
 | `cancelled` | terminal | Cancelled by user (archived) |
 
 Download modes: `http`, `magnet`, `torrent`, `metalink`, `mirror`, `torrent_data`, `metalink_data`
@@ -57,9 +57,9 @@ Checked dynamically via RPC probe, not persisted.
 
 | Derived State | Computed From | Meaning |
 |---|---|---|
-| `engine_ready` | session=open, run=idle, daemon=available | Engine can accept a run command |
-| `engine_active` | session=open, run=running, daemon=available | Engine is processing the queue |
-| `engine_draining` | session=open, run=stop_requested | Engine is finishing current job before stopping |
+| `scheduler_ready` | session=open, run=idle, daemon=available | Scheduler can accept a run command |
+| `scheduler_active` | session=open, run=running, daemon=available | Scheduler is processing the queue |
+| `scheduler_draining` | session=open, run=stop_requested | Scheduler is finishing current job before stopping |
 | `queue_complete` | run=running, all jobs terminal | No more work; triggers session close |
 
 ## 3. Transition Catalog

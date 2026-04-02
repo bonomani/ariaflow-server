@@ -2,11 +2,11 @@
 
 ## 1. Short Overview
 
-Ariaflow is a headless download engine.
+Ariaflow is a headless download scheduler.
 It manages queue state, sessions, runs, and policy.
-The engine exposes its state through an HTTP API.
+Ariaflow exposes its state through an HTTP API.
 The web UI is a separate client and is documented elsewhere.
-This backend is API-only.
+The af-api is API-only.
 
 ## 2. Canonical Model
 
@@ -28,7 +28,7 @@ Question: can the system run safely?
 
 ### Policy
 
-Question: how should the engine behave?
+Question: how should the scheduler behave?
 
 Policy defines defaults. It does not own runtime state.
 
@@ -39,9 +39,9 @@ Policy defines defaults. It does not own runtime state.
 
 ### Session
 
-Question: when and under which context did the engine operate?
+Question: when and under which context did ariaflow operate?
 
-A session is the lifecycle container for one engine use period.
+A session is the lifecycle container for one ariaflow use period.
 
 - `started_at`
 - `last_seen_at`
@@ -49,7 +49,7 @@ A session is the lifecycle container for one engine use period.
 
 ### Run
 
-Question: what is the engine doing right now?
+Question: what is the scheduler doing right now?
 
 A run is one execution cycle inside a session.
 
@@ -189,13 +189,13 @@ Observability
 - Put diagrams near the end.
 - Keep the language plain.
 - Keep the relationships explicit.
-- Keep one canonical document for the engine.
-- Keep UI behavior and engine behavior documented in separate files.
+- Keep one canonical document for ariaflow.
+- Keep UI behavior and scheduler behavior documented in separate files.
 
 ## 9. UI Mapping
 
-- `Status / Readiness` maps to engine health and preflight.
-- `Policy` maps to engine settings and defaults.
+- `Status / Readiness` maps to scheduler health and preflight.
+- `Policy` maps to scheduler settings and defaults.
 - `Session / Run` maps to the current execution context.
 - `Queue` maps to active work.
 - `Observability` maps to logs and evidence.

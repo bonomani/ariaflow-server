@@ -732,7 +732,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         ):
             status = status_all()
         self.assertIn("0.1.1", status["ariaflow"]["result"]["message"])
-        self.assertIn("runtime engine dependency", status["aria2"]["result"]["message"])
+        self.assertIn("runtime download dependency", status["aria2"]["result"]["message"])
         self.assertIn(
             "networkquality available", status["networkquality"]["result"]["message"]
         )

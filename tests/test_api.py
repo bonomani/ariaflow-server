@@ -925,7 +925,7 @@ class TestMetaEndpoints(APIServerPerTestCase):
     def test_schema_version_in_response(self) -> None:
         code, body = _request(f"{self.base}/api/status")
         self.assertIn("_schema", body)
-        self.assertEqual(body["_schema"], "1")
+        self.assertEqual(body["_schema"], "2")
 
     def test_request_id_in_response(self) -> None:
         # Use non-cached endpoint to verify unique request IDs
@@ -937,7 +937,7 @@ class TestMetaEndpoints(APIServerPerTestCase):
 
     def test_schema_version_header(self) -> None:
         code, _, headers = _raw_request(f"{self.base}/api/status")
-        self.assertEqual(headers.get("X-Schema-Version"), "1")
+        self.assertEqual(headers.get("X-Schema-Version"), "2")
         self.assertTrue(len(headers.get("X-Request-Id", "")) > 0)
 
     def test_etag_on_status(self) -> None:

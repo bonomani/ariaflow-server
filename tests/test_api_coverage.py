@@ -53,11 +53,11 @@ class TestGetEndpoints(APIServerTestCase):
             "summary",
             "aria2",
             "bandwidth",
-            "backend",
+            "ariaflow",
             "_rev",
         ):
             self.assertIn(key, body, f"missing key: {key}")
-        self.assertIn("schema_version", body["backend"])
+        self.assertIn("schema_version", body["ariaflow"])
         self.assertIn("_schema", body)
         self.assertIn("_request_id", body)
         self.assertIn("ETag", hdrs)
@@ -509,11 +509,11 @@ class TestCrossCutting(APIServerTestCase):
     # Schema version
     def test_schema_version_in_body(self) -> None:
         code, body, _ = _req(f"{self.base}/api/declaration")
-        self.assertEqual(body["_schema"], "1")
+        self.assertEqual(body["_schema"], "2")
 
     def test_schema_version_in_header(self) -> None:
         _, _, hdrs = _req(f"{self.base}/api/declaration")
-        self.assertEqual(hdrs.get("X-Schema-Version"), "1")
+        self.assertEqual(hdrs.get("X-Schema-Version"), "2")
 
     # Request ID
     def test_request_id_unique(self) -> None:

@@ -599,9 +599,9 @@ class TestScenarioFrontendConsistency(ScenarioBase):
     def test_schema_version_detection(self) -> None:
         base = self.base
         _, body, hdrs = _req(f"{base}/api/status")
-        self.assertEqual(body["_schema"], "1")
-        self.assertEqual(hdrs.get("X-Schema-Version"), "1")
-        self.assertEqual(body["backend"]["schema_version"], "1")
+        self.assertEqual(body["_schema"], "2")
+        self.assertEqual(hdrs.get("X-Schema-Version"), "2")
+        self.assertEqual(body["ariaflow"]["schema_version"], "2")
 
 
 # ═══════════════════════════════════════════════════════

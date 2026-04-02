@@ -61,7 +61,7 @@ from .core import cleanup_queue_state
 
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 STATUS_CACHE_TTL = 2.0
-API_SCHEMA_VERSION = "1"
+API_SCHEMA_VERSION = "2"
 
 # ── SSE event bus ──
 _sse_clients: list[queue.Queue[str]] = []
@@ -471,7 +471,7 @@ INDEX_HTML = """<!doctype html>
       flex-wrap: wrap;
       gap: 8px;
     }
-    .engine-inline {
+    .scheduler-inline {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
@@ -689,7 +689,7 @@ INDEX_HTML = """<!doctype html>
     <div class="hero">
       <div class="title">
         <h1>ariaflow</h1>
-        <p>Headless queue engine with a local dashboard.</p>
+        <p>Headless download scheduler with a local dashboard.</p>
       </div>
       <div class="panel">
         <div class="chips">
@@ -699,23 +699,23 @@ INDEX_HTML = """<!doctype html>
     <div class="panel" style="margin-bottom:14px;">
       <div class="section-title">
         <h2>Backends</h2>
-        <div class="hint">Default is the current backend</div>
+        <div class="hint">Default is the current connection</div>
       </div>
       <div class="row">
-        <input id="backend-input" placeholder="http://127.0.0.1:8000">
-        <button class="secondary" onclick="addBackend()">Add backend</button>
-        <button class="secondary" onclick="useDefaultBackend()">Use default</button>
+        <input id="connection-input" placeholder="http://127.0.0.1:8000">
+        <button class="secondary" onclick="addConnection()">Add connection</button>
+        <button class="secondary" onclick="useDefaultConnection()">Use default</button>
       </div>
       <div class="chips" style="margin-top:12px;">
-        <div class="chip">Version <strong id="backend-version">-</strong></div>
-        <div class="chip">PID <strong id="backend-pid">-</strong></div>
-        <div class="chip">Runner <strong id="backend-runner">idle</strong></div>
-        <div class="chip">Startup <strong id="backend-startup">manual</strong></div>
-        <div class="chip">Cap <strong id="backend-cap">-</strong></div>
-        <div class="chip">Last issue <strong id="backend-error">none</strong></div>
-        <div class="chip">Run <strong id="backend-session">-</strong></div>
+        <div class="chip">Version <strong id="ariaflow-version">-</strong></div>
+        <div class="chip">PID <strong id="ariaflow-pid">-</strong></div>
+        <div class="chip">Runner <strong id="ariaflow-scheduler">idle</strong></div>
+        <div class="chip">Startup <strong id="ariaflow-startup">manual</strong></div>
+        <div class="chip">Cap <strong id="ariaflow-cap">-</strong></div>
+        <div class="chip">Last issue <strong id="ariaflow-error">none</strong></div>
+        <div class="chip">Run <strong id="ariaflow-session">-</strong></div>
       </div>
-      <div id="backend-panel" class="chips" style="margin-top:12px;"></div>
+      <div id="connection-panel" class="chips" style="margin-top:12px;"></div>
     </div>
     <div class="grid">
       <div class="span-12 show-dashboard page-only">
@@ -731,7 +731,7 @@ INDEX_HTML = """<!doctype html>
           <div class="action-bar">
             <div class="action-buttons">
               <button class="secondary" onclick="preflightRun()">Preflight</button>
-              <button class="secondary" id="runner-btn" onclick="toggleRunner()">Start engine</button>
+              <button class="secondary" id="scheduler-btn" onclick="toggleScheduler()">Start scheduler</button>
               <button class="secondary" onclick="newSession()">Start new run</button>
             </div>
           </div>
@@ -741,7 +741,7 @@ INDEX_HTML = """<!doctype html>
         <div class="panel">
           <div class="section-title">
             <h2>Queue</h2>
-            <div class="hint">Jobs live inside the queue; pause or resume the flow without stopping the engine</div>
+            <div class="hint">Jobs live inside the queue; pause or resume the flow without stopping the scheduler</div>
           </div>
           <div class="system-card" style="margin-bottom:12px;">
             <div class="queue-overview">
@@ -760,7 +760,7 @@ INDEX_HTML = """<!doctype html>
             <div class="system-head">
               <div class="system-copy">
                 <h3>Queue State</h3>
-                <div class="meta"><span>The shared workflow state. Jobs wait here and advance only when the engine is running.</span></div>
+                <div class="meta"><span>The shared workflow state. Jobs wait here and advance only when the scheduler is running.</span></div>
               </div>
               <span class="badge" id="queue-state-badge">idle</span>
             </div>
@@ -926,7 +926,7 @@ INDEX_HTML = """<!doctype html>
       </div>
     </div>
     <div class="footer">
-      Local-only dashboard. Web UI is optional; the engine stays headless.
+      Local-only dashboard. Web UI is optional; ariaflow stays headless.
     </div>
   </div>
   <script>
@@ -992,70 +992,70 @@ INDEX_HTML = """<!doctype html>
 
     const DEFAULT_BACKEND_URL = window.location.origin || "http://127.0.0.1:8000";
 
-    function loadBackendState() {
-      let backends = [];
+    function loadConnectionState() {
+      let connections = [];
       try {
-        backends = JSON.parse(localStorage.getItem('ariaflow.backends') || '[]');
+        connections = JSON.parse(localStorage.getItem('ariaflow.connections') || '[]');
       } catch (err) {
-        backends = [];
+        connections = [];
       }
-      backends = [...new Set((backends.length ? backends : [DEFAULT_BACKEND_URL]).map((item) => String(item || '').trim()).filter(Boolean))];
-      const selected = (localStorage.getItem('ariaflow.selected_backend') || '').trim();
+      connections = [...new Set((connections.length ? connections : [DEFAULT_BACKEND_URL]).map((item) => String(item || '').trim()).filter(Boolean))];
+      const selected = (localStorage.getItem('ariaflow.selected_connection') || '').trim();
       return {
-        backends,
-        selected: backends.includes(selected) ? selected : backends[0],
+        connections,
+        selected: connections.includes(selected) ? selected : connections[0],
       };
     }
 
-    function saveBackendState(backends, selected) {
-      const clean = [...new Set((backends || []).map((item) => String(item || '').trim()).filter(Boolean))];
+    function saveConnectionState(conns, selected) {
+      const clean = [...new Set((conns || []).map((item) => String(item || '').trim()).filter(Boolean))];
       const nextSelected = clean.includes(selected) ? selected : (clean[0] || DEFAULT_BACKEND_URL);
-      localStorage.setItem('ariaflow.backends', JSON.stringify(clean));
-      localStorage.setItem('ariaflow.selected_backend', nextSelected);
-      renderBackendPanel();
+      localStorage.setItem('ariaflow.connections', JSON.stringify(clean));
+      localStorage.setItem('ariaflow.selected_connection', nextSelected);
+      renderConnectionPanel();
     }
 
     function apiPath(path) {
-      const backend = loadBackendState().selected || DEFAULT_BACKEND_URL;
+      const conn = loadConnectionState().selected || DEFAULT_BACKEND_URL;
       const u = new URL(path, window.location.origin);
-      u.searchParams.set('backend', backend);
+      u.searchParams.set('connection', conn);
       return `${u.pathname}${u.search}`;
     }
 
-    function renderBackendPanel() {
-      const panel = document.getElementById('backend-panel');
+    function renderConnectionPanel() {
+      const panel = document.getElementById('connection-panel');
       if (!panel) return;
-      const { backends, selected } = loadBackendState();
-      panel.innerHTML = backends.map((backend) => `
-        <button class="${backend === selected ? '' : 'secondary'}" onclick="selectBackend('${backend.replace(/'/g, "\\'")}')">${backend}</button>
+      const { connections, selected } = loadConnectionState();
+      panel.innerHTML = connections.map((conn) => `
+        <button class="${conn === selected ? '' : 'secondary'}" onclick="selectConnection('${conn.replace(/'/g, "\\'")}')">${conn}</button>
       `).join('');
-      const input = document.getElementById('backend-input');
+      const input = document.getElementById('connection-input');
       if (input && !input.value) input.value = selected || DEFAULT_BACKEND_URL;
     }
 
-    function selectBackend(backend) {
-      const state = loadBackendState();
-      if (!state.backends.includes(backend)) state.backends.push(backend);
-      saveBackendState(state.backends, backend);
+    function selectConnection(conn) {
+      const state = loadConnectionState();
+      if (!state.connections.includes(conn)) state.connections.push(conn);
+      saveConnectionState(state.connections, conn);
       refresh();
       if (page === 'lifecycle') loadLifecycle();
       if (page === 'log') refreshActionLog();
     }
 
-    function addBackend() {
-      const input = document.getElementById('backend-input');
+    function addConnection() {
+      const input = document.getElementById('connection-input');
       const value = (input?.value || '').trim();
       if (!value) return;
-      const state = loadBackendState();
-      if (!state.backends.includes(value)) state.backends.push(value);
-      saveBackendState(state.backends, value);
+      const state = loadConnectionState();
+      if (!state.connections.includes(value)) state.connections.push(value);
+      saveConnectionState(state.connections, value);
       refresh();
     }
 
-    function useDefaultBackend() {
-      const state = loadBackendState();
-      if (!state.backends.includes(DEFAULT_BACKEND_URL)) state.backends.unshift(DEFAULT_BACKEND_URL);
-      saveBackendState(state.backends, DEFAULT_BACKEND_URL);
+    function useDefaultConnection() {
+      const state = loadConnectionState();
+      if (!state.connections.includes(DEFAULT_BACKEND_URL)) state.connections.unshift(DEFAULT_BACKEND_URL);
+      saveConnectionState(state.connections, DEFAULT_BACKEND_URL);
       refresh();
     }
 
@@ -1262,12 +1262,12 @@ INDEX_HTML = """<!doctype html>
       if (state?.session_id && state?.session_closed_at) return `closed ${String(state.session_id).slice(0, 8)}`;
       return "-";
     }
-    function runnerStateLabel(state, reachable=true) {
+    function schedulerStateLabel(state, reachable=true) {
       if (!reachable) return 'offline';
       return state?.running ? 'running' : 'idle';
     }
     function queueStateLabel(state, items, active) {
-      if (!state?.running) return 'waiting for engine';
+      if (!state?.running) return 'waiting for scheduler';
       if (state?.paused) return 'paused';
       if (active && active.status && active.status !== 'idle') return active.status;
       if ((items || []).length) return 'ready';
@@ -1281,8 +1281,8 @@ INDEX_HTML = """<!doctype html>
     function timestampLabel(value) {
       return value || '-';
     }
-    function backendUnavailableLabel(data) {
-      const error = data?.backend?.error || data?.error || 'backend unavailable';
+    function unavailableLabel(data) {
+      const error = data?.ariaflow?.error || data?.error || 'ariaflow unavailable';
       return `Backend unavailable · ${error}`;
     }
     function enrichQueueItems(items, active, state) {
@@ -1628,15 +1628,15 @@ INDEX_HTML = """<!doctype html>
         const r = await fetch(apiPath('/api/status'));
         const data = await r.json();
         lastStatus = data;
-        if (data?.ok === false || data?.backend?.reachable === false) {
-          document.getElementById('queue').innerHTML = `<div class='item'>${backendUnavailableLabel(data)}</div>`;
-          document.getElementById('backend-version').textContent = '-';
-          document.getElementById('backend-pid').textContent = '-';
-          document.getElementById('backend-runner').textContent = 'offline';
-          document.getElementById('backend-session').textContent = '-';
-          document.getElementById('backend-error').textContent = data?.backend?.error || 'connection refused';
-          document.getElementById('backend-startup').textContent = autoPreflight ? 'auto-check' : 'manual';
-          document.getElementById('backend-cap').textContent = '-';
+        if (data?.ok === false || data?.ariaflow?.reachable === false) {
+          document.getElementById('queue').innerHTML = `<div class='item'>${unavailableLabel(data)}</div>`;
+          document.getElementById('ariaflow-version').textContent = '-';
+          document.getElementById('ariaflow-pid').textContent = '-';
+          document.getElementById('ariaflow-scheduler').textContent = 'offline';
+          document.getElementById('ariaflow-session').textContent = '-';
+          document.getElementById('ariaflow-error').textContent = data?.ariaflow?.error || 'connection refused';
+          document.getElementById('ariaflow-startup').textContent = autoPreflight ? 'auto-check' : 'manual';
+          document.getElementById('ariaflow-cap').textContent = '-';
           document.getElementById('queue-state').textContent = 'offline';
           document.getElementById('queue-state-badge').textContent = 'offline';
           document.getElementById('queue-detail').textContent = 'Backend unavailable';
@@ -1648,14 +1648,14 @@ INDEX_HTML = """<!doctype html>
           document.getElementById('session-last-seen').textContent = '-';
           document.getElementById('session-closed').textContent = '-';
           document.getElementById('bw-source').textContent = 'offline';
-          document.getElementById('bw-down').textContent = backendUnavailableLabel(data);
+          document.getElementById('bw-down').textContent = unavailableLabel(data);
           document.getElementById('bw-cap').textContent = '-';
           document.getElementById('bw-global').textContent = 'Configured limit unavailable';
           document.getElementById('bw-live').textContent = 'offline';
-          document.getElementById('bw-live-detail').textContent = backendUnavailableLabel(data);
+          document.getElementById('bw-live-detail').textContent = unavailableLabel(data);
           document.getElementById('bw-probe-mode').textContent = '-';
-          document.getElementById('bw-probe-detail').textContent = backendUnavailableLabel(data);
-          document.getElementById('runner-btn').textContent = 'Start engine';
+          document.getElementById('bw-probe-detail').textContent = unavailableLabel(data);
+          document.getElementById('scheduler-btn').textContent = 'Start scheduler';
           document.getElementById('toggle-btn').textContent = 'Pause';
           renderQueueSummary({ queued: 0, done: 0, error: 0 });
           syncRefreshControl();
@@ -1668,20 +1668,20 @@ INDEX_HTML = """<!doctype html>
         const speed = liveActive?.downloadSpeed || active?.downloadSpeed || data.state?.download_speed || null;
         const items = enrichQueueItems(data.items || [], actives, state);
         document.getElementById('queue').innerHTML = items.length ? items.map(renderQueueItem).join("") : "<div class='item'>Queue is empty.</div>";
-        document.getElementById('backend-version').textContent = data.backend?.version || 'unreported';
-        document.getElementById('backend-pid').textContent = data.backend?.pid || 'unreported';
-        document.getElementById('backend-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
-        document.getElementById('backend-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
-        document.getElementById('backend-runner').textContent = runnerStateLabel(state);
-        document.getElementById('backend-session').textContent = sessionLabel(state);
+        document.getElementById('ariaflow-version').textContent = data.ariaflow?.version || 'unreported';
+        document.getElementById('ariaflow-pid').textContent = data.ariaflow?.pid || 'unreported';
+        document.getElementById('ariaflow-error').textContent = state.last_error || data.bandwidth?.reason || 'none';
+        document.getElementById('ariaflow-cap').textContent = data.bandwidth?.cap_mbps ? humanCap(formatMbps(data.bandwidth.cap_mbps)) : humanCap(data.bandwidth?.limit || '-');
+        document.getElementById('ariaflow-scheduler').textContent = schedulerStateLabel(state);
+        document.getElementById('ariaflow-session').textContent = sessionLabel(state);
         const toggleButton = document.getElementById('toggle-btn');
         if (toggleButton) toggleButton.textContent = data.state && data.state.paused ? 'Resume queue' : 'Pause queue';
-        const runnerButton = document.getElementById('runner-btn');
-        if (runnerButton) runnerButton.textContent = data.state && data.state.running ? 'Stop engine' : 'Start engine';
-        document.getElementById('backend-startup').textContent = autoPreflight ? 'auto-check' : 'manual';
+        const schedulerButton = document.getElementById('scheduler-btn');
+        if (schedulerButton) schedulerButton.textContent = data.state && data.state.running ? 'Stop scheduler' : 'Start scheduler';
+        document.getElementById('ariaflow-startup').textContent = autoPreflight ? 'auto-check' : 'manual';
         document.getElementById('queue-state').textContent = queueStateLabel(state, items, liveActive);
         document.getElementById('queue-state-badge').textContent = queueStateLabel(state, items, liveActive);
-        document.getElementById('queue-detail').textContent = state?.paused ? 'Queue is paused' : (state?.running ? 'Queue can advance' : 'Waiting for engine start');
+        document.getElementById('queue-detail').textContent = state?.paused ? 'Queue is paused' : (state?.running ? 'Queue can advance' : 'Waiting for scheduler start');
         document.getElementById('queue-active').textContent = summarizeActiveItem(liveActive, state, items);
         document.getElementById('queue-speed').textContent = speed ? formatRate(speed) : "idle";
         document.getElementById('session-state').textContent = sessionStateLabel(state);
@@ -1715,8 +1715,8 @@ INDEX_HTML = """<!doctype html>
       const r = await fetch(apiPath('/api/lifecycle'));
       const data = await r.json();
       lastLifecycle = data;
-      if (data?.ok === false || data?.backend?.reachable === false) {
-        document.getElementById('lifecycle').innerHTML = `<div class='item'>${backendUnavailableLabel(data)}</div>`;
+      if (data?.ok === false || data?.ariaflow?.reachable === false) {
+        document.getElementById('lifecycle').innerHTML = `<div class='item'>${unavailableLabel(data)}</div>`;
         return;
       }
       document.getElementById('lifecycle').innerHTML = renderLifecycleSummary(data);
@@ -1776,14 +1776,14 @@ INDEX_HTML = """<!doctype html>
       lastResult = data;
       const result = data.result || {};
       document.getElementById('result').textContent = result.started
-        ? "Queue runner started"
+        ? "Scheduler started"
         : result.stopped
-          ? "Queue runner stopped"
-          : (data.action === 'stop' ? "Queue runner already stopped" : "Queue runner already running");
+          ? "Scheduler stopped"
+          : (data.action === 'stop' ? "Scheduler already stopped" : "Scheduler already running");
       document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
       await refresh();
     }
-    async function toggleRunner() {
+    async function toggleScheduler() {
       return runQueue();
     }
     async function uccRun() {
@@ -1829,9 +1829,9 @@ INDEX_HTML = """<!doctype html>
     async function loadDeclaration() {
       const r = await fetch(apiPath('/api/declaration'));
       lastDeclaration = await r.json();
-      if (lastDeclaration?.ok === false || lastDeclaration?.backend?.reachable === false) {
+      if (lastDeclaration?.ok === false || lastDeclaration?.ariaflow?.reachable === false) {
         const options = document.getElementById('options-panel');
-        if (options) options.innerHTML = `<div class='item'>${backendUnavailableLabel(lastDeclaration)}</div>`;
+        if (options) options.innerHTML = `<div class='item'>${unavailableLabel(lastDeclaration)}</div>`;
         return;
       }
       const declarationBox = document.getElementById('declaration');
@@ -1858,9 +1858,9 @@ INDEX_HTML = """<!doctype html>
       if (sessionFilter && !sessionFilter.value) sessionFilter.value = 'current';
       const r = await fetch(apiPath('/api/log?limit=120'));
       const data = await r.json();
-      if (data?.ok === false || data?.backend?.reachable === false) {
+      if (data?.ok === false || data?.ariaflow?.reachable === false) {
         const actionLog = document.getElementById('action-log');
-        if (actionLog) actionLog.innerHTML = `<div class='item'>${backendUnavailableLabel(data)}</div>`;
+        if (actionLog) actionLog.innerHTML = `<div class='item'>${unavailableLabel(data)}</div>`;
         return;
       }
       const actionLog = document.getElementById('action-log');
@@ -1880,7 +1880,7 @@ INDEX_HTML = """<!doctype html>
     if (page === 'dashboard') {
       loadDeclaration().catch(() => {});
     }
-    renderBackendPanel();
+    renderConnectionPanel();
     applyPage();
   </script>
 </body>
@@ -1935,7 +1935,7 @@ API_ONLY_HTML = """<!doctype html>
 <body>
   <main>
     <h1>ariaflow API</h1>
-    <p>This process is the headless backend. It is API-only and serves JSON under <code>/api/*</code>.</p>
+    <p>This process is the headless scheduler. It is API-only and serves JSON under <code>/api/*</code>.</p>
     <p>The dashboard is not hosted here. Use <code>ariaflow-web</code> for the browser UI.</p>
     <ul>
       <li><code>GET /api/status</code></li>
@@ -1972,6 +1972,10 @@ def _api_discovery() -> dict[str, object]:
         "endpoints": {
             "GET": [
                 {"path": "/api", "description": "API discovery (this endpoint)"},
+                {
+                    "path": "/api/scheduler",
+                    "description": "Scheduler state (idle/running/paused/stopping)",
+                },
                 {
                     "path": "/api/status",
                     "description": "Queue items, state, summary",
@@ -2159,7 +2163,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "aria2": aria_status(timeout=3),
             "bandwidth": bandwidth,
             "_rev": state.get("_rev", 0),
-            "backend": {
+            "ariaflow": {
                 "reachable": True,
                 "version": __version__,
                 "schema_version": API_SCHEMA_VERSION,
@@ -2269,6 +2273,32 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
         if path == "/api":
             self._send_json(_api_discovery())
+            return
+        if path == "/api/scheduler":
+            state = load_state()
+            running = bool(state.get("running"))
+            paused = bool(state.get("paused"))
+            stop_requested = bool(state.get("stop_requested"))
+            if stop_requested:
+                scheduler_status = "stopping"
+            elif running and paused:
+                scheduler_status = "paused"
+            elif running:
+                scheduler_status = "running"
+            else:
+                scheduler_status = "idle"
+            self._send_json(
+                {
+                    "status": scheduler_status,
+                    "running": running,
+                    "paused": paused,
+                    "stop_requested": stop_requested,
+                    "session_id": state.get("session_id"),
+                    "session_started_at": state.get("session_started_at"),
+                    "session_closed_at": state.get("session_closed_at"),
+                    "_rev": state.get("_rev", 0),
+                }
+            )
             return
         if path == "/api/events":
             self.send_response(200)
@@ -2545,7 +2575,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                             after={
                                 "state": load_state(),
                                 "queue": summarize_queue(load_queue()),
-                                "runner": blocked,
+                                "scheduler": blocked,
                             },
                             detail=blocked,
                         )
@@ -2570,7 +2600,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 after={
                     "state": load_state(),
                     "queue": summarize_queue(load_queue()),
-                    "runner": response,
+                    "scheduler": response,
                 },
                 detail=response,
             )

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Ariaflow API
   description: |
-    Headless download engine API. Manages queue state, sessions, runs,
+    Headless download scheduler API. Manages queue state, sessions, runs,
     and policy on top of aria2.
   version: 0.1.38
   license:
@@ -31,7 +31,7 @@ paths:
     get:
       tags: [Queue]
       summary: Get queue status
-      description: Returns queue items, engine state, summary counts, and aria2 status.
+      description: Returns queue items, scheduler state, summary counts, and aria2 status.
       responses:
         "200":
           description: Current status
@@ -353,7 +353,7 @@ paths:
     post:
       tags: [Engine]
       summary: Pause all active transfers
-      description: Pauses all active aria2 downloads and sets engine paused state.
+      description: Pauses all active aria2 downloads and sets scheduler paused state.
       responses:
         "200":
           description: Pause result
@@ -373,7 +373,7 @@ paths:
     post:
       tags: [Engine]
       summary: Resume all paused transfers
-      description: Resumes all paused aria2 downloads and clears engine paused state.
+      description: Resumes all paused aria2 downloads and clears scheduler paused state.
       responses:
         "200":
           description: Resume result
@@ -427,7 +427,7 @@ paths:
   /api/options:
     get:
       tags: [Config]
-      summary: Get engine options
+      summary: Get scheduler options
       description: Alias for GET /api/declaration.
       responses:
         "200":

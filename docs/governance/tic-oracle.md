@@ -1,6 +1,6 @@
 # TIC Oracle — Ariaflow
 
-Profile: ariaflow-engine
+Profile: ariaflow-scheduler
 TIC ref: tic@7cfba80
 Test file: `tests/test_tic.py`
 
