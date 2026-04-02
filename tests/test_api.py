@@ -1,0 +1,836 @@
+"""Extensive API integration tests.
+
+Every test spins up a real HTTP server and makes real requests.
+aria2 RPC is mocked where needed to avoid requiring a running daemon.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import tempfile
+import threading
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from aria_queue.core import load_queue, load_state, save_queue, save_state  # noqa: E402
+from aria_queue.webapp import serve  # noqa: E402
+
+
+def _request(url: str, method: str = "GET", payload: dict | None = None, timeout: int = 5) -> tuple[int, dict]:
+    data = None
+    headers = {}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            return resp.status, body
+    except urllib.error.HTTPError as exc:
+        body = json.loads(exc.read().decode("utf-8"))
+        return exc.code, body
+
+
+def _raw_request(url: str, method: str = "GET", data: bytes | None = None,
+                 content_type: str | None = None, timeout: int = 5) -> tuple[int, bytes, dict[str, str]]:
+    headers = {}
+    if content_type:
+        headers["Content-Type"] = content_type
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, resp.read(), dict(resp.headers)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(), dict(exc.headers)
+
+
+class APIServerMixin:
+    """Mixin that starts/stops a test server."""
+
+    def start_server(self) -> str:
+        self.tmp = tempfile.TemporaryDirectory()
+        os.environ["ARIA_QUEUE_DIR"] = self.tmp.name
+        self.server = serve(host="127.0.0.1", port=0)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        time.sleep(0.2)
+        return f"http://127.0.0.1:{self.port}"
+
+    def stop_server(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.tmp.cleanup()
+
+
+# ──────────────────────────────────────────────────────
+# 1. Status & Queue Read Endpoints
+# ──────────────────────────────────────────────────────
+
+class TestStatusEndpoint(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_status_returns_required_fields(self) -> None:
+        code, body = _request(f"{self.base}/api/status")
+        self.assertEqual(code, 200)
+        for key in ("items", "state", "summary"):
+            self.assertIn(key, body)
+
+    def test_status_summary_counts_match_items(self) -> None:
+        _request(f"{self.base}/api/add", "POST", {"items": [
+            {"url": "https://example.com/a.bin"},
+            {"url": "https://example.com/b.bin"},
+        ]})
+        code, body = _request(f"{self.base}/api/status")
+        self.assertEqual(body["summary"]["queued"], 2)
+        self.assertEqual(body["summary"]["total"], 2)
+        self.assertEqual(len(body["items"]), 2)
+
+    def test_status_includes_session_info(self) -> None:
+        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/x.bin"}]})
+        code, body = _request(f"{self.base}/api/status")
+        self.assertIn("session_id", body["state"])
+        self.assertIsNotNone(body["state"]["session_id"])
+
+    def test_status_empty_queue(self) -> None:
+        code, body = _request(f"{self.base}/api/status")
+        self.assertEqual(body["summary"]["total"], 0)
+        self.assertEqual(body["items"], [])
+
+
+# ──────────────────────────────────────────────────────
+# 2. Add Endpoint
+# ──────────────────────────────────────────────────────
+
+class TestAddEndpoint(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_add_single_item(self) -> None:
+        code, body = _request(f"{self.base}/api/add", "POST", {
+            "items": [{"url": "https://example.com/file.bin"}],
+        })
+        self.assertEqual(code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["added"][0]["url"], "https://example.com/file.bin")
+        self.assertEqual(body["added"][0]["status"], "queued")
+        self.assertIn("id", body["added"][0])
+
+    def test_add_multiple_items(self) -> None:
+        code, body = _request(f"{self.base}/api/add", "POST", {
+            "items": [
+                {"url": "https://example.com/one.bin"},
+                {"url": "https://example.com/two.bin"},
+                {"url": "https://example.com/three.bin"},
+            ],
+        })
+        self.assertEqual(body["count"], 3)
+        urls = [item["url"] for item in body["added"]]
+        self.assertIn("https://example.com/one.bin", urls)
+        self.assertIn("https://example.com/three.bin", urls)
+
+    def test_add_with_output_and_post_action(self) -> None:
+        code, body = _request(f"{self.base}/api/add", "POST", {
+            "items": [{"url": "https://example.com/file.bin", "output": "custom.bin", "post_action_rule": "pending"}],
+        })
+        self.assertEqual(body["added"][0]["output"], "custom.bin")
+        self.assertEqual(body["added"][0]["post_action_rule"], "pending")
+
+    def test_add_duplicate_url_returns_same_id(self) -> None:
+        _, first = _request(f"{self.base}/api/add", "POST", {
+            "items": [{"url": "https://example.com/dup.bin"}],
+        })
+        _, second = _request(f"{self.base}/api/add", "POST", {
+            "items": [{"url": "https://example.com/dup.bin"}],
+        })
+        self.assertEqual(first["added"][0]["id"], second["added"][0]["id"])
+
+    def test_add_empty_items_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/add", "POST", {"items": []})
+        self.assertEqual(code, 400)
+
+    def test_add_missing_items_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/add", "POST", {"url": "https://example.com/x"})
+        self.assertEqual(code, 400)
+
+    def test_add_invalid_json_returns_400(self) -> None:
+        code, _, _ = _raw_request(
+            f"{self.base}/api/add",
+            method="POST",
+            data=b"not json",
+            content_type="application/json",
+        )
+        self.assertEqual(code, 400)
+
+    def test_add_no_body_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/add", "POST", None)
+        self.assertEqual(code, 400)
+
+
+# ──────────────────────────────────────────────────────
+# 3. Per-item Actions
+# ──────────────────────────────────────────────────────
+
+class TestPerItemActions(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+        _, added = _request(f"{self.base}/api/add", "POST", {
+            "items": [{"url": "https://example.com/item.bin"}],
+        })
+        self.item_id = added["added"][0]["id"]
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    # ── Pause ──
+
+    def test_pause_queued_item(self) -> None:
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        self.assertEqual(code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["item"]["status"], "paused")
+
+    def test_pause_already_paused_returns_400(self) -> None:
+        _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "invalid_state")
+
+    def test_pause_done_item_returns_400(self) -> None:
+        items = load_queue()
+        items[0]["status"] = "done"
+        save_queue(items)
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "invalid_state")
+
+    def test_pause_nonexistent_returns_404(self) -> None:
+        code, body = _request(f"{self.base}/api/item/fake-id/pause", "POST")
+        self.assertEqual(code, 404)
+        self.assertEqual(body["error"], "not_found")
+
+    # ── Resume ──
+
+    def test_resume_paused_item_without_gid(self) -> None:
+        _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
+        self.assertEqual(code, 200)
+        self.assertEqual(body["item"]["status"], "queued")
+
+    def test_resume_paused_item_with_gid(self) -> None:
+        items = load_queue()
+        items[0]["status"] = "paused"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+        with patch("aria_queue.core.aria_rpc"):
+            code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
+        self.assertEqual(code, 200)
+        self.assertEqual(body["item"]["status"], "downloading")
+
+    def test_resume_queued_item_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "invalid_state")
+
+    # ── Remove ──
+
+    def test_remove_queued_item(self) -> None:
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
+        self.assertEqual(code, 200)
+        self.assertTrue(body["removed"])
+        self.assertEqual(len(load_queue()), 0)
+
+    def test_remove_downloading_item_calls_aria2(self) -> None:
+        items = load_queue()
+        items[0]["status"] = "downloading"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+        with patch("aria_queue.core.aria_rpc") as rpc:
+            code, body = _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
+        self.assertEqual(code, 200)
+        rpc.assert_any_call("aria2.remove", ["gid-1"], port=6800, timeout=5)
+
+    def test_remove_nonexistent_returns_404(self) -> None:
+        code, body = _request(f"{self.base}/api/item/fake-id/remove", "POST")
+        self.assertEqual(code, 404)
+
+    def test_double_remove_returns_404(self) -> None:
+        _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
+        self.assertEqual(code, 404)
+
+    # ── Retry ──
+
+    def test_retry_error_item(self) -> None:
+        items = load_queue()
+        items[0]["status"] = "error"
+        items[0]["error_code"] = "5"
+        items[0]["error_message"] = "download failed"
+        items[0]["gid"] = "gid-dead"
+        save_queue(items)
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        self.assertEqual(code, 200)
+        self.assertEqual(body["item"]["status"], "queued")
+        self.assertIsNone(body["item"]["error_code"])
+        self.assertIsNone(body["item"]["error_message"])
+        self.assertIsNone(body["item"]["gid"])
+
+    def test_retry_failed_item(self) -> None:
+        items = load_queue()
+        items[0]["status"] = "failed"
+        save_queue(items)
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        self.assertEqual(code, 200)
+        self.assertEqual(body["item"]["status"], "queued")
+
+    def test_retry_stopped_item(self) -> None:
+        items = load_queue()
+        items[0]["status"] = "stopped"
+        save_queue(items)
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        self.assertEqual(code, 200)
+        self.assertEqual(body["item"]["status"], "queued")
+
+    def test_retry_queued_item_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "invalid_state")
+
+    def test_retry_done_item_returns_400(self) -> None:
+        items = load_queue()
+        items[0]["status"] = "done"
+        save_queue(items)
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        self.assertEqual(code, 400)
+
+    # ── Invalid action ──
+
+    def test_invalid_action_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/explode", "POST")
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "invalid_action")
+
+
+# ──────────────────────────────────────────────────────
+# 4. File Selection (Torrent/Metalink)
+# ──────────────────────────────────────────────────────
+
+class TestFileSelection(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+        _, added = _request(f"{self.base}/api/add", "POST", {
+            "items": [{"url": "https://example.com/archive.torrent"}],
+        })
+        self.item_id = added["added"][0]["id"]
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_get_files_no_gid_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/item/{self.item_id}/files")
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "no_gid")
+
+    def test_get_files_with_gid(self) -> None:
+        items = load_queue()
+        items[0]["gid"] = "gid-torrent"
+        save_queue(items)
+        files = [
+            {"index": "1", "path": "/downloads/file1.mkv", "length": "1000000", "selected": "true"},
+            {"index": "2", "path": "/downloads/file2.nfo", "length": "500", "selected": "true"},
+        ]
+        with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
+            code, body = _request(f"{self.base}/api/item/{self.item_id}/files")
+        self.assertEqual(code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(len(body["files"]), 2)
+        self.assertEqual(body["gid"], "gid-torrent")
+
+    def test_get_files_nonexistent_returns_404(self) -> None:
+        code, body = _request(f"{self.base}/api/item/fake/files")
+        self.assertEqual(code, 404)
+
+    def test_select_files(self) -> None:
+        items = load_queue()
+        items[0]["gid"] = "gid-torrent"
+        items[0]["status"] = "paused"
+        save_queue(items)
+        with patch("aria_queue.core.aria_rpc") as rpc:
+            code, body = _request(
+                f"{self.base}/api/item/{self.item_id}/files",
+                "POST",
+                {"select": [1, 3, 5]},
+            )
+        self.assertEqual(code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["selected"], [1, 3, 5])
+        rpc.assert_any_call("aria2.changeOption", ["gid-torrent", {"select-file": "1,3,5"}], port=6800, timeout=5)
+        rpc.assert_any_call("aria2.unpause", ["gid-torrent"], port=6800, timeout=5)
+
+    def test_select_files_empty_returns_400(self) -> None:
+        code, body = _request(
+            f"{self.base}/api/item/{self.item_id}/files",
+            "POST",
+            {"select": []},
+        )
+        self.assertEqual(code, 400)
+
+    def test_select_files_missing_select_returns_400(self) -> None:
+        code, body = _request(
+            f"{self.base}/api/item/{self.item_id}/files",
+            "POST",
+            {"indices": [1, 2]},
+        )
+        self.assertEqual(code, 400)
+
+    def test_select_files_non_integer_returns_400(self) -> None:
+        code, body = _request(
+            f"{self.base}/api/item/{self.item_id}/files",
+            "POST",
+            {"select": ["a", "b"]},
+        )
+        self.assertEqual(code, 400)
+
+
+# ──────────────────────────────────────────────────────
+# 5. aria2 Options Proxy
+# ──────────────────────────────────────────────────────
+
+class TestAria2Options(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_safe_option_accepted(self) -> None:
+        with patch("aria_queue.core.aria_rpc"), \
+             patch("aria_queue.core.current_global_options", return_value={}):
+            code, body = _request(f"{self.base}/api/aria2/options", "POST", {
+                "max-concurrent-downloads": "5",
+            })
+        self.assertEqual(code, 200)
+        self.assertTrue(body["ok"])
+        self.assertIn("max-concurrent-downloads", body["applied"])
+
+    def test_multiple_safe_options(self) -> None:
+        with patch("aria_queue.core.aria_rpc"), \
+             patch("aria_queue.core.current_global_options", return_value={}):
+            code, body = _request(f"{self.base}/api/aria2/options", "POST", {
+                "max-concurrent-downloads": "3",
+                "split": "4",
+                "timeout": "30",
+            })
+        self.assertEqual(code, 200)
+        self.assertEqual(len(body["applied"]), 3)
+
+    def test_unsafe_option_rejected(self) -> None:
+        code, body = _request(f"{self.base}/api/aria2/options", "POST", {
+            "dir": "/tmp/evil",
+        })
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "rejected_options")
+
+    def test_mixed_safe_unsafe_rejected(self) -> None:
+        code, body = _request(f"{self.base}/api/aria2/options", "POST", {
+            "max-concurrent-downloads": "3",
+            "enable-rpc": "false",
+        })
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "rejected_options")
+
+    def test_empty_options_rejected(self) -> None:
+        code, body = _request(f"{self.base}/api/aria2/options", "POST", {})
+        self.assertEqual(code, 400)
+        self.assertIn(body["error"], ("empty_options", "invalid_payload"))
+
+    def test_non_object_payload_rejected(self) -> None:
+        code, body = _request(f"{self.base}/api/aria2/options", "POST", None)
+        self.assertEqual(code, 400)
+
+    def test_all_eight_safe_options(self) -> None:
+        all_safe = {
+            "max-concurrent-downloads": "3",
+            "max-connection-per-server": "4",
+            "split": "4",
+            "min-split-size": "1M",
+            "max-overall-download-limit": "0",
+            "max-download-limit": "0",
+            "timeout": "60",
+            "connect-timeout": "30",
+        }
+        with patch("aria_queue.core.aria_rpc"), \
+             patch("aria_queue.core.current_global_options", return_value={}):
+            code, body = _request(f"{self.base}/api/aria2/options", "POST", all_safe)
+        self.assertEqual(code, 200)
+        self.assertEqual(len(body["applied"]), 8)
+
+
+# ──────────────────────────────────────────────────────
+# 6. Engine Control (Run/Pause/Resume)
+# ──────────────────────────────────────────────────────
+
+class TestEngineControl(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_run_start(self) -> None:
+        code, body = _request(f"{self.base}/api/run", "POST", {
+            "action": "start",
+            "auto_preflight_on_run": False,
+        })
+        self.assertEqual(code, 200)
+        self.assertTrue(body["ok"])
+        self.assertEqual(body["action"], "start")
+
+    def test_run_stop(self) -> None:
+        code, body = _request(f"{self.base}/api/run", "POST", {"action": "stop"})
+        self.assertEqual(code, 200)
+        self.assertEqual(body["action"], "stop")
+
+    def test_run_invalid_action_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/run", "POST", {"action": "restart"})
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "invalid_action")
+
+    def test_run_missing_action_returns_400(self) -> None:
+        code, body = _request(f"{self.base}/api/run", "POST", {})
+        self.assertEqual(code, 400)
+
+    def test_global_pause_resume(self) -> None:
+        code, paused = _request(f"{self.base}/api/pause", "POST")
+        self.assertEqual(code, 200)
+        self.assertIn("paused", paused)
+
+        code, resumed = _request(f"{self.base}/api/resume", "POST")
+        self.assertEqual(code, 200)
+        self.assertIn("resumed", resumed)
+
+    def test_preflight(self) -> None:
+        with patch("aria_queue.webapp.preflight", return_value={
+            "contract": "UCC", "version": "2.0",
+            "gates": [], "preferences": [], "policies": [],
+            "warnings": [], "hard_failures": [],
+            "status": "pass", "exit_code": 0,
+        }), patch("aria_queue.webapp.aria_status", return_value={}), \
+             patch("aria_queue.webapp.current_bandwidth", return_value={}):
+            code, body = _request(f"{self.base}/api/preflight", "POST")
+        self.assertEqual(code, 200)
+        self.assertEqual(body["status"], "pass")
+        self.assertIn("gates", body)
+
+    def test_preflight_blocked_start(self) -> None:
+        with patch("aria_queue.webapp.auto_preflight_on_run", return_value=False), \
+             patch("aria_queue.webapp.preflight", return_value={
+                 "status": "fail", "exit_code": 1,
+                 "gates": [], "preferences": [], "policies": [],
+                 "warnings": [], "hard_failures": ["aria2_available"],
+             }):
+            code, body = _request(f"{self.base}/api/run", "POST", {
+                "action": "start",
+                "auto_preflight_on_run": True,
+            })
+        self.assertEqual(code, 409)
+        self.assertEqual(body["error"], "preflight_blocked")
+
+
+# ──────────────────────────────────────────────────────
+# 7. Declaration / Config
+# ──────────────────────────────────────────────────────
+
+class TestDeclaration(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_get_declaration(self) -> None:
+        code, body = _request(f"{self.base}/api/declaration")
+        self.assertEqual(code, 200)
+        self.assertIn("meta", body)
+        self.assertIn("uic", body)
+        self.assertEqual(body["meta"]["contract"], "UCC")
+
+    def test_get_options_is_alias(self) -> None:
+        _, decl = _request(f"{self.base}/api/declaration")
+        _, opts = _request(f"{self.base}/api/options")
+        self.assertEqual(decl, opts)
+
+    def test_save_declaration(self) -> None:
+        _, original = _request(f"{self.base}/api/declaration")
+        code, body = _request(f"{self.base}/api/declaration", "POST", original)
+        self.assertEqual(code, 200)
+        self.assertTrue(body["saved"])
+        self.assertIn("declaration", body)
+
+    def test_save_declaration_roundtrip(self) -> None:
+        _, original = _request(f"{self.base}/api/declaration")
+        original["uic"]["preferences"].append({
+            "name": "test_pref",
+            "value": True,
+            "options": [True, False],
+            "rationale": "test",
+        })
+        _request(f"{self.base}/api/declaration", "POST", original)
+        _, reloaded = _request(f"{self.base}/api/declaration")
+        pref_names = [p["name"] for p in reloaded["uic"]["preferences"]]
+        self.assertIn("test_pref", pref_names)
+
+
+# ──────────────────────────────────────────────────────
+# 8. Session Management
+# ──────────────────────────────────────────────────────
+
+class TestSession(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_new_session(self) -> None:
+        # Create initial session via add
+        _request(f"{self.base}/api/add", "POST", {
+            "items": [{"url": "https://example.com/x.bin"}],
+        })
+        _, status_before = _request(f"{self.base}/api/status")
+        old_session = status_before["state"]["session_id"]
+
+        code, body = _request(f"{self.base}/api/session", "POST", {"action": "new"})
+        self.assertEqual(code, 200)
+        self.assertTrue(body["ok"])
+        new_session = body["session"]["session_id"]
+        self.assertNotEqual(old_session, new_session)
+
+    def test_new_session_closes_previous(self) -> None:
+        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/y.bin"}]})
+        _request(f"{self.base}/api/session", "POST", {"action": "new"})
+        # Check the log for close action
+        _, log = _request(f"{self.base}/api/log?limit=10")
+        actions = [entry.get("action") for entry in log["items"]]
+        self.assertIn("session", actions)
+
+
+# ──────────────────────────────────────────────────────
+# 9. Action Log
+# ──────────────────────────────────────────────────────
+
+class TestActionLog(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_log_default_limit(self) -> None:
+        code, body = _request(f"{self.base}/api/log")
+        self.assertEqual(code, 200)
+        self.assertIn("items", body)
+        self.assertIsInstance(body["items"], list)
+
+    def test_log_custom_limit(self) -> None:
+        # Add items to generate log entries
+        for i in range(5):
+            _request(f"{self.base}/api/add", "POST", {"items": [{"url": f"https://example.com/{i}.bin"}]})
+        code, body = _request(f"{self.base}/api/log?limit=3")
+        self.assertLessEqual(len(body["items"]), 3)
+
+    def test_log_entries_have_timestamps(self) -> None:
+        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/log.bin"}]})
+        _, body = _request(f"{self.base}/api/log?limit=5")
+        for entry in body["items"]:
+            self.assertIn("timestamp", entry)
+
+    def test_log_records_add_action(self) -> None:
+        _request(f"{self.base}/api/add", "POST", {"items": [{"url": "https://example.com/tracked.bin"}]})
+        _, body = _request(f"{self.base}/api/log?limit=5")
+        actions = [e.get("action") for e in body["items"]]
+        self.assertIn("add", actions)
+
+
+# ──────────────────────────────────────────────────────
+# 10. Lifecycle
+# ──────────────────────────────────────────────────────
+
+class TestLifecycle(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_lifecycle_status(self) -> None:
+        code, body = _request(f"{self.base}/api/lifecycle")
+        self.assertEqual(code, 200)
+        self.assertIn("ariaflow", body)
+        self.assertIn("meta", body["ariaflow"])
+        self.assertEqual(body["ariaflow"]["meta"]["contract"], "UCC")
+
+    def test_lifecycle_action_non_macos(self) -> None:
+        with patch("aria_queue.webapp.is_macos", return_value=False):
+            code, body = _request(f"{self.base}/api/lifecycle/action", "POST", {
+                "target": "ariaflow",
+                "action": "install",
+            })
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "macos_only")
+
+
+# ──────────────────────────────────────────────────────
+# 11. UCC Endpoint
+# ──────────────────────────────────────────────────────
+
+class TestUCC(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_ucc_returns_structured_result(self) -> None:
+        with patch("aria_queue.contracts.preflight", return_value={
+            "contract": "UCC", "version": "2.0",
+            "gates": [], "preferences": [], "policies": [],
+            "warnings": [], "hard_failures": [],
+            "status": "pass", "exit_code": 0,
+        }), patch("aria_queue.core.process_queue", return_value=[]), \
+             patch("aria_queue.core.get_active_progress", return_value=None):
+            code, body = _request(f"{self.base}/api/ucc", "POST")
+        self.assertEqual(code, 200)
+        self.assertIn("meta", body)
+        self.assertIn("result", body)
+        self.assertIn("observation", body["result"])
+        self.assertIn("outcome", body["result"])
+
+
+# ──────────────────────────────────────────────────────
+# 12. Meta Endpoints (Docs, OpenAPI, Tests)
+# ──────────────────────────────────────────────────────
+
+class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_openapi_yaml(self) -> None:
+        code, body, headers = _raw_request(f"{self.base}/api/openapi.yaml")
+        self.assertEqual(code, 200)
+        text = body.decode("utf-8")
+        self.assertIn("openapi:", text)
+        self.assertIn("/api/status", text)
+        self.assertIn("yaml", headers.get("Content-Type", ""))
+
+    def test_swagger_ui(self) -> None:
+        code, body, headers = _raw_request(f"{self.base}/api/docs")
+        self.assertEqual(code, 200)
+        html = body.decode("utf-8")
+        self.assertIn("swagger-ui", html)
+        self.assertIn("openapi.yaml", html)
+        self.assertIn("text/html", headers.get("Content-Type", ""))
+
+    def test_cors_headers(self) -> None:
+        code, body, headers = _raw_request(f"{self.base}/api/status")
+        self.assertEqual(headers.get("Access-Control-Allow-Origin"), "*")
+
+
+# ──────────────────────────────────────────────────────
+# 13. Error Handling & Edge Cases
+# ──────────────────────────────────────────────────────
+
+class TestErrorHandling(APIServerMixin, unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.base = self.start_server()
+
+    def tearDown(self) -> None:
+        self.stop_server()
+
+    def test_404_unknown_endpoint(self) -> None:
+        code, body = _request(f"{self.base}/api/nonexistent")
+        self.assertEqual(code, 404)
+
+    def test_404_unknown_post_endpoint(self) -> None:
+        code, body = _request(f"{self.base}/api/nonexistent", "POST", {})
+        self.assertEqual(code, 404)
+
+    def test_invalid_json_body(self) -> None:
+        code, _, _ = _raw_request(
+            f"{self.base}/api/run",
+            method="POST",
+            data=b"{broken",
+            content_type="application/json",
+        )
+        self.assertEqual(code, 400)
+
+    def test_empty_post_body(self) -> None:
+        code, _, _ = _raw_request(
+            f"{self.base}/api/run",
+            method="POST",
+            data=b"",
+            content_type="application/json",
+        )
+        self.assertEqual(code, 400)
+
+    def test_concurrent_add_and_status(self) -> None:
+        """Verify server handles overlapping requests."""
+        results: list[tuple[int, dict]] = []
+
+        def add_item() -> None:
+            r = _request(f"{self.base}/api/add", "POST", {
+                "items": [{"url": f"https://example.com/concurrent-{time.time()}.bin"}],
+            })
+            results.append(r)
+
+        threads = [threading.Thread(target=add_item) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        self.assertEqual(len(results), 5)
+        for code, body in results:
+            self.assertEqual(code, 200)
+            self.assertTrue(body["ok"])
+
+        # All items should be in status
+        code, status = _request(f"{self.base}/api/status")
+        self.assertEqual(code, 200)
+        self.assertGreaterEqual(status["summary"]["total"], 5)
+
+
+if __name__ == "__main__":
+    unittest.main()
