@@ -183,6 +183,169 @@ class WebSmokeTests(unittest.TestCase):
                     server.shutdown()
                     server.server_close()
 
+    def test_api_per_item_lifecycle(self) -> None:
+        """Integration test: add → pause → resume → retry → remove via HTTP."""
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ARIA_QUEUE_DIR"] = tmp
+            server = serve(host="127.0.0.1", port=0)
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            time.sleep(0.2)
+            try:
+                base = f"http://127.0.0.1:{port}"
+
+                # Add an item
+                added = request_json(f"{base}/api/add", method="POST", payload={
+                    "items": [{"url": "https://example.com/test.bin"}],
+                })
+                self.assertTrue(added["ok"])
+                item_id = added["added"][0]["id"]
+                self.assertEqual(added["added"][0]["status"], "queued")
+
+                # Pause it
+                paused = request_json(f"{base}/api/item/{item_id}/pause", method="POST")
+                self.assertTrue(paused["ok"])
+                self.assertEqual(paused["item"]["status"], "paused")
+
+                # Resume it
+                resumed = request_json(f"{base}/api/item/{item_id}/resume", method="POST")
+                self.assertTrue(resumed["ok"])
+                self.assertEqual(resumed["item"]["status"], "queued")
+
+                # Pause again, then verify double-pause is rejected
+                request_json(f"{base}/api/item/{item_id}/pause", method="POST")
+                try:
+                    request_json(f"{base}/api/item/{item_id}/pause", method="POST")
+                    self.fail("expected 400")
+                except urllib.error.HTTPError as exc:
+                    self.assertEqual(exc.code, 400)
+                    body = json.loads(exc.read().decode("utf-8"))
+                    self.assertEqual(body["error"], "invalid_state")
+
+                # Resume, then manually set to error for retry test
+                request_json(f"{base}/api/item/{item_id}/resume", method="POST")
+                from aria_queue.core import load_queue, save_queue
+                items = load_queue()
+                items[0]["status"] = "error"
+                items[0]["error_code"] = "1"
+                save_queue(items)
+
+                # Retry
+                retried = request_json(f"{base}/api/item/{item_id}/retry", method="POST")
+                self.assertTrue(retried["ok"])
+                self.assertEqual(retried["item"]["status"], "queued")
+                self.assertIsNone(retried["item"]["error_code"])
+
+                # Remove
+                removed = request_json(f"{base}/api/item/{item_id}/remove", method="POST")
+                self.assertTrue(removed["ok"])
+                self.assertTrue(removed["removed"])
+
+                # Verify queue is empty
+                status = request_json(f"{base}/api/status")
+                self.assertEqual(len(status["items"]), 0)
+
+                # Not found
+                try:
+                    request_json(f"{base}/api/item/nonexistent/pause", method="POST")
+                    self.fail("expected 404")
+                except urllib.error.HTTPError as exc:
+                    self.assertEqual(exc.code, 404)
+
+                # Invalid action
+                try:
+                    request_json(f"{base}/api/item/{item_id}/explode", method="POST")
+                    self.fail("expected 400")
+                except urllib.error.HTTPError as exc:
+                    self.assertEqual(exc.code, 400)
+                    body = json.loads(exc.read().decode("utf-8"))
+                    self.assertEqual(body["error"], "invalid_action")
+
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_api_aria2_options_rejects_unsafe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ARIA_QUEUE_DIR"] = tmp
+            server = serve(host="127.0.0.1", port=0)
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            time.sleep(0.2)
+            try:
+                base = f"http://127.0.0.1:{port}"
+                try:
+                    request_json(f"{base}/api/aria2/options", method="POST", payload={"dir": "/tmp/evil"})
+                    self.fail("expected 400")
+                except urllib.error.HTTPError as exc:
+                    self.assertEqual(exc.code, 400)
+                    body = json.loads(exc.read().decode("utf-8"))
+                    self.assertEqual(body["error"], "rejected_options")
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_api_openapi_and_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ARIA_QUEUE_DIR"] = tmp
+            server = serve(host="127.0.0.1", port=0)
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            time.sleep(0.2)
+            try:
+                base = f"http://127.0.0.1:{port}"
+
+                # OpenAPI spec
+                with urllib.request.urlopen(f"{base}/api/openapi.yaml", timeout=5) as resp:
+                    self.assertEqual(resp.status, 200)
+                    content_type = resp.headers.get("Content-Type", "")
+                    self.assertIn("yaml", content_type)
+                    body = resp.read().decode("utf-8")
+                    self.assertIn("openapi:", body)
+                    self.assertIn("/api/status", body)
+
+                # Swagger UI
+                with urllib.request.urlopen(f"{base}/api/docs", timeout=5) as resp:
+                    self.assertEqual(resp.status, 200)
+                    html = resp.read().decode("utf-8")
+                    self.assertIn("swagger-ui", html)
+                    self.assertIn("openapi.yaml", html)
+
+                # CORS headers
+                with urllib.request.urlopen(f"{base}/api/status", timeout=5) as resp:
+                    cors = resp.headers.get("Access-Control-Allow-Origin", "")
+                    self.assertEqual(cors, "*")
+
+            finally:
+                server.shutdown()
+                server.server_close()
+
+    def test_api_tests_endpoint(self) -> None:
+        """Test the /api/tests endpoint by mocking subprocess to avoid recursion."""
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["ARIA_QUEUE_DIR"] = tmp
+            server = serve(host="127.0.0.1", port=0)
+            port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            time.sleep(0.2)
+            try:
+                fake_output = "test_example (test_tic.TicAriaFlowTests) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.001s\n\nOK\n"
+                fake_result = type("R", (), {"returncode": 0, "stderr": fake_output, "stdout": ""})()
+                with patch("aria_queue.webapp.subprocess.run", return_value=fake_result):
+                    result = request_json(f"http://127.0.0.1:{port}/api/tests")
+                self.assertTrue(result["ok"])
+                self.assertEqual(result["total"], 1)
+                self.assertEqual(result["passed"], 1)
+                self.assertEqual(result["failed"], 0)
+                self.assertEqual(result["tests"][0]["status"], "ok")
+            finally:
+                server.shutdown()
+                server.server_close()
+
     def test_run_start_honors_request_auto_preflight_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             os.environ["ARIA_QUEUE_DIR"] = tmp
