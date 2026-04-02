@@ -145,14 +145,40 @@ def _parse_add_items(
             priority_val = int(priority_raw)
         except (TypeError, ValueError):
             priority_val = 0
+        torrent_data_str = None
+        if torrent_data:
+            torrent_data_str = str(torrent_data)
+            try:
+                import base64
+
+                base64.b64decode(torrent_data_str, validate=True)
+            except Exception:
+                return None, _error_payload(
+                    "invalid_torrent_data",
+                    f"items[{index}].torrent_data must be valid base64",
+                    index=index,
+                )
+        metalink_data_str = None
+        if metalink_data:
+            metalink_data_str = str(metalink_data)
+            try:
+                import base64
+
+                base64.b64decode(metalink_data_str, validate=True)
+            except Exception:
+                return None, _error_payload(
+                    "invalid_metalink_data",
+                    f"items[{index}].metalink_data must be valid base64",
+                    index=index,
+                )
         items.append(
             {
                 "url": url,
                 "output": output_value or None,
                 "post_action_rule": post_action_value or None,
                 "mirrors": mirrors,
-                "torrent_data": str(torrent_data) if torrent_data else None,
-                "metalink_data": str(metalink_data) if metalink_data else None,
+                "torrent_data": torrent_data_str,
+                "metalink_data": metalink_data_str,
                 "priority": priority_val,
             }
         )

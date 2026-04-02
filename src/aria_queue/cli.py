@@ -22,6 +22,15 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("url")
     add.add_argument("--output")
     add.add_argument("--post-action-rule", default="pending")
+    add.add_argument("--priority", type=int, default=0, help="higher = processed first")
+    add.add_argument(
+        "--mirror",
+        action="append",
+        dest="mirrors",
+        help="additional mirror URL (repeatable)",
+    )
+    add.add_argument("--torrent-data", help="base64-encoded .torrent file content")
+    add.add_argument("--metalink-data", help="base64-encoded metalink XML content")
 
     run = sub.add_parser("run", help="process the queue sequentially")
     run.add_argument("--port", type=int, default=6800)
@@ -73,9 +82,15 @@ def main() -> int:
 
     if args.command == "add":
         item = add_queue_item(
-            args.url, output=args.output, post_action_rule=args.post_action_rule
+            args.url,
+            output=args.output,
+            post_action_rule=args.post_action_rule,
+            priority=args.priority,
+            mirrors=args.mirrors,
+            torrent_data=args.torrent_data,
+            metalink_data=args.metalink_data,
         )
-        print(f"Queued: {item.url}")
+        print(f"Queued: {item.url} (mode={item.mode}, priority={item.priority})")
         return 0
 
     if args.command == "run":

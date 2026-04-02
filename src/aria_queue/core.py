@@ -649,14 +649,10 @@ def load_queue() -> list[dict[str, Any]]:
 
 
 def summarize_queue(items: list[dict[str, Any]]) -> dict[str, int]:
-    return {
-        "total": len(items),
-        "queued": sum(1 for item in items if item.get("status") == "queued"),
-        "downloading": sum(1 for item in items if item.get("status") == "downloading"),
-        "paused": sum(1 for item in items if item.get("status") == "paused"),
-        "done": sum(1 for item in items if item.get("status") == "done"),
-        "error": sum(1 for item in items if item.get("status") == "error"),
-    }
+    counts: dict[str, int] = {"total": len(items)}
+    for status in ITEM_STATUSES:
+        counts[status] = sum(1 for item in items if item.get("status") == status)
+    return counts
 
 
 def save_queue(items: list[dict[str, Any]]) -> None:
@@ -664,16 +660,19 @@ def save_queue(items: list[dict[str, Any]]) -> None:
         write_json(queue_path(), {"items": items})
 
 
+_TERMINAL_STATUSES = {"done", "error", "stopped", "cancelled"}
+
+
 def find_queue_item_by_url(url: str) -> dict[str, Any] | None:
     for item in load_queue():
-        if item.get("url") == url and item.get("status") != "error":
+        if item.get("url") == url and item.get("status") not in _TERMINAL_STATUSES:
             return item
     return None
 
 
 def find_queue_item_by_gid(gid: str) -> dict[str, Any] | None:
     for item in load_queue():
-        if item.get("gid") == gid and item.get("status") != "error":
+        if item.get("gid") == gid and item.get("status") not in _TERMINAL_STATUSES:
             return item
     return None
 
@@ -1286,7 +1285,8 @@ def add_queue_item(
             (
                 item
                 for item in items
-                if item.get("url") == url and item.get("status") != "error"
+                if item.get("url") == url
+                and item.get("status") not in _TERMINAL_STATUSES
             ),
             None,
         )
@@ -2606,7 +2606,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             if not state.get("paused"):
                 slots = None if limit == 0 else max(limit - occupied, 0)
                 allocated = 0
-                for item in items:
+                for item in sorted(
+                    items, key=lambda i: int(i.get("priority", 0)), reverse=True
+                ):
                     if item.get("status") not in {"queued", "paused"}:
                         continue
                     if slots is not None and allocated >= slots:
