@@ -1853,6 +1853,17 @@ API_ONLY_HTML = """<!doctype html>
 """
 
 
+def _find_openapi_spec() -> Path | None:
+    candidates = [
+        Path(__file__).resolve().parent / "openapi.yaml",          # package data
+        Path(__file__).resolve().parent.parent.parent / "openapi.yaml",  # dev source tree
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    return None
+
+
 def _swagger_ui_html() -> str:
     return """<!DOCTYPE html>
 <html lang="en">
@@ -1991,8 +2002,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             )
             return
         if path == "/api/openapi.yaml":
-            spec_path = Path(__file__).resolve().parent.parent.parent / "openapi.yaml"
-            if not spec_path.exists():
+            spec_path = _find_openapi_spec()
+            if spec_path is None:
                 self._send_json({"error": "not_found", "message": "openapi.yaml not found"}, status=404)
                 return
             body = spec_path.read_bytes()
