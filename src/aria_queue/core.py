@@ -2049,12 +2049,15 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
             continue
     with storage_locked():
         state = load_state()
-        state["paused"] = True
+        if paused:
+            state["paused"] = True
         items = load_queue()
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         for item in items:
             if str(item.get("gid") or "") in paused:
                 item["status"] = "paused"
                 item["live_status"] = "paused"
+                item["paused_at"] = now
         save_state(state)
         save_queue(items)
     payload = {"paused": bool(paused), "gids": paused, "result": {"paused": paused}}
@@ -2102,9 +2105,11 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         state = load_state()
         state["paused"] = False
         items = load_queue()
+        now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         for item in items:
             if str(item.get("gid") or "") in resumed:
                 item["status"] = "downloading"
+                item["resumed_at"] = now
                 item.pop("live_status", None)
         save_state(state)
         save_queue(items)
