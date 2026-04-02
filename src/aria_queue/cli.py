@@ -101,7 +101,7 @@ def main() -> int:
                 state = "satisfied" if gate["satisfied"] else "not_satisfied"
                 print(f"[GATE] {gate['name']} : {state} [{gate['blocking']}]")
             for pref in result["preferences"]:
-                options = " | ".join(pref.get("options", []))
+                options = " | ".join(str(o) for o in pref.get("options", []))
                 print(
                     f"[PREFERENCE] {pref['name']} : {pref.get('value', 'undeclared')} — options: {options}"
                 )
