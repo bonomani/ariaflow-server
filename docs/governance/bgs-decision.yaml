@@ -1,13 +1,13 @@
-decision_id: ariaflow-engine-001
+decision_id: ariaflow-scheduler-001
 bgs_slice: BGS-State-Modeled-Governed-Verified
 declared_scope: "scheduler execution path: session, run, queue, and job lifecycle"
 decision_reason: >
-  Ariaflow is a stateful download engine with explicit session/run lifecycle,
+  Ariaflow is a stateful download scheduler with explicit session/run lifecycle,
   preflight readiness checks, and queue/job state transitions. The scope
   depends on installation, runtime readiness, recovery, and transition
   legality — an ASM-based slice is the natural fit per CR-1b.
 
-bgs_version_ref: bgs@6d9b3d8
+bgs_version_ref: bgs@e459816
 
 members_used:
   - BISS
@@ -40,7 +40,7 @@ evidence_refs:
   - ./tests/
 
 owner: bonomani
-date: 2026-04-01
+date: 2026-04-02
 
 limitations:
   - BISS classification is initial and needs expansion as new boundaries are added
