@@ -255,6 +255,7 @@ def load_state() -> dict[str, Any]:
 
 def save_state(state: dict[str, Any]) -> None:
     with storage_locked():
+        state["_rev"] = int(state.get("_rev", 0)) + 1
         write_json(state_path(), state)
 
 

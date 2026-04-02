@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import queue
+import threading
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import subprocess
 from pathlib import Path
@@ -53,6 +57,37 @@ from .core import cleanup_queue_state
 
 STATUS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 STATUS_CACHE_TTL = 2.0
+API_SCHEMA_VERSION = "1"
+
+# ── SSE event bus ──
+_sse_clients: list[queue.Queue[str]] = []
+_sse_lock = threading.Lock()
+
+
+def _sse_publish(event: str, data: dict[str, object]) -> None:
+    msg = f"event: {event}\ndata: {json.dumps(data, sort_keys=True)}\n\n"
+    with _sse_lock:
+        dead: list[queue.Queue[str]] = []
+        for q in _sse_clients:
+            try:
+                q.put_nowait(msg)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_clients.remove(q)
+
+
+def _sse_subscribe() -> queue.Queue[str]:
+    q: queue.Queue[str] = queue.Queue(maxsize=64)
+    with _sse_lock:
+        _sse_clients.append(q)
+    return q
+
+
+def _sse_unsubscribe(q: queue.Queue[str]) -> None:
+    with _sse_lock:
+        if q in _sse_clients:
+            _sse_clients.remove(q)
 
 
 def _error_payload(error: str, message: str, **detail: object) -> dict[str, object]:
@@ -1913,6 +1948,10 @@ def _api_discovery() -> dict[str, object]:
                 {"path": "/api/docs", "description": "Swagger UI"},
                 {"path": "/api/openapi.yaml", "description": "OpenAPI 3.0 spec"},
                 {"path": "/api/tests", "description": "Run test suite"},
+                {
+                    "path": "/api/events",
+                    "description": "Server-Sent Events stream (real-time state changes)",
+                },
             ],
             "POST": [
                 {"path": "/api/add", "description": "Enqueue URLs"},
@@ -2016,9 +2055,14 @@ def _run_tests() -> dict[str, object]:
 
 
 class AriaFlowHandler(BaseHTTPRequestHandler):
-    def _invalidate_status_cache(self) -> None:
+    def _invalidate_status_cache(self, event: str = "state_changed") -> None:
         STATUS_CACHE["ts"] = 0.0
         STATUS_CACHE["payload"] = None
+        state = load_state()
+        _sse_publish(
+            event,
+            {"rev": state.get("_rev", 0), "server_version": __version__},
+        )
 
     def _status_payload(self, force: bool = False) -> dict:
         now = time.time()
@@ -2044,9 +2088,11 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             "summary": summarize_queue(items),
             "aria2": aria_status(timeout=3),
             "bandwidth": bandwidth,
+            "_rev": state.get("_rev", 0),
             "backend": {
                 "reachable": True,
                 "version": __version__,
+                "schema_version": API_SCHEMA_VERSION,
                 "pid": os.getpid(),
             },
         }
@@ -2060,12 +2106,31 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         STATUS_CACHE["payload"] = payload
         return payload
 
-    def _send_json(self, payload: dict, status: int = 200) -> None:
+    def _send_json(
+        self, payload: dict, status: int = 200, *, etag: bool = False
+    ) -> None:
+        request_id = str(uuid4())
+        payload.setdefault("_schema", API_SCHEMA_VERSION)
+        payload.setdefault("_request_id", request_id)
         body = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+        if etag:
+            tag = '"' + hashlib.md5(body).hexdigest() + '"'
+            if_none = self.headers.get("If-None-Match", "")
+            if if_none == tag:
+                self.send_response(304)
+                self.send_header("ETag", tag)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                return
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Request-Id", request_id)
+        self.send_header("X-Schema-Version", API_SCHEMA_VERSION)
+        if etag:
+            self.send_header("ETag", tag)
+            self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
 
@@ -2073,7 +2138,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, If-None-Match",
+        )
+        self.send_header(
+            "Access-Control-Expose-Headers",
+            "ETag, X-Request-Id, X-Schema-Version",
+        )
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
@@ -2128,11 +2200,43 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if path == "/api":
             self._send_json(_api_discovery())
             return
+        if path == "/api/events":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("X-Schema-Version", API_SCHEMA_VERSION)
+            self.end_headers()
+            q = _sse_subscribe()
+            try:
+                # send initial state
+                init = json.dumps(
+                    {
+                        "schema_version": API_SCHEMA_VERSION,
+                        "server_version": __version__,
+                    },
+                    sort_keys=True,
+                )
+                self.wfile.write(f"event: connected\ndata: {init}\n\n".encode())
+                self.wfile.flush()
+                while True:
+                    try:
+                        msg = q.get(timeout=30)
+                        self.wfile.write(msg.encode())
+                        self.wfile.flush()
+                    except queue.Empty:
+                        self.wfile.write(b": keepalive\n\n")
+                        self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            finally:
+                _sse_unsubscribe(q)
+            return
         if path == "/api/bandwidth":
             self._send_json(bandwidth_status())
             return
         if path == "/api/status":
-            self._send_json(self._status_payload())
+            self._send_json(self._status_payload(), etag=True)
             return
         if path == "/api/log":
             limit = 120

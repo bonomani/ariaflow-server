@@ -806,6 +806,8 @@ class TestDeclaration(APIServerMixin, unittest.TestCase):
     def test_get_options_is_alias(self) -> None:
         _, decl = _request(f"{self.base}/api/declaration")
         _, opts = _request(f"{self.base}/api/options")
+        decl.pop("_request_id", None)
+        opts.pop("_request_id", None)
         self.assertEqual(decl, opts)
 
     def test_save_declaration(self) -> None:
@@ -1027,6 +1029,83 @@ class TestMetaEndpoints(APIServerMixin, unittest.TestCase):
     def test_cors_headers(self) -> None:
         code, body, headers = _raw_request(f"{self.base}/api/status")
         self.assertEqual(headers.get("Access-Control-Allow-Origin"), "*")
+
+    def test_schema_version_in_response(self) -> None:
+        code, body = _request(f"{self.base}/api/status")
+        self.assertIn("_schema", body)
+        self.assertEqual(body["_schema"], "1")
+
+    def test_request_id_in_response(self) -> None:
+        # Use non-cached endpoint to verify unique request IDs
+        code, body = _request(f"{self.base}/api/declaration")
+        self.assertIn("_request_id", body)
+        self.assertTrue(len(body["_request_id"]) > 0)
+        _, body2 = _request(f"{self.base}/api/declaration")
+        self.assertNotEqual(body["_request_id"], body2["_request_id"])
+
+    def test_schema_version_header(self) -> None:
+        code, _, headers = _raw_request(f"{self.base}/api/status")
+        self.assertEqual(headers.get("X-Schema-Version"), "1")
+        self.assertTrue(len(headers.get("X-Request-Id", "")) > 0)
+
+    def test_etag_on_status(self) -> None:
+        # First request gets ETag
+        code, body, headers = _raw_request(f"{self.base}/api/status")
+        self.assertEqual(code, 200)
+        etag = headers.get("ETag", "")
+        self.assertTrue(etag.startswith('"'))
+
+        # Same request with If-None-Match returns 304
+        req = urllib.request.Request(
+            f"{self.base}/api/status",
+            headers={"If-None-Match": etag},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                # 304 should not have body but urllib may still return 200
+                pass
+        except urllib.error.HTTPError as exc:
+            # 304 is not an error per se but urllib treats it as one
+            self.assertEqual(exc.code, 304)
+
+    def test_revision_counter_in_status(self) -> None:
+        _request(
+            f"{self.base}/api/add",
+            "POST",
+            {
+                "items": [{"url": "https://example.com/rev.bin"}],
+            },
+        )
+        _, body = _request(f"{self.base}/api/status")
+        self.assertIn("_rev", body)
+        rev1 = body["_rev"]
+        self.assertIsInstance(rev1, int)
+        self.assertGreater(rev1, 0)
+
+    def test_sse_endpoint_connects(self) -> None:
+        """Verify SSE endpoint sends connected event."""
+        import socket
+
+        sock = socket.create_connection(("127.0.0.1", self.port), timeout=3)
+        sock.settimeout(3)
+        sock.sendall(b"GET /api/events HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        data = b""
+        try:
+            while len(data) < 1024:
+                chunk = sock.recv(1024)
+                if not chunk:
+                    break
+                data += chunk
+                if b"connected" in data:
+                    break
+        except socket.timeout:
+            pass
+        finally:
+            sock.close()
+        text = data.decode("utf-8", errors="replace")
+        self.assertIn("text/event-stream", text)
+        self.assertIn("event: connected", text)
+        self.assertIn("schema_version", text)
 
 
 # ──────────────────────────────────────────────────────
