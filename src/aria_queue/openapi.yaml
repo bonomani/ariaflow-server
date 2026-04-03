@@ -4,7 +4,7 @@ info:
   description: |
     Headless download engine API. Manages queue state, sessions, runs,
     and policy on top of aria2.
-  version: 0.1.38
+  version: 0.1.98
   license:
     name: MIT
 
