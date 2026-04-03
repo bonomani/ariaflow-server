@@ -50,16 +50,6 @@ ITEM_STATUSES = {
 #   mirror     — multiple URLs for same file (aria2.addUri([url1, url2, ...]))
 #   torrent_data — direct .torrent file upload (aria2.addTorrent(base64))
 #   metalink_data — direct metalink XML upload (aria2.addMetalink(base64))
-DOWNLOAD_MODES = {
-    "http",
-    "magnet",
-    "torrent",
-    "metalink",
-    "mirror",
-    "torrent_data",
-    "metalink_data",
-}
-
 _TERMINAL_STATUSES = {"complete", "error", "stopped", "cancelled"}
 
 
@@ -131,12 +121,6 @@ def save_queue(items: list[dict[str, Any]]) -> None:
     with storage_locked():
         write_json(queue_path(), {"items": items})
 
-
-def find_queue_item_by_url(url: str) -> dict[str, Any] | None:
-    for item in _core().load_queue():
-        if item.get("url") == url and item.get("status") not in _TERMINAL_STATUSES:
-            return item
-    return None
 
 
 def _aria2_position_for_priority(priority: int, port: int = 6800) -> int:
@@ -863,18 +847,6 @@ def format_bytes(value: int | float | None) -> str:
             return f"{size:.1f} {unit}"
         size /= 1024
     return f"{size:.1f} TiB"
-
-
-def format_rate(bytes_per_second: int | float | None) -> str:
-    if bytes_per_second is None:
-        return "-"
-    return f"{format_bytes(bytes_per_second)}/s"
-
-
-def format_mbps(value: int | float | None) -> str:
-    if value is None:
-        return "-"
-    return f"{value} Mbps"
 
 
 def post_action(item: dict[str, Any]) -> dict[str, Any]:
