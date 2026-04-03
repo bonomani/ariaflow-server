@@ -594,11 +594,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
         if path in {"/bandwidth", "/lifecycle", "/options", "/log"}:
             self._send_json(
-                {
-                    "error": "ui_not_served",
-                    "message": "ariaflow is API-only; use ariaflow-web for the dashboard",
-                },
-                status=404,
+                _error_payload("ui_not_served", "ariaflow is API-only; use ariaflow-web for the dashboard"),
+                status=400,
             )
             return
         # Parameterized route: /api/item/{id}/files
@@ -610,7 +607,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if method_name:
             getattr(self, method_name)(parsed)
         else:
-            self._send_json({"error": "not_found"}, status=404)
+            self._send_json(_error_payload("not_found", "resource not found"), status=404)
 
     def _get_openapi_yaml(self, parsed: object) -> None:
         spec_path = _find_openapi_spec()
@@ -831,7 +828,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if method_name:
             getattr(self, method_name)(payload, path)
         else:
-            self._send_json({"error": "not_found"}, status=404)
+            self._send_json(_error_payload("not_found", "resource not found"), status=404)
 
     def _post_bandwidth_probe(self, payload: object, path: str) -> None:
         result = manual_probe()
@@ -1020,7 +1017,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     def _post_lifecycle_action(self, payload: object, path: str) -> None:
         if not is_macos():
-            self._send_json({"error": "macos_only"}, status=400)
+            self._send_json(_error_payload("macos_only", "this endpoint requires macOS"), status=400)
             return
         target = str(payload.get("target", "")).strip()
         action = str(payload.get("action", "")).strip()
@@ -1137,7 +1134,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         action = str(payload.get("action", "")).strip()
         if action != "new":
             self._send_json(
-                {"error": "unsupported_action", "action": action}, status=400
+                _error_payload("unsupported_action", f"unknown action: {action}"), status=400
             )
             return
         before = {"state": load_state(), "queue": summarize_queue(load_queue())}

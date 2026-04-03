@@ -47,7 +47,7 @@ class WebSmokeTests(unittest.TestCase):
                 for route in ("/bandwidth", "/lifecycle", "/options", "/log"):
                     with self.assertRaises(urllib.error.HTTPError) as route_error:
                         urllib.request.urlopen(f"{base}{route}", timeout=5)
-                    self.assertEqual(route_error.exception.code, 404)
+                    self.assertEqual(route_error.exception.code, 400)
                 status = request_json(f"{base}/api/status")
                 self.assertIn("items", status)
                 self.assertIn("state", status)
