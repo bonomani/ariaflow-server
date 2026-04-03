@@ -17,7 +17,7 @@ from aria_queue.core import (
     _should_probe_bandwidth,
     add_queue_item,
     deduplicate_active_transfers,
-    aria2_discover_active_transfer,
+    discover_active_transfer,
     load_action_log,
     load_queue,
     load_state,
@@ -299,7 +299,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
         ):
-            active = aria2_discover_active_transfer()
+            active = discover_active_transfer()
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["status"], "active")
         self.assertEqual(active["percent"], 10.0)
@@ -331,7 +331,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
         ):
-            active = aria2_discover_active_transfer()
+            active = discover_active_transfer()
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["url"], "https://example.com/recovered.gguf")
 
@@ -721,7 +721,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch(
-                "aria_queue.install.aria2_status",
+                "aria_queue.install.launchd_aria2_status",
                 return_value={
                     "loaded": True,
                     "plist_exists": True,

@@ -13,11 +13,11 @@ def launch_agents_dir() -> Path:
     return Path.home() / "Library" / "LaunchAgents"
 
 
-def aria2_plist_path() -> Path:
+def launchd_aria2_plist_path() -> Path:
     return launch_agents_dir() / f"{ARIA2_LABEL}.plist"
 
 
-def aria2_session_dir() -> Path:
+def launchd_aria2_session_dir() -> Path:
     return Path.home() / ".aria2"
 
 
@@ -48,7 +48,7 @@ def _launchctl_load(plist: Path) -> None:
         subprocess.run(["launchctl", "load", str(plist)], check=True)
 
 
-def aria2_status() -> dict[str, bool]:
+def launchd_aria2_status() -> dict[str, bool]:
     version = None
     if _launchctl_list(ARIA2_LABEL):
         try:
@@ -59,8 +59,8 @@ def aria2_status() -> dict[str, bool]:
             version = None
     return {
         "loaded": _launchctl_list(ARIA2_LABEL),
-        "plist_exists": aria2_plist_path().exists(),
-        "session_exists": (aria2_session_dir() / "session.txt").exists(),
+        "plist_exists": launchd_aria2_plist_path().exists(),
+        "session_exists": (launchd_aria2_session_dir() / "session.txt").exists(),
         "version": version,
     }
 
@@ -87,8 +87,8 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
     <string>--console-log-level=warn</string>
     <string>--summary-interval=0</string>
     <string>--dir={str(Path.home() / "Downloads")}</string>
-    <string>--input-file={str(aria2_session_dir() / "session.txt")}</string>
-    <string>--save-session={str(aria2_session_dir() / "session.txt")}</string>
+    <string>--input-file={str(launchd_aria2_session_dir() / "session.txt")}</string>
+    <string>--save-session={str(launchd_aria2_session_dir() / "session.txt")}</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -98,10 +98,10 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
 </plist>
 """
     commands = [
-        f"mkdir -p {aria2_session_dir()} {Path.home() / 'Downloads'} {launch_agents_dir()}",
-        f"touch {aria2_session_dir() / 'session.txt'}",
-        f"cat > {aria2_plist_path()} <<'PLIST'\n{plist}PLIST",
-        f"launchctl bootstrap gui/{os.getuid()} {aria2_plist_path()}",
+        f"mkdir -p {launchd_aria2_session_dir()} {Path.home() / 'Downloads'} {launch_agents_dir()}",
+        f"touch {launchd_aria2_session_dir() / 'session.txt'}",
+        f"cat > {launchd_aria2_plist_path()} <<'PLIST'\n{plist}PLIST",
+        f"launchctl bootstrap gui/{os.getuid()} {launchd_aria2_plist_path()}",
     ]
     if dry_run:
         return commands
@@ -109,29 +109,29 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
         [
             "mkdir",
             "-p",
-            str(aria2_session_dir()),
+            str(launchd_aria2_session_dir()),
             str(Path.home() / "Downloads"),
             str(launch_agents_dir()),
         ],
         check=True,
     )
-    (aria2_session_dir() / "session.txt").touch(exist_ok=True)
-    aria2_plist_path().write_text(plist, encoding="utf-8")
-    _launchctl_load(aria2_plist_path())
+    (launchd_aria2_session_dir() / "session.txt").touch(exist_ok=True)
+    launchd_aria2_plist_path().write_text(plist, encoding="utf-8")
+    _launchctl_load(launchd_aria2_plist_path())
     return commands
 
 
 def uninstall_aria2_launchd(dry_run: bool = False) -> list[str]:
     commands = [
-        f"launchctl unload {aria2_plist_path()}",
-        f"rm -f {aria2_plist_path()}",
-        f"rm -rf {aria2_session_dir()}",
+        f"launchctl unload {launchd_aria2_plist_path()}",
+        f"rm -f {launchd_aria2_plist_path()}",
+        f"rm -rf {launchd_aria2_session_dir()}",
     ]
     if dry_run:
         return commands
-    _launchctl_unload(aria2_plist_path())
-    if aria2_plist_path().exists():
-        aria2_plist_path().unlink()
-    if aria2_session_dir().exists():
-        shutil.rmtree(aria2_session_dir(), ignore_errors=True)
+    _launchctl_unload(launchd_aria2_plist_path())
+    if launchd_aria2_plist_path().exists():
+        launchd_aria2_plist_path().unlink()
+    if launchd_aria2_session_dir().exists():
+        shutil.rmtree(launchd_aria2_session_dir(), ignore_errors=True)
     return commands

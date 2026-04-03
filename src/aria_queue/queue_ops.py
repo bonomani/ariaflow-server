@@ -419,7 +419,7 @@ def select_item_files(
     return {"ok": True, "item_id": item_id, "gid": gid, "selected": indices}
 
 
-def aria2_discover_active_transfer(
+def discover_active_transfer(
     port: int = 6800, timeout: int = 5
 ) -> dict[str, Any] | None:
     core = _core()
@@ -493,8 +493,8 @@ def aria2_discover_active_transfer(
     return None
 
 
-def aria2_active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
-    return aria2_discover_active_transfer(port=port, timeout=timeout)
+def active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
+    return discover_active_transfer(port=port, timeout=timeout)
 
 
 def pause_active_transfer(port: int = 6800) -> dict[str, Any]:

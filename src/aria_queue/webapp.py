@@ -20,7 +20,7 @@ from .api import (
     bandwidth_status,
     aria2_change_options,
     aria2_tell_active,
-    aria2_active_status,
+    active_status,
     auto_preflight_on_run,
     aria2_status,
     aria2_current_bandwidth,
@@ -2170,7 +2170,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 "pid": os.getpid(),
             },
         }
-        active = aria2_active_status(timeout=3)
+        active = active_status(timeout=3)
         if active:
             payload["active"] = active
         actives = aria2_tell_active(timeout=3)

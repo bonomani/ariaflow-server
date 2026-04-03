@@ -208,7 +208,7 @@ class WebSmokeTests(unittest.TestCase):
                         "error": None,
                     },
                 ),
-                patch("aria_queue.webapp.aria2_active_status", return_value=None),
+                patch("aria_queue.webapp.active_status", return_value=None),
                 patch("aria_queue.webapp.aria2_tell_active", return_value=[]),
             ):
                 server = serve(host="127.0.0.1", port=0)

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .core import _find_networkquality
 from .platform.launchd import (
-    aria2_status,
+    launchd_aria2_status,
     install_aria2_launchd,
     is_macos,
     uninstall_aria2_launchd,
@@ -194,7 +194,7 @@ def status_all() -> dict[str, dict[str, object]]:
     current_version = current_ariaflow_version()
     aria2_installed = brew_is_installed("aria2")
     aria2_version = brew_package_version("aria2")
-    aria2 = aria2_status()
+    aria2 = launchd_aria2_status()
     networkquality = networkquality_status()
     plan = {
         "ariaflow": ucc_record(
