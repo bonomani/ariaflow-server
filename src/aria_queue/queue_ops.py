@@ -614,18 +614,6 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
     return {"ok": True, "item": dict(item)}
 
 
-def format_bytes(value: int | float | None) -> str:
-    if value is None:
-        return "-"
-    size = float(value)
-    units = ["B", "KiB", "MiB", "GiB", "TiB"]
-    for unit in units:
-        if abs(size) < 1024 or unit == units[-1]:
-            if unit == "B":
-                return f"{int(size)} {unit}"
-            return f"{size:.1f} {unit}"
-        size /= 1024
-    return f"{size:.1f} TiB"
 
 
 def post_action(item: dict[str, Any]) -> dict[str, Any]:
