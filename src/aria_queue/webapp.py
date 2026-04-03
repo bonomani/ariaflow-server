@@ -400,6 +400,39 @@ def _run_tests() -> dict[str, object]:
 
 
 class AriaFlowHandler(BaseHTTPRequestHandler):
+    _GET_ROUTES: dict[str, str] = {
+        "/api/openapi.yaml": "_get_openapi_yaml",
+        "/api/docs": "_get_docs",
+        "/api/tests": "_get_tests",
+        "/api": "_get_api",
+        "/api/scheduler": "_get_scheduler",
+        "/api/events": "_get_events",
+        "/api/bandwidth": "_get_bandwidth",
+        "/api/status": "_get_status",
+        "/api/log": "_get_log",
+        "/api/declaration": "_get_declaration",
+        "/api/options": "_get_options",
+        "/api/lifecycle": "_get_lifecycle",
+        "/api/archive": "_get_archive",
+        "/api/sessions": "_get_sessions",
+        "/api/session/stats": "_get_session_stats",
+    }
+
+    _POST_ROUTES: dict[str, str] = {
+        "/api/bandwidth/probe": "_post_bandwidth_probe",
+        "/api/cleanup": "_post_cleanup",
+        "/api/add": "_post_add",
+        "/api/preflight": "_post_preflight",
+        "/api/run": "_post_run",
+        "/api/ucc": "_post_ucc",
+        "/api/declaration": "_post_declaration",
+        "/api/lifecycle/action": "_post_lifecycle_action",
+        "/api/session": "_post_session",
+        "/api/pause": "_post_pause",
+        "/api/resume": "_post_resume",
+        "/api/aria2/options": "_post_aria2_options",
+    }
+
     def _invalidate_status_cache(self, event: str = "state_changed") -> None:
         STATUS_CACHE["ts"] = 0.0
         STATUS_CACHE["payload"] = None
@@ -496,6 +529,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
+        # Special routes (redirect, non-API)
         if path in {"/", "/index.html"}:
             self.send_response(HTTPStatus.FOUND)
             self.send_header("Location", "/api/docs")
@@ -510,194 +544,200 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 status=404,
             )
             return
-        if path == "/api/openapi.yaml":
-            spec_path = _find_openapi_spec()
-            if spec_path is None:
-                self._send_json(
-                    {"error": "not_found", "message": "openapi.yaml not found"},
-                    status=404,
-                )
-                return
-            body = spec_path.read_bytes()
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "text/yaml; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(body)
+        # Parameterized route: /api/item/{id}/files
+        if path.startswith("/api/item/") and path.endswith("/files") and path.count("/") == 4:
+            self._get_item_files(parsed)
             return
-        if path == "/api/docs":
-            html = _swagger_ui_html()
-            body = html.encode("utf-8")
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
-        if path == "/api/tests":
-            result = _run_tests()
-            self._send_json(result)
-            return
-        if path == "/api":
-            self._send_json(_api_discovery())
-            return
-        if path == "/api/scheduler":
-            state = load_state()
-            running = bool(state.get("running"))
-            paused = bool(state.get("paused"))
-            stop_requested = bool(state.get("stop_requested"))
-            if stop_requested:
-                scheduler_status = "stopping"
-            elif running and paused:
-                scheduler_status = "paused"
-            elif running:
-                scheduler_status = "running"
-            else:
-                scheduler_status = "idle"
+        # Dispatch table
+        method_name = self._GET_ROUTES.get(path)
+        if method_name:
+            getattr(self, method_name)(parsed)
+        else:
+            self._send_json({"error": "not_found"}, status=404)
+
+    def _get_openapi_yaml(self, parsed: object) -> None:
+        spec_path = _find_openapi_spec()
+        if spec_path is None:
             self._send_json(
+                {"error": "not_found", "message": "openapi.yaml not found"},
+                status=404,
+            )
+            return
+        body = spec_path.read_bytes()
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/yaml; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _get_docs(self, parsed: object) -> None:
+        html = _swagger_ui_html()
+        body = html.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _get_tests(self, parsed: object) -> None:
+        result = _run_tests()
+        self._send_json(result)
+
+    def _get_api(self, parsed: object) -> None:
+        self._send_json(_api_discovery())
+
+    def _get_scheduler(self, parsed: object) -> None:
+        state = load_state()
+        running = bool(state.get("running"))
+        paused = bool(state.get("paused"))
+        stop_requested = bool(state.get("stop_requested"))
+        if stop_requested:
+            scheduler_status = "stopping"
+        elif running and paused:
+            scheduler_status = "paused"
+        elif running:
+            scheduler_status = "running"
+        else:
+            scheduler_status = "idle"
+        self._send_json(
+            {
+                "status": scheduler_status,
+                "running": running,
+                "paused": paused,
+                "stop_requested": stop_requested,
+                "session_id": state.get("session_id"),
+                "session_started_at": state.get("session_started_at"),
+                "session_closed_at": state.get("session_closed_at"),
+                "_rev": state.get("_rev", 0),
+            }
+        )
+
+    def _get_events(self, parsed: object) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Schema-Version", API_SCHEMA_VERSION)
+        self.end_headers()
+        q = _sse_subscribe()
+        try:
+            # send initial state
+            init = json.dumps(
                 {
-                    "status": scheduler_status,
-                    "running": running,
-                    "paused": paused,
-                    "stop_requested": stop_requested,
-                    "session_id": state.get("session_id"),
-                    "session_started_at": state.get("session_started_at"),
-                    "session_closed_at": state.get("session_closed_at"),
-                    "_rev": state.get("_rev", 0),
-                }
+                    "schema_version": API_SCHEMA_VERSION,
+                    "server_version": __version__,
+                },
+                sort_keys=True,
             )
-            return
-        if path == "/api/events":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("X-Schema-Version", API_SCHEMA_VERSION)
-            self.end_headers()
-            q = _sse_subscribe()
-            try:
-                # send initial state
-                init = json.dumps(
-                    {
-                        "schema_version": API_SCHEMA_VERSION,
-                        "server_version": __version__,
-                    },
-                    sort_keys=True,
-                )
-                self.wfile.write(f"event: connected\ndata: {init}\n\n".encode())
-                self.wfile.flush()
-                while True:
-                    try:
-                        msg = q.get(timeout=30)
-                        self.wfile.write(msg.encode())
-                        self.wfile.flush()
-                    except queue.Empty:
-                        self.wfile.write(b": keepalive\n\n")
-                        self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError, OSError):
-                pass
-            finally:
-                _sse_unsubscribe(q)
-            return
-        if path == "/api/bandwidth":
-            self._send_json(bandwidth_status())
-            return
-        if path == "/api/status":
-            query = dict(
-                part.split("=", 1) if "=" in part else (part, "")
-                for part in parsed.query.split("&")
-                if part
-            )
-            payload = self._status_payload()
-            filter_status = query.get("status", "").strip()
-            filter_session = query.get("session", "").strip()
-            if filter_status or filter_session:
-                items = payload.get("items", [])
-                if filter_status:
-                    statuses = set(filter_status.split(","))
-                    items = [i for i in items if i.get("status") in statuses]
-                if filter_session == "current":
-                    sid = payload.get("state", {}).get("session_id")
-                    items = [i for i in items if i.get("session_id") == sid]
-                elif filter_session:
-                    items = [i for i in items if i.get("session_id") == filter_session]
-                payload = dict(payload)
-                payload["items"] = items
-                payload["summary"] = summarize_queue(items)
-                payload["filtered"] = True
-            self._send_json(payload, etag=True)
-            return
-        if path == "/api/log":
+            self.wfile.write(f"event: connected\ndata: {init}\n\n".encode())
+            self.wfile.flush()
+            while True:
+                try:
+                    msg = q.get(timeout=30)
+                    self.wfile.write(msg.encode())
+                    self.wfile.flush()
+                except queue.Empty:
+                    self.wfile.write(b": keepalive\n\n")
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            _sse_unsubscribe(q)
+
+    def _get_bandwidth(self, parsed: object) -> None:
+        self._send_json(bandwidth_status())
+
+    def _get_status(self, parsed: object) -> None:
+        query = dict(
+            part.split("=", 1) if "=" in part else (part, "")
+            for part in parsed.query.split("&")
+            if part
+        )
+        payload = self._status_payload()
+        filter_status = query.get("status", "").strip()
+        filter_session = query.get("session", "").strip()
+        if filter_status or filter_session:
+            items = payload.get("items", [])
+            if filter_status:
+                statuses = set(filter_status.split(","))
+                items = [i for i in items if i.get("status") in statuses]
+            if filter_session == "current":
+                sid = payload.get("state", {}).get("session_id")
+                items = [i for i in items if i.get("session_id") == sid]
+            elif filter_session:
+                items = [i for i in items if i.get("session_id") == filter_session]
+            payload = dict(payload)
+            payload["items"] = items
+            payload["summary"] = summarize_queue(items)
+            payload["filtered"] = True
+        self._send_json(payload, etag=True)
+
+    def _get_log(self, parsed: object) -> None:
+        limit = 120
+        query = dict(
+            part.split("=", 1) if "=" in part else (part, "")
+            for part in parsed.query.split("&")
+            if part
+        )
+        try:
+            limit = max(1, min(500, int(query.get("limit", "120"))))
+        except ValueError:
             limit = 120
-            query = dict(
-                part.split("=", 1) if "=" in part else (part, "")
-                for part in parsed.query.split("&")
-                if part
-            )
-            try:
-                limit = max(1, min(500, int(query.get("limit", "120"))))
-            except ValueError:
-                limit = 120
-            self._send_json({"items": load_action_log(limit=limit)})
+        self._send_json({"items": load_action_log(limit=limit)})
+
+    def _get_declaration(self, parsed: object) -> None:
+        self._send_json(load_declaration())
+
+    def _get_options(self, parsed: object) -> None:
+        self._send_json(load_declaration())
+
+    def _get_lifecycle(self, parsed: object) -> None:
+        self._send_json(_lifecycle_payload())
+
+    def _get_item_files(self, parsed: object) -> None:
+        path = urlparse(self.path).path
+        item_id = path.split("/")[3]
+        result = get_item_files(item_id)
+        if not result.get("ok", True):
+            status_code = 404 if result.get("error") == "not_found" else 400
+            self._send_json(result, status=status_code)
             return
-        if path == "/api/declaration":
-            self._send_json(load_declaration())
-            return
-        if path == "/api/options":
-            self._send_json(load_declaration())
-            return
-        if path == "/api/lifecycle":
-            self._send_json(_lifecycle_payload())
-            return
-        if (
-            path.startswith("/api/item/")
-            and path.endswith("/files")
-            and path.count("/") == 4
-        ):
-            item_id = path.split("/")[3]
-            result = get_item_files(item_id)
-            if not result.get("ok", True):
-                status_code = 404 if result.get("error") == "not_found" else 400
-                self._send_json(result, status=status_code)
-                return
-            self._send_json(result)
-            return
-        if path == "/api/archive":
-            query = dict(
-                part.split("=", 1) if "=" in part else (part, "")
-                for part in parsed.query.split("&")
-                if part
-            )
-            try:
-                limit = max(1, min(500, int(query.get("limit", "100"))))
-            except ValueError:
-                limit = 100
-            items = load_archive()
-            self._send_json({"items": items[-limit:]})
-            return
-        if path == "/api/sessions":
-            query = dict(
-                part.split("=", 1) if "=" in part else (part, "")
-                for part in parsed.query.split("&")
-                if part
-            )
-            try:
-                limit = max(1, min(200, int(query.get("limit", "50"))))
-            except ValueError:
-                limit = 50
-            self._send_json({"sessions": load_session_history(limit=limit)})
-            return
-        if path == "/api/session/stats":
-            query = dict(
-                part.split("=", 1) if "=" in part else (part, "")
-                for part in parsed.query.split("&")
-                if part
-            )
-            sid = query.get("session_id") or None
-            self._send_json(session_stats(session_id=sid))
-            return
-        self._send_json({"error": "not_found"}, status=404)
+        self._send_json(result)
+
+    def _get_archive(self, parsed: object) -> None:
+        query = dict(
+            part.split("=", 1) if "=" in part else (part, "")
+            for part in parsed.query.split("&")
+            if part
+        )
+        try:
+            limit = max(1, min(500, int(query.get("limit", "100"))))
+        except ValueError:
+            limit = 100
+        items = load_archive()
+        self._send_json({"items": items[-limit:]})
+
+    def _get_sessions(self, parsed: object) -> None:
+        query = dict(
+            part.split("=", 1) if "=" in part else (part, "")
+            for part in parsed.query.split("&")
+            if part
+        )
+        try:
+            limit = max(1, min(200, int(query.get("limit", "50"))))
+        except ValueError:
+            limit = 50
+        self._send_json({"sessions": load_session_history(limit=limit)})
+
+    def _get_session_stats(self, parsed: object) -> None:
+        query = dict(
+            part.split("=", 1) if "=" in part else (part, "")
+            for part in parsed.query.split("&")
+            if part
+        )
+        sid = query.get("session_id") or None
+        self._send_json(session_stats(session_id=sid))
 
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
@@ -712,434 +752,435 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if path == "/api/bandwidth/probe":
-            result = manual_probe()
-            self._invalidate_status_cache()
-            self._send_json(result)
-            return
-
-        if path == "/api/cleanup":
-            params = payload if isinstance(payload, dict) else {}
-            max_age = int(params.get("max_done_age_days", 7))
-            max_count = int(params.get("max_done_count", 100))
-            result = auto_cleanup_queue(
-                max_done_age_days=max_age, max_done_count=max_count
-            )
-            if result["archived"] > 0:
-                self._invalidate_status_cache()
-            self._send_json({"ok": True, **result})
-            return
-
-        if path == "/api/add":
-            items, error = _parse_add_items(payload)
-            if error is not None:
-                self._send_json(error, status=400)
-                return
-            added = [
-                add_queue_item(
-                    item["url"],
-                    output=item["output"],
-                    post_action_rule=item["post_action_rule"],
-                    mirrors=item.get("mirrors"),
-                    torrent_data=item.get("torrent_data"),
-                    metalink_data=item.get("metalink_data"),
-                    priority=item.get("priority", 0),
-                ).__dict__
-                for item in items
-            ]
-            self._invalidate_status_cache()
-            self._send_json({"ok": True, "count": len(added), "added": added})
-            return
-
-        if path == "/api/preflight":
-            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
-            result = preflight()
-            result["aria2"] = aria2_status()
-            result["bandwidth"] = aria2_current_bandwidth()
-            record_action(
-                action="preflight",
-                target="system",
-                outcome="converged" if result.get("status") == "pass" else "blocked",
-                reason=result.get("status", "unknown"),
-                before=before,
-                after={
-                    "state": load_state(),
-                    "queue": summarize_queue(load_queue()),
-                    "preflight": result,
-                },
-                detail=result,
-            )
-            self._invalidate_status_cache()
-            self._send_json(result)
-            return
-
-        if path == "/api/run":
-            if not isinstance(payload, dict):
-                self._send_json(
-                    _error_payload("invalid_payload", "expected a JSON object"),
-                    status=400,
-                )
-                return
-            action = str(payload.get("action", "")).strip().lower()
-            if action not in {"start", "stop"}:
-                self._send_json(
-                    _error_payload(
-                        "invalid_action",
-                        "action must be 'start' or 'stop'",
-                        action=action or None,
-                    ),
-                    status=400,
-                )
-                return
-            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
-            effective_auto_preflight: bool | None = None
-            if action == "stop":
-                result = stop_background_process()
-                response: dict[str, object] = {
-                    "ok": True,
-                    "action": "stop",
-                    "result": result,
-                }
-            else:
-                override, override_error = _resolve_auto_preflight_override(payload)
-                if override_error is not None:
-                    self._send_json(override_error, status=400)
-                    return
-                effective_auto_preflight = (
-                    auto_preflight_on_run() if override is None else override
-                )
-                if effective_auto_preflight:
-                    preflight_result = preflight()
-                    record_action(
-                        action="preflight",
-                        target="system",
-                        outcome="converged"
-                        if preflight_result.get("status") == "pass"
-                        else "blocked",
-                        reason=preflight_result.get("status", "unknown"),
-                        before=before,
-                        after={
-                            "state": load_state(),
-                            "queue": summarize_queue(load_queue()),
-                            "preflight": preflight_result,
-                        },
-                        detail=preflight_result,
-                    )
-                    if preflight_result.get("exit_code") != 0:
-                        blocked = {
-                            "ok": False,
-                            "action": "start",
-                            "error": "preflight_blocked",
-                            "message": "preflight failed before start",
-                            "effective_auto_preflight_on_run": True,
-                            "preflight": preflight_result,
-                        }
-                        record_action(
-                            action="run",
-                            target="queue",
-                            outcome="blocked",
-                            reason="preflight_blocked",
-                            before=before,
-                            after={
-                                "state": load_state(),
-                                "queue": summarize_queue(load_queue()),
-                                "scheduler": blocked,
-                            },
-                            detail=blocked,
-                        )
-                        self._invalidate_status_cache()
-                        self._send_json(blocked, status=409)
-                        return
-                result = start_background_process()
-                response = {
-                    "ok": True,
-                    "action": "start",
-                    "effective_auto_preflight_on_run": effective_auto_preflight,
-                    "result": result,
-                }
-            record_action(
-                action="run",
-                target="queue",
-                outcome="changed"
-                if result.get("started") or result.get("stopped")
-                else "unchanged",
-                reason=result.get("reason", "unknown"),
-                before=before,
-                after={
-                    "state": load_state(),
-                    "queue": summarize_queue(load_queue()),
-                    "scheduler": response,
-                },
-                detail=response,
-            )
-            self._invalidate_status_cache()
-            self._send_json(response)
-            return
-
-        if path == "/api/ucc":
-            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
-            result = run_ucc()
-            record_action(
-                action="ucc",
-                target="queue",
-                outcome=result.get("result", {}).get("outcome", "unknown"),
-                observation=result.get("result", {}).get("observation", "unknown"),
-                reason=result.get("result", {}).get("reason", "unknown"),
-                before=before,
-                after={
-                    "state": load_state(),
-                    "queue": summarize_queue(load_queue()),
-                    "ucc": result,
-                },
-                detail=result,
-            )
-            self._invalidate_status_cache()
-            self._send_json(result)
-            return
-
-        if path == "/api/declaration":
-            declaration = payload if isinstance(payload, dict) else {}
-            saved = save_declaration(declaration)
-            self._invalidate_status_cache()
-            self._send_json({"saved": True, "declaration": saved})
-            return
-
-        if path == "/api/lifecycle/action":
-            if not is_macos():
-                self._send_json({"error": "macos_only"}, status=400)
-                return
-            target = str(payload.get("target", "")).strip()
-            action = str(payload.get("action", "")).strip()
-            before = {"lifecycle": status_all()}
-            try:
-                if target == "ariaflow" and action == "install":
-                    commands = homebrew_install_ariaflow(dry_run=False)
-                    result = {
-                        "ariaflow": ucc_record(
-                            target="ariaflow",
-                            observed=True,
-                            outcome="changed",
-                            completion="complete",
-                            reason="install",
-                            detail="ariaflow package installed or updated",
-                            commands=commands,
-                        )
-                    }
-                elif target == "ariaflow" and action == "uninstall":
-                    commands = homebrew_uninstall_ariaflow(dry_run=False)
-                    result = {
-                        "ariaflow": ucc_record(
-                            target="ariaflow",
-                            observed=True,
-                            outcome="changed",
-                            completion="complete",
-                            reason="uninstall",
-                            detail="ariaflow package removed",
-                            commands=commands,
-                        )
-                    }
-                elif target == "aria2-launchd" and action == "install":
-                    commands = install_aria2_launchd(dry_run=False)
-                    result = {
-                        "aria2-launchd": ucc_record(
-                            target="aria2-launchd",
-                            observed=True,
-                            outcome="changed",
-                            completion="complete",
-                            reason="install",
-                            detail="optional aria2 launchd service installed or queued for installation",
-                            commands=commands,
-                        )
-                    }
-                elif target == "aria2-launchd" and action == "uninstall":
-                    commands = uninstall_aria2_launchd(dry_run=False)
-                    result = {
-                        "aria2-launchd": ucc_record(
-                            target="aria2-launchd",
-                            observed=True,
-                            outcome="changed",
-                            completion="complete",
-                            reason="uninstall",
-                            detail="optional aria2 launchd removed or queued for removal",
-                            commands=commands,
-                        )
-                    }
-                else:
-                    self._send_json(
-                        {
-                            "error": "unsupported_action",
-                            "target": target,
-                            "action": action,
-                        },
-                        status=400,
-                    )
-                    return
-            except Exception as exc:
-                record_action(
-                    action="lifecycle_action",
-                    target=target or "system",
-                    outcome="failed",
-                    reason="exception",
-                    before=before,
-                    after={
-                        "lifecycle": status_all(),
-                        "target": target,
-                        "action": action,
-                    },
-                    detail={"error": str(exc), "target": target, "action": action},
-                )
-                self._invalidate_status_cache()
-                self._send_json(
-                    {"error": "lifecycle_action_failed", "message": str(exc)},
-                    status=500,
-                )
-                return
-            record_action(
-                action="lifecycle_action",
-                target=target or "system",
-                outcome="changed",
-                reason=action or "lifecycle_action",
-                before=before,
-                after={
-                    "lifecycle": status_all(),
-                    "target": target,
-                    "action": action,
-                    "result": result,
-                },
-                detail={"target": target, "action": action, "result": result},
-            )
-            self._invalidate_status_cache()
-            self._send_json(
-                {
-                    "ok": True,
-                    "target": target,
-                    "action": action,
-                    "lifecycle": _lifecycle_payload(),
-                    "result": result,
-                }
-            )
-            return
-
-        if path == "/api/session":
-            action = str(payload.get("action", "")).strip()
-            if action != "new":
-                self._send_json(
-                    {"error": "unsupported_action", "action": action}, status=400
-                )
-                return
-            before = {"state": load_state(), "queue": summarize_queue(load_queue())}
-            state = start_new_state_session(reason="manual_new_session")
-            self._invalidate_status_cache()
-            after = {"state": load_state(), "queue": summarize_queue(load_queue())}
-            result = {"ok": True, "session": state}
-            record_action(
-                action="session",
-                target="system",
-                outcome="changed",
-                reason="new_session",
-                before=before,
-                after=after,
-                detail={
-                    "session_id": state.get("session_id"),
-                    "session_started_at": state.get("session_started_at"),
-                },
-            )
-            self._send_json(result)
-            return
-
-        if path == "/api/pause":
-            result = pause_active_transfer()
-            self._invalidate_status_cache()
-            self._send_json(result)
-            return
-
-        if path == "/api/resume":
-            result = resume_active_transfer()
-            self._invalidate_status_cache()
-            self._send_json(result)
-            return
-
-        if path == "/api/aria2/options":
-            if not isinstance(payload, dict) or not payload:
-                self._send_json(
-                    _error_payload(
-                        "invalid_payload",
-                        "expected a JSON object with option key-value pairs",
-                    ),
-                    status=400,
-                )
-                return
-            options = {str(k): str(v) for k, v in payload.items()}
-            result = aria2_change_options(options)
-            if not result.get("ok", True):
-                self._send_json(result, status=400)
-                return
-            self._send_json(result)
-            return
-
+        # Parameterized route: /api/item/{id}/files (POST)
         if (
             path.startswith("/api/item/")
             and path.endswith("/files")
             and path.count("/") == 4
         ):
-            item_id = path.split("/")[3]
-            select = payload.get("select") if isinstance(payload, dict) else None
-            if not isinstance(select, list) or not select:
-                self._send_json(
-                    _error_payload("invalid_payload", "expected {select: [1, 3, 5]}"),
-                    status=400,
-                )
-                return
-            try:
-                indices = [int(i) for i in select]
-            except (ValueError, TypeError):
-                self._send_json(
-                    _error_payload(
-                        "invalid_payload", "select must be a list of integers"
-                    ),
-                    status=400,
-                )
-                return
-            result = select_item_files(item_id, indices)
-            if not result.get("ok", True):
-                status_code = 404 if result.get("error") == "not_found" else 400
-                self._send_json(result, status=status_code)
-                return
-            self._invalidate_status_cache()
-            self._send_json(result)
+            self._post_item_files(payload, path)
             return
 
+        # Parameterized route: /api/item/{id}/{action}
         if path.startswith("/api/item/") and path.count("/") == 4:
-            parts = path.split("/")
-            item_id = parts[3]
-            action = parts[4]
-            item_actions = {
-                "pause": pause_queue_item,
-                "resume": resume_queue_item,
-                "remove": remove_queue_item,
-                "retry": retry_queue_item,
+            self._post_item_action(payload, path)
+            return
+
+        # Dispatch table
+        method_name = self._POST_ROUTES.get(path)
+        if method_name:
+            getattr(self, method_name)(payload, path)
+        else:
+            self._send_json({"error": "not_found"}, status=404)
+
+    def _post_bandwidth_probe(self, payload: object, path: str) -> None:
+        result = manual_probe()
+        self._invalidate_status_cache()
+        self._send_json(result)
+
+    def _post_cleanup(self, payload: object, path: str) -> None:
+        params = payload if isinstance(payload, dict) else {}
+        max_age = int(params.get("max_done_age_days", 7))
+        max_count = int(params.get("max_done_count", 100))
+        result = auto_cleanup_queue(
+            max_done_age_days=max_age, max_done_count=max_count
+        )
+        if result["archived"] > 0:
+            self._invalidate_status_cache()
+        self._send_json({"ok": True, **result})
+
+    def _post_add(self, payload: object, path: str) -> None:
+        items, error = _parse_add_items(payload)
+        if error is not None:
+            self._send_json(error, status=400)
+            return
+        added = [
+            add_queue_item(
+                item["url"],
+                output=item["output"],
+                post_action_rule=item["post_action_rule"],
+                mirrors=item.get("mirrors"),
+                torrent_data=item.get("torrent_data"),
+                metalink_data=item.get("metalink_data"),
+                priority=item.get("priority", 0),
+            ).__dict__
+            for item in items
+        ]
+        self._invalidate_status_cache()
+        self._send_json({"ok": True, "count": len(added), "added": added})
+
+    def _post_preflight(self, payload: object, path: str) -> None:
+        before = {"state": load_state(), "queue": summarize_queue(load_queue())}
+        result = preflight()
+        result["aria2"] = aria2_status()
+        result["bandwidth"] = aria2_current_bandwidth()
+        record_action(
+            action="preflight",
+            target="system",
+            outcome="converged" if result.get("status") == "pass" else "blocked",
+            reason=result.get("status", "unknown"),
+            before=before,
+            after={
+                "state": load_state(),
+                "queue": summarize_queue(load_queue()),
+                "preflight": result,
+            },
+            detail=result,
+        )
+        self._invalidate_status_cache()
+        self._send_json(result)
+
+    def _post_run(self, payload: object, path: str) -> None:
+        if not isinstance(payload, dict):
+            self._send_json(
+                _error_payload("invalid_payload", "expected a JSON object"),
+                status=400,
+            )
+            return
+        action = str(payload.get("action", "")).strip().lower()
+        if action not in {"start", "stop"}:
+            self._send_json(
+                _error_payload(
+                    "invalid_action",
+                    "action must be 'start' or 'stop'",
+                    action=action or None,
+                ),
+                status=400,
+            )
+            return
+        before = {"state": load_state(), "queue": summarize_queue(load_queue())}
+        effective_auto_preflight: bool | None = None
+        if action == "stop":
+            result = stop_background_process()
+            response: dict[str, object] = {
+                "ok": True,
+                "action": "stop",
+                "result": result,
             }
-            handler = item_actions.get(action)
-            if handler is None:
+        else:
+            override, override_error = _resolve_auto_preflight_override(payload)
+            if override_error is not None:
+                self._send_json(override_error, status=400)
+                return
+            effective_auto_preflight = (
+                auto_preflight_on_run() if override is None else override
+            )
+            if effective_auto_preflight:
+                preflight_result = preflight()
+                record_action(
+                    action="preflight",
+                    target="system",
+                    outcome="converged"
+                    if preflight_result.get("status") == "pass"
+                    else "blocked",
+                    reason=preflight_result.get("status", "unknown"),
+                    before=before,
+                    after={
+                        "state": load_state(),
+                        "queue": summarize_queue(load_queue()),
+                        "preflight": preflight_result,
+                    },
+                    detail=preflight_result,
+                )
+                if preflight_result.get("exit_code") != 0:
+                    blocked = {
+                        "ok": False,
+                        "action": "start",
+                        "error": "preflight_blocked",
+                        "message": "preflight failed before start",
+                        "effective_auto_preflight_on_run": True,
+                        "preflight": preflight_result,
+                    }
+                    record_action(
+                        action="run",
+                        target="queue",
+                        outcome="blocked",
+                        reason="preflight_blocked",
+                        before=before,
+                        after={
+                            "state": load_state(),
+                            "queue": summarize_queue(load_queue()),
+                            "scheduler": blocked,
+                        },
+                        detail=blocked,
+                    )
+                    self._invalidate_status_cache()
+                    self._send_json(blocked, status=409)
+                    return
+            result = start_background_process()
+            response = {
+                "ok": True,
+                "action": "start",
+                "effective_auto_preflight_on_run": effective_auto_preflight,
+                "result": result,
+            }
+        record_action(
+            action="run",
+            target="queue",
+            outcome="changed"
+            if result.get("started") or result.get("stopped")
+            else "unchanged",
+            reason=result.get("reason", "unknown"),
+            before=before,
+            after={
+                "state": load_state(),
+                "queue": summarize_queue(load_queue()),
+                "scheduler": response,
+            },
+            detail=response,
+        )
+        self._invalidate_status_cache()
+        self._send_json(response)
+
+    def _post_ucc(self, payload: object, path: str) -> None:
+        before = {"state": load_state(), "queue": summarize_queue(load_queue())}
+        result = run_ucc()
+        record_action(
+            action="ucc",
+            target="queue",
+            outcome=result.get("result", {}).get("outcome", "unknown"),
+            observation=result.get("result", {}).get("observation", "unknown"),
+            reason=result.get("result", {}).get("reason", "unknown"),
+            before=before,
+            after={
+                "state": load_state(),
+                "queue": summarize_queue(load_queue()),
+                "ucc": result,
+            },
+            detail=result,
+        )
+        self._invalidate_status_cache()
+        self._send_json(result)
+
+    def _post_declaration(self, payload: object, path: str) -> None:
+        declaration = payload if isinstance(payload, dict) else {}
+        saved = save_declaration(declaration)
+        self._invalidate_status_cache()
+        self._send_json({"saved": True, "declaration": saved})
+
+    def _post_lifecycle_action(self, payload: object, path: str) -> None:
+        if not is_macos():
+            self._send_json({"error": "macos_only"}, status=400)
+            return
+        target = str(payload.get("target", "")).strip()
+        action = str(payload.get("action", "")).strip()
+        before = {"lifecycle": status_all()}
+        try:
+            if target == "ariaflow" and action == "install":
+                commands = homebrew_install_ariaflow(dry_run=False)
+                result = {
+                    "ariaflow": ucc_record(
+                        target="ariaflow",
+                        observed=True,
+                        outcome="changed",
+                        completion="complete",
+                        reason="install",
+                        detail="ariaflow package installed or updated",
+                        commands=commands,
+                    )
+                }
+            elif target == "ariaflow" and action == "uninstall":
+                commands = homebrew_uninstall_ariaflow(dry_run=False)
+                result = {
+                    "ariaflow": ucc_record(
+                        target="ariaflow",
+                        observed=True,
+                        outcome="changed",
+                        completion="complete",
+                        reason="uninstall",
+                        detail="ariaflow package removed",
+                        commands=commands,
+                    )
+                }
+            elif target == "aria2-launchd" and action == "install":
+                commands = install_aria2_launchd(dry_run=False)
+                result = {
+                    "aria2-launchd": ucc_record(
+                        target="aria2-launchd",
+                        observed=True,
+                        outcome="changed",
+                        completion="complete",
+                        reason="install",
+                        detail="optional aria2 launchd service installed or queued for installation",
+                        commands=commands,
+                    )
+                }
+            elif target == "aria2-launchd" and action == "uninstall":
+                commands = uninstall_aria2_launchd(dry_run=False)
+                result = {
+                    "aria2-launchd": ucc_record(
+                        target="aria2-launchd",
+                        observed=True,
+                        outcome="changed",
+                        completion="complete",
+                        reason="uninstall",
+                        detail="optional aria2 launchd removed or queued for removal",
+                        commands=commands,
+                    )
+                }
+            else:
                 self._send_json(
-                    _error_payload("invalid_action", f"unknown item action: {action}"),
+                    {
+                        "error": "unsupported_action",
+                        "target": target,
+                        "action": action,
+                    },
                     status=400,
                 )
                 return
-            try:
-                result = handler(item_id)
-            except Exception as exc:
-                self._send_json(_error_payload("internal_error", str(exc)), status=500)
-                return
-            if not result.get("ok", True):
-                status_code = 404 if result.get("error") == "not_found" else 400
-                self._send_json(result, status=status_code)
-                return
+        except Exception as exc:
+            record_action(
+                action="lifecycle_action",
+                target=target or "system",
+                outcome="failed",
+                reason="exception",
+                before=before,
+                after={
+                    "lifecycle": status_all(),
+                    "target": target,
+                    "action": action,
+                },
+                detail={"error": str(exc), "target": target, "action": action},
+            )
             self._invalidate_status_cache()
-            self._send_json(result)
+            self._send_json(
+                {"error": "lifecycle_action_failed", "message": str(exc)},
+                status=500,
+            )
             return
+        record_action(
+            action="lifecycle_action",
+            target=target or "system",
+            outcome="changed",
+            reason=action or "lifecycle_action",
+            before=before,
+            after={
+                "lifecycle": status_all(),
+                "target": target,
+                "action": action,
+                "result": result,
+            },
+            detail={"target": target, "action": action, "result": result},
+        )
+        self._invalidate_status_cache()
+        self._send_json(
+            {
+                "ok": True,
+                "target": target,
+                "action": action,
+                "lifecycle": _lifecycle_payload(),
+                "result": result,
+            }
+        )
 
-        self._send_json({"error": "not_found"}, status=404)
+    def _post_session(self, payload: object, path: str) -> None:
+        action = str(payload.get("action", "")).strip()
+        if action != "new":
+            self._send_json(
+                {"error": "unsupported_action", "action": action}, status=400
+            )
+            return
+        before = {"state": load_state(), "queue": summarize_queue(load_queue())}
+        state = start_new_state_session(reason="manual_new_session")
+        self._invalidate_status_cache()
+        after = {"state": load_state(), "queue": summarize_queue(load_queue())}
+        result = {"ok": True, "session": state}
+        record_action(
+            action="session",
+            target="system",
+            outcome="changed",
+            reason="new_session",
+            before=before,
+            after=after,
+            detail={
+                "session_id": state.get("session_id"),
+                "session_started_at": state.get("session_started_at"),
+            },
+        )
+        self._send_json(result)
+
+    def _post_pause(self, payload: object, path: str) -> None:
+        result = pause_active_transfer()
+        self._invalidate_status_cache()
+        self._send_json(result)
+
+    def _post_resume(self, payload: object, path: str) -> None:
+        result = resume_active_transfer()
+        self._invalidate_status_cache()
+        self._send_json(result)
+
+    def _post_aria2_options(self, payload: object, path: str) -> None:
+        if not isinstance(payload, dict) or not payload:
+            self._send_json(
+                _error_payload(
+                    "invalid_payload",
+                    "expected a JSON object with option key-value pairs",
+                ),
+                status=400,
+            )
+            return
+        options = {str(k): str(v) for k, v in payload.items()}
+        result = aria2_change_options(options)
+        if not result.get("ok", True):
+            self._send_json(result, status=400)
+            return
+        self._send_json(result)
+
+    def _post_item_files(self, payload: object, path: str) -> None:
+        item_id = path.split("/")[3]
+        select = payload.get("select") if isinstance(payload, dict) else None
+        if not isinstance(select, list) or not select:
+            self._send_json(
+                _error_payload("invalid_payload", "expected {select: [1, 3, 5]}"),
+                status=400,
+            )
+            return
+        try:
+            indices = [int(i) for i in select]
+        except (ValueError, TypeError):
+            self._send_json(
+                _error_payload(
+                    "invalid_payload", "select must be a list of integers"
+                ),
+                status=400,
+            )
+            return
+        result = select_item_files(item_id, indices)
+        if not result.get("ok", True):
+            status_code = 404 if result.get("error") == "not_found" else 400
+            self._send_json(result, status=status_code)
+            return
+        self._invalidate_status_cache()
+        self._send_json(result)
+
+    def _post_item_action(self, payload: object, path: str) -> None:
+        parts = path.split("/")
+        item_id = parts[3]
+        action = parts[4]
+        item_actions = {
+            "pause": pause_queue_item,
+            "resume": resume_queue_item,
+            "remove": remove_queue_item,
+            "retry": retry_queue_item,
+        }
+        handler = item_actions.get(action)
+        if handler is None:
+            self._send_json(
+                _error_payload("invalid_action", f"unknown item action: {action}"),
+                status=400,
+            )
+            return
+        try:
+            result = handler(item_id)
+        except Exception as exc:
+            self._send_json(_error_payload("internal_error", str(exc)), status=500)
+            return
+        if not result.get("ok", True):
+            status_code = 404 if result.get("error") == "not_found" else 400
+            self._send_json(result, status=status_code)
+            return
+        self._invalidate_status_cache()
+        self._send_json(result)
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A003
         return
