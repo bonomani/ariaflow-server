@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+import fcntl
 import json
 import os
 import re
@@ -10,14 +10,16 @@ import time
 import threading
 import urllib.request
 from dataclasses import dataclass, asdict
-import fcntl
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-
-_STORAGE_LOCK = threading.RLock()
-_STORAGE_LOCK_STATE = threading.local()
+from .storage import (
+    config_dir, queue_path, state_path, log_path, action_log_path,
+    archive_path, sessions_log_path, storage_lock_path,
+    ensure_storage, storage_locked, read_json, write_json,
+    _STORAGE_LOCK, _STORAGE_LOCK_STATE,
+)
 _BITS_PER_MEGABIT = 1_000_000.0
 _BYTES_PER_MEGABIT = 125_000.0
 _NETWORKQUALITY_MAX_RUNTIME = 8
@@ -31,98 +33,6 @@ _NETWORKQUALITY_CANDIDATES = (
 )
 
 
-def config_dir() -> Path:
-    return Path(
-        os.environ.get("ARIA_QUEUE_DIR", Path.home() / ".config" / "aria-queue")
-    )
-
-
-def queue_path() -> Path:
-    return config_dir() / "queue.json"
-
-
-def state_path() -> Path:
-    return config_dir() / "state.json"
-
-
-def log_path() -> Path:
-    return config_dir() / "aria2.log"
-
-
-def action_log_path() -> Path:
-    return config_dir() / "actions.jsonl"
-
-
-def archive_path() -> Path:
-    return config_dir() / "archive.json"
-
-
-def sessions_log_path() -> Path:
-    return config_dir() / "sessions.jsonl"
-
-
-def storage_lock_path() -> Path:
-    return config_dir() / ".storage.lock"
-
-
-def ensure_storage() -> None:
-    config_dir().mkdir(parents=True, exist_ok=True)
-
-
-@contextmanager
-def storage_locked() -> Any:
-    ensure_storage()
-    with _STORAGE_LOCK:
-        depth = getattr(_STORAGE_LOCK_STATE, "depth", 0)
-        handle = getattr(_STORAGE_LOCK_STATE, "handle", None)
-        if depth == 0 or handle is None:
-            handle = storage_lock_path().open("a+", encoding="utf-8")
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-            except Exception:
-                handle.close()
-                raise
-            _STORAGE_LOCK_STATE.handle = handle
-        _STORAGE_LOCK_STATE.depth = depth + 1
-        try:
-            yield
-        finally:
-            next_depth = getattr(_STORAGE_LOCK_STATE, "depth", 1) - 1
-            _STORAGE_LOCK_STATE.depth = next_depth
-            if next_depth == 0:
-                current = getattr(_STORAGE_LOCK_STATE, "handle", None)
-                if current is not None:
-                    fcntl.flock(current.fileno(), fcntl.LOCK_UN)
-                    current.close()
-                if hasattr(_STORAGE_LOCK_STATE, "handle"):
-                    delattr(_STORAGE_LOCK_STATE, "handle")
-                if hasattr(_STORAGE_LOCK_STATE, "depth"):
-                    delattr(_STORAGE_LOCK_STATE, "depth")
-
-
-def read_json(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        time.sleep(0.05)
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return default
-
-
-def write_json(path: Path, value: Any) -> None:
-    ensure_storage()
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    try:
-        tmp.write_text(
-            json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
-        tmp.replace(path)
-    except FileNotFoundError:
-        return
 
 
 _ACTION_LOG_MAX_LINES = 10000
@@ -530,7 +440,7 @@ def stop_background_process(port: int = 6800) -> dict[str, Any]:
     gid = state.get("active_gid")
     if gid:
         try:
-            aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+            aria2_pause(gid, port=port, timeout=5)
         except Exception:
             pass
         with storage_locked():
@@ -567,6 +477,7 @@ def stop_background_process(port: int = 6800) -> dict[str, Any]:
 ITEM_STATUSES = {
     "discovering",
     "queued",
+    "waiting",
     "downloading",
     "paused",
     "done",
@@ -671,6 +582,30 @@ def find_queue_item_by_url(url: str) -> dict[str, Any] | None:
         if item.get("url") == url and item.get("status") not in _TERMINAL_STATUSES:
             return item
     return None
+
+
+def _aria2_position_for_priority(priority: int, port: int = 6800) -> int:
+    waiting = aria2_tell_waiting(port=port)
+    items_by_gid: dict[str, dict[str, Any]] = {}
+    for item in load_queue():
+        g = item.get("gid")
+        if g:
+            items_by_gid[g] = item
+    for i, info in enumerate(waiting):
+        match = items_by_gid.get(str(info.get("gid") or ""))
+        if match and int(match.get("priority", 0)) < priority:
+            return i
+    return len(waiting)
+
+
+def _apply_aria2_priority(gid: str, priority: int, port: int = 6800) -> None:
+    if priority <= 0:
+        return
+    try:
+        pos = _aria2_position_for_priority(priority, port=port)
+        aria2_change_position(gid, pos, "POS_SET", port=port)
+    except Exception:
+        pass
 
 
 def find_queue_item_by_gid(gid: str) -> dict[str, Any] | None:
@@ -911,6 +846,7 @@ def _merge_active_status(status: str | None) -> str:
 def _queue_item_preference(item: dict[str, Any]) -> tuple[int, float, int, int]:
     status_rank = {
         "downloading": 3,
+        "waiting": 2,
         "paused": 2,
         "queued": 1,
         "done": 0,
@@ -1053,7 +989,7 @@ def reconcile_live_queue(
         state = ensure_state_session()
         items = load_queue()
         before_summary = summarize_queue(items)
-    active_infos = active_gids(port=port, timeout=timeout)
+    active_infos = aria2_tell_active(port=port, timeout=timeout)
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     changed = False
     recovered = 0
@@ -1198,7 +1134,7 @@ def reconcile_live_queue(
 
 
 def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    active = active_gids(port=port, timeout=timeout)
+    active = aria2_tell_active(port=port, timeout=timeout)
     if len(active) < 2:
         return {"changed": False, "kept": [], "paused": []}
     action = dedup_active_transfer_action()
@@ -1242,9 +1178,9 @@ def deduplicate_active_transfers(port: int = 6800, timeout: int = 5) -> dict[str
                 continue
             try:
                 if action == "remove":
-                    aria_rpc("aria2.remove", [gid], port=port, timeout=timeout)
+                    aria2_remove(gid, port=port, timeout=timeout)
                 else:
-                    aria_rpc("aria2.pause", [gid], port=port, timeout=timeout)
+                    aria2_pause(gid, port=port, timeout=timeout)
                 paused.append(gid)
                 changed = True
             except Exception:
@@ -1389,6 +1325,24 @@ def add_queue_item(
         deduplicate_active_transfers()
     except Exception:
         pass
+    if state.get("running"):
+        probe = state.get("last_bandwidth_probe") or {}
+        cap = int(probe.get("cap_bytes_per_sec", 0))
+        try:
+            gid = add_download(asdict(item), cap_bytes_per_sec=cap)
+        except Exception:
+            gid = None
+        if gid:
+            with storage_locked():
+                live_items = load_queue()
+                for it in live_items:
+                    if it.get("id") == item.id:
+                        it["gid"] = gid
+                        it["status"] = "downloading"
+                        break
+                save_queue(live_items)
+            _apply_aria2_priority(gid, priority)
+            item = QueueItem(**{**asdict(item), "gid": gid, "status": "downloading"})
     return item
 
 
@@ -1655,17 +1609,245 @@ def aria_rpc(
         raise RuntimeError(f"aria2 RPC returned non-object: {type(data).__name__}")
     if "error" in data:
         err = data["error"]
-        raise RuntimeError(f"aria2 RPC error {err.get('code')}: {err.get('message')}")
+        if isinstance(err, dict):
+            raise RuntimeError(f"aria2 RPC error {err.get('code')}: {err.get('message')}")
+        raise RuntimeError(f"aria2 RPC error: {err}")
+    if "result" not in data:
+        raise RuntimeError(f"aria2 RPC response missing 'result': {list(data.keys())}")
     return data
+
+
+# ── aria2 RPC wrappers (1:1 with aria2 JSON-RPC methods) ──────────
+
+
+def aria2_add_uri(
+    uris: list[str],
+    options: dict[str, str] | None = None,
+    position: int | None = None,
+    port: int = 6800,
+    timeout: int = 15,
+) -> str:
+    params: list[Any] = [uris]
+    if options is not None or position is not None:
+        params.append(options or {})
+    if position is not None:
+        params.append(position)
+    return aria_rpc("aria2.addUri", params, port=port, timeout=timeout)["result"]
+
+
+def aria2_add_torrent(
+    torrent_b64: str,
+    uris: list[str] | None = None,
+    options: dict[str, str] | None = None,
+    position: int | None = None,
+    port: int = 6800,
+    timeout: int = 15,
+) -> str:
+    params: list[Any] = [torrent_b64, uris or []]
+    if options is not None or position is not None:
+        params.append(options or {})
+    if position is not None:
+        params.append(position)
+    return aria_rpc("aria2.addTorrent", params, port=port, timeout=timeout)["result"]
+
+
+def aria2_add_metalink(
+    metalink_b64: str,
+    options: dict[str, str] | None = None,
+    position: int | None = None,
+    port: int = 6800,
+    timeout: int = 15,
+) -> list[str]:
+    params: list[Any] = [metalink_b64]
+    if options is not None or position is not None:
+        params.append(options or {})
+    if position is not None:
+        params.append(position)
+    return aria_rpc("aria2.addMetalink", params, port=port, timeout=timeout)["result"]
+
+
+def aria2_pause(gid: str, port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.pause", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_force_pause(gid: str, port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.forcePause", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_pause_all(port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.pauseAll", port=port, timeout=timeout)["result"]
+
+
+def aria2_force_pause_all(port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.forcePauseAll", port=port, timeout=timeout)["result"]
+
+
+def aria2_unpause(gid: str, port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.unpause", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_unpause_all(port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.unpauseAll", port=port, timeout=timeout)["result"]
+
+
+def aria2_remove(gid: str, port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.remove", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_force_remove(gid: str, port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.forceRemove", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_remove_download_result(gid: str, port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.removeDownloadResult", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_tell_status(
+    gid: str, fields: list[str] | None = None, port: int = 6800, timeout: int = 5
+) -> dict[str, Any]:
+    params: list[Any] = [gid]
+    if fields is not None:
+        params.append(fields)
+    return aria_rpc("aria2.tellStatus", params, port=port, timeout=timeout)["result"]
+
+
+def aria2_tell_active(port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
+    try:
+        result = aria_rpc("aria2.tellActive", port=port, timeout=timeout)
+        return list(result.get("result", []))
+    except Exception:
+        return []
+
+
+def aria2_tell_waiting(
+    port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5
+) -> list[dict[str, Any]]:
+    try:
+        result = aria_rpc(
+            "aria2.tellWaiting", [offset, num], port=port, timeout=timeout
+        )
+        return list(result.get("result", []))
+    except Exception:
+        return []
+
+
+def aria2_tell_stopped(
+    port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5
+) -> list[dict[str, Any]]:
+    try:
+        result = aria_rpc(
+            "aria2.tellStopped", [offset, num], port=port, timeout=timeout
+        )
+        return list(result.get("result", []))
+    except Exception:
+        return []
+
+
+def aria2_get_files(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
+    return aria_rpc("aria2.getFiles", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_get_uris(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
+    return aria_rpc("aria2.getUris", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_get_peers(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
+    return aria_rpc("aria2.getPeers", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_get_servers(gid: str, port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
+    return aria_rpc("aria2.getServers", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_get_option(gid: str, port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+    return aria_rpc("aria2.getOption", [gid], port=port, timeout=timeout)["result"]
+
+
+def aria2_change_option(
+    gid: str, options: dict[str, str], port: int = 6800, timeout: int = 5
+) -> str:
+    return aria_rpc("aria2.changeOption", [gid, options], port=port, timeout=timeout)["result"]
+
+
+def aria2_get_global_option(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+    return aria_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
+
+
+def aria2_change_global_option(
+    options: dict[str, str], port: int = 6800, timeout: int = 5
+) -> str:
+    return aria_rpc("aria2.changeGlobalOption", [options], port=port, timeout=timeout)["result"]
+
+
+def aria2_get_global_stat(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+    return aria_rpc("aria2.getGlobalStat", port=port, timeout=timeout)["result"]
+
+
+def aria2_change_position(
+    gid: str, pos: int, how: str, port: int = 6800, timeout: int = 5
+) -> int:
+    return aria_rpc("aria2.changePosition", [gid, pos, how], port=port, timeout=timeout)["result"]
+
+
+def aria2_change_uri(
+    gid: str,
+    file_index: int,
+    del_uris: list[str],
+    add_uris: list[str],
+    position: int | None = None,
+    port: int = 6800,
+    timeout: int = 5,
+) -> list[int]:
+    params: list[Any] = [gid, file_index, del_uris, add_uris]
+    if position is not None:
+        params.append(position)
+    return aria_rpc("aria2.changeUri", params, port=port, timeout=timeout)["result"]
+
+
+def aria2_purge_download_result(port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.purgeDownloadResult", port=port, timeout=timeout)["result"]
+
+
+def aria2_get_version(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+    return aria_rpc("aria2.getVersion", port=port, timeout=timeout)["result"]
+
+
+def aria2_get_session_info(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+    return aria_rpc("aria2.getSessionInfo", port=port, timeout=timeout)["result"]
+
+
+def aria2_save_session(port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.saveSession", port=port, timeout=timeout)["result"]
+
+
+def aria2_shutdown(port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.shutdown", port=port, timeout=timeout)["result"]
+
+
+def aria2_force_shutdown(port: int = 6800, timeout: int = 5) -> str:
+    return aria_rpc("aria2.forceShutdown", port=port, timeout=timeout)["result"]
+
+
+def aria2_multicall(calls: list[dict[str, Any]], port: int = 6800, timeout: int = 15) -> list[Any]:
+    return aria_rpc("system.multicall", [calls], port=port, timeout=timeout)["result"]
+
+
+def aria2_list_methods(port: int = 6800, timeout: int = 5) -> list[str]:
+    return aria_rpc("system.listMethods", port=port, timeout=timeout)["result"]
+
+
+def aria2_list_notifications(port: int = 6800, timeout: int = 5) -> list[str]:
+    return aria_rpc("system.listNotifications", port=port, timeout=timeout)["result"]
 
 
 def ensure_aria_daemon(port: int = 6800) -> None:
     try:
-        aria_rpc("aria2.getVersion", port=port)
+        aria2_get_version(port=port)
         return
     except Exception:
         pass
 
+    session_file = config_dir() / "aria2.session"
     args = [
         "aria2c",
         "--enable-rpc=true",
@@ -1676,11 +1858,15 @@ def ensure_aria_daemon(port: int = 6800) -> None:
         "--summary-interval=0",
         f"--log={log_path()}",
         "--log-level=warn",
+        f"--save-session={session_file}",
+        "--save-session-interval=30",
     ]
+    if session_file.exists():
+        args.append(f"--input-file={session_file}")
     subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(2)
     try:
-        aria_rpc("aria2.getVersion", port=port, timeout=5)
+        aria2_get_version(port=port, timeout=5)
     except Exception as exc:
         raise RuntimeError(f"aria2c failed to start on port {port}: {exc}") from exc
 
@@ -1710,15 +1896,13 @@ def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800)
         if not data_b64:
             raise RuntimeError("torrent_data mode but no torrent_data provided")
         options["pause-metadata"] = "true"
-        result = aria_rpc("aria2.addTorrent", [data_b64, [], options], port=port)
-        return result["result"]
+        return aria2_add_torrent(data_b64, uris=[], options=options, port=port)
 
     if mode == "metalink_data":
         data_b64 = item.get("metalink_data") or ""
         if not data_b64:
             raise RuntimeError("metalink_data mode but no metalink_data provided")
-        result = aria_rpc("aria2.addMetalink", [data_b64, options], port=port)
-        gids = result.get("result", [])
+        gids = aria2_add_metalink(data_b64, options=options, port=port)
         return gids[0] if isinstance(gids, list) and gids else str(gids)
 
     if mode == "mirror":
@@ -1726,29 +1910,13 @@ def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800)
         uris = list(dict.fromkeys([url] + [str(m) for m in mirrors]))
         if not uris:
             uris = [url]
-        result = aria_rpc("aria2.addUri", [uris, options], port=port)
-        return result["result"]
+        return aria2_add_uri(uris, options=options, port=port)
 
     if mode in ("torrent", "metalink", "magnet"):
         options["pause-metadata"] = "true"
 
     uris = [url]
-    result = aria_rpc("aria2.addUri", [uris, options], port=port)
-    return result["result"]
-
-
-def status(gid: str, port: int = 6800, timeout: int = 5) -> dict[str, Any]:
-    fields = [
-        "status",
-        "errorCode",
-        "errorMessage",
-        "downloadSpeed",
-        "completedLength",
-        "totalLength",
-        "files",
-    ]
-    result = aria_rpc("aria2.tellStatus", [gid, fields], port=port, timeout=timeout)
-    return result["result"]
+    return aria2_add_uri(uris, options=options, port=port)
 
 
 def get_item_files(item_id: str, port: int = 6800) -> dict[str, Any]:
@@ -1764,8 +1932,7 @@ def get_item_files(item_id: str, port: int = 6800) -> dict[str, Any]:
     if not gid:
         return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
     try:
-        result = aria_rpc("aria2.getFiles", [gid], port=port, timeout=5)
-        files = result.get("result", [])
+        files = aria2_get_files(gid, port=port, timeout=5)
     except Exception as exc:
         return {"ok": False, "error": "rpc_error", "message": str(exc)}
     return {"ok": True, "item_id": item_id, "gid": gid, "files": files}
@@ -1787,13 +1954,8 @@ def select_item_files(
         return {"ok": False, "error": "no_gid", "message": "item has no aria2 GID"}
     select_str = ",".join(str(i) for i in indices)
     try:
-        aria_rpc(
-            "aria2.changeOption",
-            [gid, {"select-file": select_str}],
-            port=port,
-            timeout=5,
-        )
-        aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+        aria2_change_option(gid, {"select-file": select_str}, port=port, timeout=5)
+        aria2_unpause(gid, port=port, timeout=5)
     except Exception as exc:
         return {"ok": False, "error": "rpc_error", "message": str(exc)}
     with storage_locked():
@@ -1814,26 +1976,6 @@ def select_item_files(
     return {"ok": True, "item_id": item_id, "gid": gid, "selected": indices}
 
 
-def active_gids(port: int = 6800, timeout: int = 5) -> list[dict[str, Any]]:
-    try:
-        result = aria_rpc("aria2.tellActive", port=port, timeout=timeout)
-        return list(result.get("result", []))
-    except Exception:
-        return []
-
-
-def queued_gids(
-    port: int = 6800, offset: int = 0, num: int = 100, timeout: int = 5
-) -> list[dict[str, Any]]:
-    try:
-        result = aria_rpc(
-            "aria2.tellWaiting", [offset, num], port=port, timeout=timeout
-        )
-        return list(result.get("result", []))
-    except Exception:
-        return []
-
-
 def discover_active_transfer(
     port: int = 6800, timeout: int = 5
 ) -> dict[str, Any] | None:
@@ -1841,7 +1983,7 @@ def discover_active_transfer(
     state = load_state()
     if state.get("active_gid"):
         try:
-            info = status(state["active_gid"], port=port, timeout=timeout)
+            info = aria2_tell_status(state["active_gid"], port=port, timeout=timeout)
             queue_item = find_queue_item_by_gid(state["active_gid"])
             if queue_item:
                 state["active_url"] = queue_item.get("url") or state.get("active_url")
@@ -1865,7 +2007,7 @@ def discover_active_transfer(
         except Exception:
             pass
 
-    active_infos = active_gids(port=port, timeout=timeout)
+    active_infos = aria2_tell_active(port=port, timeout=timeout)
     ranked_infos = sorted(
         active_infos,
         key=lambda info: (
@@ -1909,9 +2051,7 @@ def discover_active_transfer(
 
 def aria_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
-        version = aria_rpc("aria2.getVersion", port=port, timeout=timeout)["result"][
-            "version"
-        ]
+        version = aria2_get_version(port=port, timeout=timeout)["version"]
     except Exception as exc:
         return {"reachable": False, "version": None, "error": str(exc)}
     return {"reachable": True, "version": version, "error": None}
@@ -1922,9 +2062,8 @@ def active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
 
 
 def set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
-    aria_rpc(
-        "aria2.changeGlobalOption",
-        [{"max-overall-download-limit": _aria_speed_value(cap_bytes_per_sec)}],
+    aria2_change_global_option(
+        {"max-overall-download-limit": _aria_speed_value(cap_bytes_per_sec)},
         port=port,
         timeout=timeout,
     )
@@ -1933,9 +2072,9 @@ def set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) ->
 def set_download_bandwidth(
     gid: str, cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5
 ) -> None:
-    aria_rpc(
-        "aria2.changeOption",
-        [gid, {"max-download-limit": _aria_speed_value(cap_bytes_per_sec)}],
+    aria2_change_option(
+        gid,
+        {"max-download-limit": _aria_speed_value(cap_bytes_per_sec)},
         port=port,
         timeout=timeout,
     )
@@ -1943,7 +2082,7 @@ def set_download_bandwidth(
 
 def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
-        result = aria_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
+        result = aria2_get_global_option(port=port, timeout=timeout)
         payload: dict[str, Any] = {
             "limit": result.get("max-overall-download-limit"),
             "dir": result.get("dir"),
@@ -1979,7 +2118,7 @@ def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
 
 def current_global_options(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
-        return aria_rpc("aria2.getGlobalOption", port=port, timeout=timeout)["result"]
+        return aria2_get_global_option(port=port, timeout=timeout)
     except Exception as exc:
         return {"error": str(exc)}
 
@@ -2008,7 +2147,7 @@ def change_aria2_options(options: dict[str, str], port: int = 6800) -> dict[str,
         return {"ok": False, "error": "empty_options", "message": "no options provided"}
     before = current_global_options(port=port)
     try:
-        aria_rpc("aria2.changeGlobalOption", [options], port=port, timeout=5)
+        aria2_change_global_option(options, port=port, timeout=5)
     except Exception as exc:
         return {"ok": False, "error": "rpc_error", "message": str(exc)}
     after = current_global_options(port=port)
@@ -2028,7 +2167,7 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         state = load_state()
         queue_items = load_queue()
-    active_jobs = active_gids(port=port, timeout=5)
+    active_jobs = aria2_tell_active(port=port, timeout=5)
     gids = [str(info.get("gid") or "") for info in active_jobs if info.get("gid")]
     queue_gids = [
         str(item.get("gid") or "")
@@ -2043,7 +2182,7 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
         if not gid:
             continue
         try:
-            aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+            aria2_pause(gid, port=port, timeout=5)
             paused.append(gid)
         except Exception:
             continue
@@ -2067,7 +2206,7 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
         outcome="changed",
         reason="user_pause",
         before=before,
-        after={"state": load_state(), "active": active_gids(port=port, timeout=5)},
+        after={"state": load_state(), "active": aria2_tell_active(port=port, timeout=5)},
         detail={"gids": paused, "result": payload},
     )
     return payload
@@ -2077,7 +2216,7 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
     with storage_locked():
         state = load_state()
         queue_items = load_queue()
-    active_jobs = active_gids(port=port, timeout=5)
+    active_jobs = aria2_tell_active(port=port, timeout=5)
     queued_items = [
         item
         for item in queue_items
@@ -2097,7 +2236,7 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         if not gid:
             continue
         try:
-            aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+            aria2_unpause(gid, port=port, timeout=5)
             resumed.append(gid)
         except Exception:
             continue
@@ -2124,7 +2263,7 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         outcome="changed",
         reason="user_resume",
         before=before,
-        after={"state": load_state(), "active": active_gids(port=port, timeout=5)},
+        after={"state": load_state(), "active": aria2_tell_active(port=port, timeout=5)},
         detail={"gids": resumed, "result": payload},
     )
     return payload
@@ -2159,7 +2298,7 @@ def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
         gid = str(item.get("gid") or "")
     if gid:
         try:
-            aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+            aria2_pause(gid, port=port, timeout=5)
         except Exception:
             pass
     with storage_locked():
@@ -2206,7 +2345,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
     rpc_ok = False
     if gid:
         try:
-            aria_rpc("aria2.unpause", [gid], port=port, timeout=5)
+            aria2_unpause(gid, port=port, timeout=5)
             rpc_ok = True
         except Exception:
             pass
@@ -2237,6 +2376,27 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             after={"item": dict(item)},
             detail={"item_id": item_id, "gid": gid},
         )
+    if not rpc_ok:
+        state = load_state()
+        if state.get("running"):
+            probe = state.get("last_bandwidth_probe") or {}
+            cap = int(probe.get("cap_bytes_per_sec", 0))
+            try:
+                new_gid = add_download(item, cap_bytes_per_sec=cap, port=port)
+            except Exception:
+                new_gid = None
+            if new_gid:
+                with storage_locked():
+                    live_items = load_queue()
+                    for it in live_items:
+                        if it.get("id") == item_id:
+                            it["gid"] = new_gid
+                            it["status"] = "downloading"
+                            break
+                    save_queue(live_items)
+                _apply_aria2_priority(new_gid, int(item.get("priority", 0)))
+                item["gid"] = new_gid
+                item["status"] = "downloading"
     return {"ok": True, "item": dict(item)}
 
 
@@ -2258,10 +2418,10 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
         }
     if should_remove_aria2:
         try:
-            aria_rpc("aria2.remove", [gid], port=port, timeout=5)
+            aria2_remove(gid, port=port, timeout=5)
         except Exception:
             try:
-                aria_rpc("aria2.removeDownloadResult", [gid], port=port, timeout=5)
+                aria2_remove_download_result(gid, port=port, timeout=5)
             except Exception:
                 pass
     with storage_locked():
@@ -2339,6 +2499,25 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
             after={"item": dict(item)},
             detail={"item_id": item_id},
         )
+    if state.get("running"):
+        probe = state.get("last_bandwidth_probe") or {}
+        cap = int(probe.get("cap_bytes_per_sec", 0))
+        try:
+            gid = add_download(item, cap_bytes_per_sec=cap)
+        except Exception:
+            gid = None
+        if gid:
+            with storage_locked():
+                live_items = load_queue()
+                for it in live_items:
+                    if it.get("id") == item_id:
+                        it["gid"] = gid
+                        it["status"] = "downloading"
+                        break
+                save_queue(live_items)
+            _apply_aria2_priority(gid, int(item.get("priority", 0)))
+            item["gid"] = gid
+            item["status"] = "downloading"
     return {"ok": True, "item": dict(item)}
 
 
@@ -2413,9 +2592,14 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             continue
 
     limit = max_simultaneous_downloads()
+    if limit > 0:
+        try:
+            aria2_change_global_option({"max-concurrent-downloads": str(limit)}, port=port)
+        except Exception:
+            pass
 
     def _finalize_primary_state(
-        items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]]
+        items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]], poll_ok: bool = True
     ) -> None:
         current = load_state()
         current["running"] = bool(current.get("running"))
@@ -2437,7 +2621,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             current["active_url"] = (
                 match.get("url") if match else _active_item_url(best)
             )
-        else:
+        elif poll_ok:
             current["active_gid"] = None
             current["active_url"] = None
         save_state(current)
@@ -2463,8 +2647,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
 
     def _poll_tracked_jobs(
         items_snapshot: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], bool]:
         running_infos: list[dict[str, Any]] = []
+        had_rpc_success = False
         for item in items_snapshot:
             if item.get("status") in {"done", "error"}:
                 continue
@@ -2473,7 +2658,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 continue
             before_item = dict(item)
             try:
-                info = status(gid, port=port, timeout=5)
+                info = aria2_tell_status(gid, port=port, timeout=5)
             except Exception:
                 rpc_failures = item.get("rpc_failures", 0) + 1
                 item["rpc_failures"] = rpc_failures
@@ -2485,6 +2670,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     )
                     item["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
                     item.pop("live_status", None)
+                    item.pop("gid", None)
                     record_action(
                         action="error",
                         target="queue_item",
@@ -2500,6 +2686,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         },
                     )
                 continue
+            had_rpc_success = True
             remote_status = str(info.get("status") or "")
             item["gid"] = gid
             item.pop("rpc_failures", None)
@@ -2519,7 +2706,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     set_bandwidth(cap_local, port=port)
                 continue
             if remote_status == "waiting":
-                item["status"] = "queued"
+                item["status"] = "waiting"
                 item["error_code"] = info.get("errorCode")
                 item["error_message"] = info.get("errorMessage")
                 running_infos.append(info)
@@ -2581,7 +2768,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["error_message"] = "download removed from aria2"
                 item.pop("gid", None)
                 item.pop("live_status", None)
-        return running_infos
+        return running_infos, had_rpc_success
 
     while True:
         # Phase 1: load state (locked)
@@ -2593,13 +2780,13 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
 
         # Phase 2: RPC calls (unlocked — no storage lock held)
         if stop:
-            active_infos = active_gids(port=port, timeout=5)
+            active_infos = aria2_tell_active(port=port, timeout=5)
             for info in active_infos:
                 gid = str(info.get("gid") or "")
                 if not gid:
                     continue
                 try:
-                    aria_rpc("aria2.pause", [gid], port=port, timeout=5)
+                    aria2_pause(gid, port=port, timeout=5)
                 except Exception:
                     pass
                 for item in items:
@@ -2619,31 +2806,27 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 close_state_session(reason="stop_requested")
             return items
 
-        running_infos = _poll_tracked_jobs(items)
+        running_infos, poll_ok = _poll_tracked_jobs(items)
         probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(
             port=port, state=state
         )
 
-        occupied = len(running_infos)
         current_running_infos = list(running_infos)
         if not is_paused:
-            slots = None if limit == 0 else max(limit - occupied, 0)
-            allocated = 0
             for item in sorted(
                 items, key=lambda i: int(i.get("priority", 0)), reverse=True
             ):
                 if item.get("status") != "queued":
                     continue
-                if slots is not None and allocated >= slots:
-                    break
-                gid = str(item.get("gid") or "")
-                live_status = str(item.get("live_status") or "")
-                if gid and live_status in {"active", "waiting"}:
+                if item.get("gid"):
                     continue
                 before_item = dict(item)
+                try:
+                    gid = add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
+                except Exception:
+                    continue
                 item["status"] = "downloading"
                 item.pop("live_status", None)
-                gid = add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
                 item["gid"] = gid
                 record_action(
                     action="run",
@@ -2660,15 +2843,15 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     },
                 )
                 current_running_infos.append(_queued_info(item, gid, "waiting"))
-                allocated += 1
+                _apply_aria2_priority(gid, int(item.get("priority", 0)))
 
         # Phase 3: save state (locked)
         with storage_locked():
             save_queue(items)
-            _finalize_primary_state(items, current_running_infos)
+            _finalize_primary_state(items, current_running_infos, poll_ok=poll_ok)
 
             if not any(
-                item.get("status") in {"queued", "downloading", "paused"}
+                item.get("status") in {"queued", "waiting", "downloading", "paused"}
                 for item in items
             ):
                 current = load_state()
@@ -2701,7 +2884,7 @@ def get_active_progress(port: int = 6800) -> dict[str, Any] | None:
     if not gid:
         return None
     try:
-        info = status(gid, port=port)
+        info = aria2_tell_status(gid, port=port)
     except Exception as exc:
         return {"gid": gid, "error": str(exc), "url": state.get("active_url")}
 

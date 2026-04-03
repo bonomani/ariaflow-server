@@ -209,7 +209,7 @@ class WebSmokeTests(unittest.TestCase):
                     },
                 ),
                 patch("aria_queue.webapp.active_status", return_value=None),
-                patch("aria_queue.webapp.active_gids", return_value=[]),
+                patch("aria_queue.webapp.aria2_tell_active", return_value=[]),
             ):
                 server = serve(host="127.0.0.1", port=0)
                 port = server.server_address[1]

@@ -120,3 +120,18 @@ error → cancelled       user removes (archived)
 - **Daemon state**: not persisted, probed at runtime via RPC
 
 Lock mechanism: `fcntl.LOCK_EX` on `.storage.lock` + thread-level `RLock`
+
+## 6. aria2 RPC Bridge (Axis 3 ↔ Axis 4)
+
+Job state transitions that involve aria2 are mediated by 36 `aria2_*` wrapper functions in `core.py`, providing 1:1 coverage of the aria2 1.37.0 JSON-RPC interface.
+
+| Job transition | aria2 RPC wrapper |
+|---|---|
+| queued → downloading | `aria2_add_uri`, `aria2_add_torrent`, or `aria2_add_metalink` |
+| downloading → paused | `aria2_pause(gid)` |
+| paused → downloading | `aria2_unpause(gid)` |
+| downloading → done/error/stopped | polled via `aria2_tell_status(gid)` |
+| any → cancelled | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` |
+| daemon probe | `aria2_get_version()` |
+
+Full wrapper reference: [`../ARIA2_RPC_WRAPPERS.md`](../ARIA2_RPC_WRAPPERS.md)

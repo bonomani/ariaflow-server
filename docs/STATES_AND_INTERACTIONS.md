@@ -1,0 +1,536 @@
+# States, Transitions, and Interactions — ariaflow Scheduler & aria2
+
+**aria2 version supported:** 1.37.0 (JSON-RPC interface)
+
+**Design rule:** All aria2 RPC methods listed below MUST have a corresponding `aria2_*` wrapper function in `core.py`, even if not currently used by the scheduler. This ensures the full aria2 API surface is available for future features and external consumers.
+
+**See also:** [ARIA2_RPC_WRAPPERS.md](./ARIA2_RPC_WRAPPERS.md) — auto-generated reference of all 36 wrapper functions (regenerate with `python scripts/gen_rpc_docs.py`).
+
+## Section 1: aria2 — States, Transitions, and RPC Commands
+
+aria2 is an external download daemon. ariaflow communicates with it via JSON-RPC on port 6800.
+
+### 1.1 aria2 Download States (6)
+
+| Status | Type | Description |
+|---|---|---|
+| `waiting` | Queued | Queued in aria2, waiting for a concurrent download slot |
+| `active` | Live | Currently downloading/uploading data |
+| `paused` | Suspended | Paused by user; will not start until unpaused |
+| `complete` | Terminal | Download finished successfully |
+| `error` | Terminal | Download failed |
+| `removed` | Terminal | Removed from aria2 via `remove`/`forceRemove` |
+
+Terminal states (`complete`, `error`, `removed`) appear in `tellStopped()` and can be purged from memory.
+
+### 1.2 aria2 State Transitions
+
+```
+                     addUri / addTorrent / addMetalink
+                                │
+                   ┌────────────▼────────────┐
+                   │        waiting          │
+                   └──┬──────────────────┬───┘
+                      │                  │
+              (slot available)     pause / forcePause
+                      │                  │
+                      ▼                  ▼
+                 ┌──────────┐       ┌──────────┐
+                 │  active  │◄──────│  paused  │  (unpause → waiting → active)
+                 └──┬──┬──┬─┘       └────▲─────┘
+                    │  │  │              │
+         complete   │  │  │ error   pause / forcePause
+                    │  │  │              │
+                    │  │  └──────────────┘
+                    ▼  ▼
+             ┌──────────┐  ┌─────────┐
+             │ complete │  │  error  │
+             └──────────┘  └─────────┘
+
+         remove / forceRemove (from any non-terminal) → removed
+```
+
+| From | To | Trigger | aria2 RPC Command |
+|---|---|---|---|
+| _(new)_ | `waiting` | Add download | `aria2.addUri`, `aria2.addTorrent`, `aria2.addMetalink` |
+| _(new)_ | `paused` | Add with `--pause=true` | `aria2.addUri` (option `pause=true`) |
+| `waiting` | `active` | Slot available | Automatic (respects `max-concurrent-downloads`) |
+| `active` | `paused` | User pauses | `aria2.pause(gid)` or `aria2.forcePause(gid)` |
+| `waiting` | `paused` | User pauses | `aria2.pause(gid)` or `aria2.forcePause(gid)` |
+| `paused` | `waiting` | User unpauses | `aria2.unpause(gid)` |
+| `active` | `complete` | Transfer finishes | Automatic |
+| `active` | `error` | Transfer fails | Automatic |
+| `active` | `removed` | User removes | `aria2.remove(gid)` or `aria2.forceRemove(gid)` |
+| `waiting` | `removed` | User removes | `aria2.remove(gid)` or `aria2.forceRemove(gid)` |
+| `paused` | `removed` | User removes | `aria2.remove(gid)` or `aria2.forceRemove(gid)` |
+
+#### Graceful vs Force
+
+| | Graceful (`pause`, `remove`) | Force (`forcePause`, `forceRemove`) |
+|---|---|---|
+| BitTorrent tracker | Contacts tracker to unregister | Skips |
+| Cleanup | Performs all cleanup | Skips |
+| Result | Same final state | Same final state |
+| Use case | Normal operation | Immediate response needed |
+
+### 1.3 aria2 RPC Methods Reference
+
+#### Download Addition
+
+| Method | Signature | Returns |
+|---|---|---|
+| `aria2.addUri` | `([secret], uris[], [options], [position])` | GID string |
+| `aria2.addTorrent` | `([secret], torrent_base64, [uris], [options], [position])` | GID string |
+| `aria2.addMetalink` | `([secret], metalink_base64, [options], [position])` | GID[] array |
+
+#### Pause / Resume
+
+| Method | Signature | Behavior |
+|---|---|---|
+| `aria2.pause` | `([secret], gid)` | Graceful pause (contacts BT trackers) |
+| `aria2.forcePause` | `([secret], gid)` | Immediate pause |
+| `aria2.pauseAll` | `([secret])` | Pause all downloads (graceful) |
+| `aria2.forcePauseAll` | `([secret])` | Pause all downloads (immediate) |
+| `aria2.unpause` | `([secret], gid)` | Resume: paused → waiting |
+| `aria2.unpauseAll` | `([secret])` | Resume all paused downloads |
+
+#### Remove
+
+| Method | Signature | Behavior |
+|---|---|---|
+| `aria2.remove` | `([secret], gid)` | Graceful stop + remove |
+| `aria2.forceRemove` | `([secret], gid)` | Immediate remove |
+
+#### Status Query
+
+| Method | Signature | Returns |
+|---|---|---|
+| `aria2.tellStatus` | `([secret], gid, [keys])` | Status dict (gid, status, totalLength, completedLength, downloadSpeed, errorCode, errorMessage, files, ...) |
+| `aria2.tellActive` | `([secret], [keys])` | Array of status dicts |
+| `aria2.tellWaiting` | `([secret], offset, num, [keys])` | Array of status dicts |
+| `aria2.tellStopped` | `([secret], offset, num, [keys])` | Array of status dicts |
+| `aria2.getUris` | `([secret], gid)` | Array of URI objects (uri, status) |
+| `aria2.getFiles` | `([secret], gid)` | Array of file objects |
+| `aria2.getPeers` | `([secret], gid)` | Array of peer objects (BitTorrent only) |
+| `aria2.getServers` | `([secret], gid)` | Array of server objects (HTTP/FTP only) |
+
+#### Global
+
+| Method | Signature | Returns |
+|---|---|---|
+| `aria2.getGlobalStat` | `([secret])` | downloadSpeed, uploadSpeed, numActive, numWaiting, numStopped |
+| `aria2.getVersion` | `([secret])` | version, enabledFeatures |
+| `aria2.getSessionInfo` | `([secret])` | sessionId |
+
+#### Options
+
+| Method | Signature | Behavior |
+|---|---|---|
+| `aria2.changeOption` | `([secret], gid, options)` | Set per-GID options |
+| `aria2.getOption` | `([secret], gid)` | Get per-GID options |
+| `aria2.changeGlobalOption` | `([secret], options)` | Set global options (e.g. `max-overall-download-limit`) |
+| `aria2.getGlobalOption` | `([secret])` | Get global options |
+
+#### Queue Management
+
+| Method | Signature | Behavior |
+|---|---|---|
+| `aria2.changePosition` | `([secret], gid, pos, how)` | Move in queue (`POS_SET`, `POS_CUR`, `POS_END`) |
+| `aria2.changeUri` | `([secret], gid, fileIndex, delUris, addUris, [position])` | Swap URIs |
+
+#### Cleanup & Session
+
+| Method | Signature | Behavior |
+|---|---|---|
+| `aria2.purgeDownloadResult` | `([secret])` | Remove all terminal downloads from memory |
+| `aria2.removeDownloadResult` | `([secret], gid)` | Remove one terminal download from memory |
+| `aria2.saveSession` | `([secret])` | Save session to file |
+| `aria2.shutdown` | `([secret])` | Graceful shutdown |
+| `aria2.forceShutdown` | `([secret])` | Immediate shutdown |
+
+#### System
+
+| Method | Signature | Returns |
+|---|---|---|
+| `system.multicall` | `(methods[])` | Array of results — batch multiple RPC calls in one request |
+| `system.listMethods` | `()` | Array of all available RPC method names |
+| `system.listNotifications` | `()` | Array of all supported notification names |
+
+#### Notifications (WebSocket)
+
+| Notification | Trigger |
+|---|---|
+| `aria2.onDownloadStart` | Download started |
+| `aria2.onDownloadPause` | Download paused |
+| `aria2.onDownloadStop` | Download stopped (removed) |
+| `aria2.onDownloadComplete` | Download completed |
+| `aria2.onDownloadError` | Download failed |
+| `aria2.onBtDownloadComplete` | BT content complete (may still seed) |
+
+---
+
+## Section 2: ariaflow Scheduler — States and Transitions
+
+### 2.1 Scheduler States (4)
+
+```
+              POST /api/run
+              {action: start}
+                    │
+                    ▼
+    ┌───────┐    ┌──────────┐    POST /api/run
+    │ idle  │───►│ running  │    {action: stop}
+    └───┬───┘    └──┬───┬───┘────────────┐
+        ▲           │   │                ▼
+        │     POST  │   │ all items   ┌──────────────┐
+        │   /api/   │   │ terminal    │stop_requested│
+        │   pause   │   │             └──────┬───────┘
+        │           ▼   │                    │ drain
+        │     ┌────────┐│                    │ complete
+        │     │ paused ││                    │
+        │     └───┬────┘│                    │
+        │  POST   │     │                    │
+        │  /api/  │     │                    │
+        │  resume │     │                    │
+        │         ▼     ▼                    │
+        └─────────────────────────────────────┘
+                   (back to idle)
+```
+
+| State | `running` | `paused` | `stop_requested` | Description |
+|---|---|---|---|---|
+| **idle** | false | false | false | Not processing. Waiting for start command |
+| **running** | true | false | false | Scheduling and polling items every 2 s |
+| **paused** | true | true | false | Loop active but skips scheduling. Active aria2 downloads paused |
+| **stop_requested** | true | — | true | Draining: pausing all active downloads, then → idle |
+
+| Transition | Trigger | What happens |
+|---|---|---|
+| idle → running | `POST /api/run {action: start}` | Spawns daemon thread running `process_queue()` |
+| running → paused | `POST /api/pause` | `aria2.pause(gid)` on all active GIDs; `state.paused = true` |
+| paused → running | `POST /api/resume` | `aria2.unpause(gid)` on all paused GIDs; `state.paused = false` |
+| running → stop_requested | `POST /api/run {action: stop}` | `state.stop_requested = true` |
+| stop_requested → idle | Automatic | Loop pauses all GIDs, closes session, clears flags |
+| running → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
+| paused → idle | Automatic | All queue items reached terminal status (`queue_complete`) |
+
+### 2.2 Queue Model
+
+#### Current Architecture — Two-Level Queue
+
+ariaflow currently maintains its own queue on top of aria2's queue:
+
+1. **ariaflow queue** (`queue.json`): items in `queued` status waiting to be submitted to aria2. ariaflow gates submission via `max_simultaneous_downloads`.
+2. **aria2 queue**: items submitted to aria2 (`active` or `waiting`). aria2 manages its own concurrency via `--max-concurrent-downloads`.
+
+This creates a "queue of queues" — ariaflow holds items back, then feeds them to aria2 which also queues them. Concurrency is controlled at two levels, priority ordering is duplicated, and state mapping between the two queues adds complexity (e.g. aria2 `waiting` maps back to ariaflow `queued` but still counts as a slot).
+
+```
+CURRENT:
+    ariaflow queue              aria2 queue                    post-completion
+    (queue.json)                (aria2 RPC)
+    ──────────────────    ────────────────────────────────    ──────────────
+
+    ┌─────────────┐
+    │ discovering │
+    └──────┬──────┘
+           ▼
+    ┌──────────┐  slot    ┌──────────┐  slot    ┌────────┐    ┌──────┐
+    │  queued  │ ───────► │ waiting  │ ───────► │ active │ ─► │ done │
+    └──────────┘ avail.   └──────────┘ avail.   └────────┘    └──────┘
+    ariaflow              aria2                  aria2         ariaflow
+    controls              controls
+```
+
+**Problems with current model:**
+- Two concurrency controls: ariaflow `max_simultaneous_downloads` AND aria2 `--max-concurrent-downloads`
+- Priority managed by ariaflow before submission, but aria2 has its own queue order (`aria2_change_position`)
+- aria2 `waiting` status mapped back to ariaflow `queued` is confusing — same name, different meaning
+- Reconciliation needed on restart to match ariaflow's queue.json with aria2's live state
+
+#### Goal Architecture — Single Queue (aria2 is the queue)
+
+The target design eliminates the double queue. ariaflow becomes a thin wrapper:
+
+1. **Pre-submission** (ariaflow only): mode detection, validation, bandwidth probing — happens instantly
+2. **Submit immediately to aria2**: all items go to aria2 as soon as pre-submission completes. aria2 owns the queue.
+3. **aria2 is the queue**: concurrency via `--max-concurrent-downloads`, priority via `aria2_change_position`, pause/resume via `aria2_pause`/`aria2_unpause`
+4. **Post-completion** (ariaflow only): post-action execution after aria2 reports `complete`
+
+```
+GOAL:
+    ariaflow                     aria2 IS the queue                 ariaflow
+    pre-submission               (single source of truth)           post-completion
+    ──────────────    ──────────────────────────────────────────    ──────────────
+
+    ┌─────────────┐    ┌──────────┐    ┌────────┐                   ┌──────┐
+    │ discovering │──► │ waiting  │──► │ active │ ────────────────► │ done │
+    └─────────────┘    └──────────┘    └────────┘                   └──────┘
+    instant             aria2 owns     aria2 owns                   post_action()
+    addUri immediately  the queue      the transfer
+```
+
+**Key changes from current to goal:**
+
+| Aspect | Current | Goal |
+|---|---|---|
+| Queue owner | ariaflow (`queue.json`) + aria2 | aria2 only |
+| `queued` status | Item waiting in ariaflow for submission | Eliminated — items go directly to aria2 `waiting` |
+| Concurrency | `max_simultaneous_downloads` (ariaflow) + `--max-concurrent-downloads` (aria2) | `--max-concurrent-downloads` (aria2 only), set via `aria2_change_global_option` |
+| Priority | ariaflow sorts before submission | `aria2_change_position` to reorder aria2's queue |
+| Pause/resume | ariaflow tracks paused state separately | `aria2_pause` / `aria2_unpause` — aria2 is authoritative |
+| State source of truth | `queue.json` (ariaflow mirrors aria2 via polling) | aria2 RPC is authoritative; `queue.json` is metadata overlay (URL, post_action_rule, session_id) |
+| Reconciliation on restart | Complex — match queue.json to aria2 live state | Simple — read aria2 state, enrich with metadata from queue.json |
+
+**What ariaflow still owns in goal architecture:**
+- Pre-submission: mode detection, validation
+- Metadata: URL origin, post_action_rule, session_id, timestamps, session_history
+- Post-completion: post_action execution
+- Bandwidth probing and `aria2_change_global_option` to apply caps
+- Session lifecycle
+- API surface: REST API, SSE events, audit logging
+
+**What ariaflow delegates to aria2 in goal architecture:**
+- Queue ordering (`aria2_change_position`)
+- Concurrency (`aria2_change_global_option({max-concurrent-downloads: N})`)
+- Download state (active, waiting, paused, complete, error, removed)
+- Pause/resume (`aria2_pause`, `aria2_unpause`, `aria2_pause_all`, `aria2_unpause_all`)
+
+**aria2 RPC methods that enable single-queue design:**
+- `aria2_add_uri` / `aria2_add_torrent` / `aria2_add_metalink` — submit immediately
+- `aria2_change_position` — reorder queue by priority
+- `aria2_change_global_option` — set `max-concurrent-downloads`
+- `aria2_tell_active` / `aria2_tell_waiting` / `aria2_tell_stopped` — read queue state
+- `aria2_pause` / `aria2_unpause` / `aria2_pause_all` / `aria2_unpause_all` — pause control
+- `aria2_force_pause` / `aria2_force_pause_all` — immediate drain
+
+### 2.3 Item States
+
+#### Current (8 states)
+
+| Status | Type | Owner | Description |
+|---|---|---|---|
+| `discovering` | Transitional | ariaflow | Auto-detecting download mode (pre-submission) |
+| `queued` | Stable | ariaflow | Waiting in ariaflow queue for submission to aria2 |
+| `downloading` | Transitional | aria2 | Active transfer (`active` in aria2) |
+| `paused` | Stable | aria2 | Transfer suspended |
+| `done` | Terminal | ariaflow | Completed — post-action runs |
+| `error` | Terminal | ariaflow | Failed (retryable) |
+| `stopped` | Terminal | ariaflow | Stopped by scheduler shutdown |
+| `cancelled` | Terminal | ariaflow | Cancelled by user, archived |
+
+#### Goal (7 states — `queued` eliminated)
+
+| Status | Type | Owner | Description |
+|---|---|---|---|
+| `discovering` | Transitional | ariaflow | Mode detection, then immediate submission to aria2 |
+| `waiting` | Stable | aria2 | In aria2's queue, not yet active (maps to aria2 `waiting`) |
+| `active` | Transitional | aria2 | Transferring data (maps to aria2 `active`) |
+| `paused` | Stable | aria2 | Suspended (maps to aria2 `paused`) |
+| `done` | Terminal | ariaflow | Completed — post-action runs |
+| `error` | Terminal | ariaflow | Failed (retryable) |
+| `cancelled` | Terminal | ariaflow | Cancelled by user, archived |
+
+**Changes:**
+- `queued` removed — items go from `discovering` directly into aria2 as `waiting`
+- `downloading` renamed to `active` — matches aria2's vocabulary
+- `stopped` merged into `cancelled` — no separate "scheduler stopped" state needed if aria2 owns the queue
+- `waiting` added — direct mirror of aria2 `waiting` (no confusing remapping)
+
+### 2.4 State Transitions
+
+#### Current transitions
+
+| From | To | Trigger | aria2 RPC | Phase |
+|---|---|---|---|---|
+| `discovering` → `queued` | Mode resolved | _(none)_ | pre-submission |
+| `queued` → `downloading` | Scheduler submits to aria2 | `aria2.addUri` / `addTorrent` / `addMetalink` | submission |
+| `downloading` → `done` | aria2 reports `complete` | _(poll via `tellStatus`)_ | post-completion |
+| `downloading` → `error` | aria2 reports `error` or 5× RPC failures | _(poll via `tellStatus`)_ | aria2-owned |
+| `downloading` → `paused` | `POST /api/item/{id}/pause` | `aria2.pause(gid)` | aria2-owned |
+| `downloading` → `stopped` | aria2 reports `removed` | _(poll via `tellStatus`)_ | aria2-owned |
+| `paused` → `downloading` | `POST /api/item/{id}/resume` (has GID) | `aria2.unpause(gid)` | aria2-owned |
+| `paused` → `queued` | `POST /api/item/{id}/resume` (no GID) | _(none — re-submitted)_ | back to pre-submission |
+| `queued`/`paused` → `cancelled` | `POST /api/item/{id}/remove` | `aria2.remove(gid)` + `removeDownloadResult(gid)` | removal |
+| `error` → `queued` | `POST /api/item/{id}/retry` | _(clears gid, error fields)_ | back to pre-submission |
+
+#### Goal transitions
+
+| From | To | Trigger | aria2 RPC |
+|---|---|---|---|
+| `discovering` → `waiting` | Mode resolved, submitted immediately | `aria2_add_uri` / `aria2_add_torrent` / `aria2_add_metalink` |
+| `waiting` → `active` | aria2 slot available | Automatic (aria2 internal) |
+| `active` → `done` | aria2 reports `complete` | _(poll via `aria2_tell_status`)_ |
+| `active` → `error` | aria2 reports `error` | _(poll via `aria2_tell_status`)_ |
+| `active` → `paused` | User pauses | `aria2_pause(gid)` |
+| `waiting` → `paused` | User pauses | `aria2_pause(gid)` |
+| `paused` → `waiting` | User resumes | `aria2_unpause(gid)` |
+| any non-terminal → `cancelled` | User removes | `aria2_remove(gid)` + `aria2_remove_download_result(gid)` |
+| `error` → `waiting` | User retries | `aria2_add_uri` (re-submit) |
+
+**Key simplification:** no `queued` holding state, no slot-gating in ariaflow, no `stopped` state. aria2 manages the full download lifecycle.
+
+### 2.5 Session States (3)
+
+| State | Description |
+|---|---|
+| **none** | No session exists (`session_id = null`) |
+| **open** | Session active, accepting work |
+| **closed** | Session ended with a reason |
+
+Close reasons: `stop_requested`, `queue_complete`, `closed`, `manual_new_session`.
+
+---
+
+## Section 3: Interaction — Scheduler ↔ aria2
+
+### 3.1 Startup Sequence
+
+```
+1. ensure_aria_daemon()
+   ├── aria2.getVersion()              check if running
+   │   ├── success → already running
+   │   └── fail → spawn aria2c --enable-rpc --rpc-listen-port=6800
+   │       └── aria2.getVersion()      verify started
+   │
+2. deduplicate_active_transfers()
+   ├── aria2.tellActive()              list all active GIDs
+   ├── group by URL
+   ├── keep best-progress per URL
+   └── aria2.remove(duplicate_gid)     remove duplicates
+   │
+3. reconcile_live_queue()
+   ├── aria2.tellActive()              list all active GIDs
+   ├── match to queue items by GID/URL
+   └── adopt orphaned aria2 jobs into queue
+```
+
+### 3.2 Main Loop (every 2 s)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Phase 1: Load (file-locked)                            │
+│  ├── load queue.json                                    │
+│  ├── load state.json                                    │
+│  └── check stop_requested → if true, drain and exit     │
+├─────────────────────────────────────────────────────────┤
+│  Phase 2: RPC calls (unlocked)                          │
+│  ├── _poll_tracked_jobs()                               │
+│  │   └── for each item with gid:                        │
+│  │       └── aria2.tellStatus(gid)                      │
+│  │           active   → item.status = downloading       │
+│  │           waiting  → item.status = queued            │
+│  │           paused   → item.status = paused            │
+│  │           complete → item.status = done              │
+│  │           error    → item.status = error             │
+│  │           removed  → item.status = stopped           │
+│  │           RPC fail ×5 → item.status = error          │
+│  │                                                       │
+│  ├── _apply_bandwidth_probe()                           │
+│  │   └── if interval elapsed: probe then                │
+│  │       aria2.changeGlobalOption                       │
+│  │         ({max-overall-download-limit: cap_bytes})    │
+│  │                                                       │
+│  └── Schedule new downloads (if not paused):            │
+│      └── for each queued item (priority order):         │
+│          └── aria2.addUri / addTorrent / addMetalink    │
+│          └── respect max_simultaneous_downloads slots   │
+├─────────────────────────────────────────────────────────┤
+│  Phase 3: Save (file-locked)                            │
+│  ├── save queue.json + state.json                       │
+│  └── all items terminal? → close session, exit loop     │
+├─────────────────────────────────────────────────────────┤
+│  sleep(2) → repeat                                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 3.3 Stop / Drain
+
+```
+User: POST /api/run {action: stop}
+  └── state.stop_requested = true
+
+Next loop iteration:
+  ├── aria2.tellActive()
+  ├── aria2.pause(gid)  for each active GID
+  ├── item.status = paused for each
+  ├── state.running = false, stop_requested = false, paused = false
+  ├── close_state_session(reason="stop_requested")
+  └── exit loop
+```
+
+### 3.4 Global Pause / Resume
+
+```
+POST /api/pause:
+  ├── aria2.tellActive()
+  ├── aria2.pause(gid)  for each
+  ├── state.paused = true
+  └── loop continues, skips scheduling
+
+POST /api/resume:
+  ├── aria2.unpause(gid)  for each paused item
+  ├── state.paused = false
+  └── loop resumes scheduling
+```
+
+### 3.5 Per-Item Actions → aria2 RPC Mapping
+
+| API Endpoint | aria2 RPC Calls |
+|---|---|
+| `POST /api/item/{id}/pause` | `aria2.pause(gid)` |
+| `POST /api/item/{id}/resume` | `aria2.unpause(gid)` (or none if no GID) |
+| `POST /api/item/{id}/remove` | `aria2.remove(gid)` then `aria2.removeDownloadResult(gid)` |
+| `POST /api/item/{id}/retry` | _(none — clears GID, re-queues for scheduling)_ |
+
+### 3.6 Download Mode → aria2 RPC
+
+| Mode | Detection | RPC Method | Extra Options |
+|---|---|---|---|
+| `http` | Default | `aria2.addUri([url])` | max-download-limit, allow-overwrite, continue |
+| `magnet` | `magnet:` prefix | `aria2.addUri([url])` | + pause-metadata=true |
+| `torrent` | `.torrent` extension | `aria2.addUri([url])` | + pause-metadata=true |
+| `metalink` | `.metalink`/`.meta4` | `aria2.addUri([url])` | + pause-metadata=true |
+| `mirror` | Multiple URLs | `aria2.addUri([url1, url2, ...])` | + pause-metadata=true |
+| `torrent_data` | Base64 .torrent | `aria2.addTorrent(base64)` | pause-metadata=true |
+| `metalink_data` | Base64 metalink | `aria2.addMetalink(base64)` | Returns GID[] |
+
+### 3.7 Bandwidth Control
+
+```
+Automatic every bandwidth_probe_interval_seconds (default 180s)
+  or manual via POST /api/bandwidth/probe:
+
+  ├── probe_bandwidth()
+  │   └── macOS: networkQuality -u -c -s -M 8  (timeout: 10s, max runtime: 8s)
+  │       searches: /usr/bin/networkQuality, /usr/bin/networkquality,
+  │       /System/Library/PrivateFrameworks/.../networkQuality
+  │
+  ├── Calculate cap:
+  │   ├── down_cap = downlink × (1 - bandwidth_down_free_percent / 100)
+  │   ├── if bandwidth_down_free_absolute_mbps > 0:
+  │   │   down_cap = min(down_cap, downlink - free_absolute)
+  │   └── same logic for uplink
+  │
+  └── Apply:
+      ├── aria2.changeGlobalOption({max-overall-download-limit: cap_bytes_per_sec})
+      └── per-GID: aria2.changeOption(gid, {max-download-limit: cap_bytes_per_sec})
+
+Probe result stored in state.json as last_bandwidth_probe:
+  interface_name, downlink_mbps, uplink_mbps, down_cap_mbps, up_cap_mbps,
+  cap_mbps, cap_bytes_per_sec, responsiveness_rpm, source, reason
+```
+
+### 3.8 State File Summary
+
+All files under `~/.config/aria-queue/` (override: `ARIA_QUEUE_DIR`), accessed under fcntl file lock.
+
+| File | Content |
+|---|---|
+| `state.json` | `running`, `paused`, `stop_requested`, `session_id`, `session_started_at`, `session_last_seen_at`, `session_closed_at`, `session_closed_reason`, `active_gid`, `active_url`, `last_bandwidth_probe`, `last_bandwidth_probe_at`, `_rev` |
+| `queue.json` | `{items: [...]}` — each item has: id, url, status, mode, priority, gid, output, mirrors, torrent_data, metalink_data, session_id, timestamps, error fields, live_status, progress fields |
+| `archive.json` | Soft-deleted items (cancelled, cleaned up) |
+| `declaration.json` | UIC gates, preferences (concurrency, bandwidth, dedup policy), policies |
+| `actions.jsonl` | Audit log of all operations (auto-rotated at 512 KB) |
+| `sessions.jsonl` | Session history (appended on session close) |
+| `.storage.lock` | fcntl `LOCK_EX` + thread `RLock` for mutual exclusion |

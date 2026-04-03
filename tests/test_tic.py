@@ -290,7 +290,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch(
-                "aria_queue.core.status",
+                "aria_queue.core.aria2_tell_status",
                 return_value={
                     "status": "active",
                     "completedLength": "10",
@@ -322,7 +322,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 ],
             ),
             patch(
-                "aria_queue.core.status",
+                "aria_queue.core.aria2_tell_status",
                 return_value={
                     "status": "active",
                     "completedLength": "10",
@@ -357,7 +357,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         ]
         with (
             patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}),
-            patch("aria_queue.core.active_gids", return_value=live),
+            patch("aria_queue.core.aria2_tell_active", return_value=live),
             patch("aria_queue.core.load_queue", return_value=[queue_item]),
             patch("aria_queue.core.save_queue") as save_queue,
             patch("aria_queue.core.record_action"),
@@ -371,7 +371,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         with (
             patch("aria_queue.core.load_state", return_value={"session_id": "batch-1"}),
             patch(
-                "aria_queue.core.active_gids",
+                "aria_queue.core.aria2_tell_active",
                 return_value=[
                     {
                         "gid": "gid-9",
@@ -397,7 +397,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         with (
             patch("aria_queue.core.load_state", return_value={"session_id": "batch-2"}),
             patch(
-                "aria_queue.core.active_gids",
+                "aria_queue.core.aria2_tell_active",
                 return_value=[
                     {
                         "gid": "gid-9",
@@ -479,7 +479,7 @@ class TicAriaFlowTests(IsolatedTestCase):
 
         with (
             patch("aria_queue.core.load_state", return_value={"session_id": "batch-3"}),
-            patch("aria_queue.core.active_gids", return_value=live),
+            patch("aria_queue.core.aria2_tell_active", return_value=live),
             patch("aria_queue.core.load_queue", return_value=queue_items),
             patch("aria_queue.core.save_queue", side_effect=capture_save),
             patch("aria_queue.core.record_action") as record_action,
@@ -519,7 +519,7 @@ class TicAriaFlowTests(IsolatedTestCase):
             },
         ]
         with (
-            patch("aria_queue.core.active_gids", return_value=active),
+            patch("aria_queue.core.aria2_tell_active", return_value=active),
             patch("aria_queue.core.aria_rpc") as rpc,
         ):
             result = deduplicate_active_transfers()
@@ -551,9 +551,9 @@ class TicAriaFlowTests(IsolatedTestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.status", side_effect=RuntimeError("connection refused")
+                "aria_queue.core.aria2_tell_status", side_effect=RuntimeError("connection refused")
             ),
             patch("aria_queue.core.time.sleep", return_value=None),
         ):
@@ -588,9 +588,9 @@ class TicAriaFlowTests(IsolatedTestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth") as set_bandwidth,
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.add_download", return_value="gid-1"),
-            patch("aria_queue.core.status", return_value=complete),
+            patch("aria_queue.core.aria2_tell_status", return_value=complete),
             patch("aria_queue.core.time.sleep", return_value=None),
         ):
             result = process_queue()
@@ -631,9 +631,9 @@ class TicAriaFlowTests(IsolatedTestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.status",
+                "aria_queue.core.aria2_tell_status",
                 return_value={
                     "status": "paused",
                     "errorCode": "0",

@@ -41,9 +41,11 @@ class QueueSchedulerTests(unittest.TestCase):
                 break
         save_declaration(declaration)
 
-    def test_process_queue_starts_only_one_download_with_default_sequential_limit(
+    def test_process_queue_submits_all_queued_items_to_aria2(
         self,
     ) -> None:
+        """aria2 manages concurrency via max-concurrent-downloads;
+        ariaflow submits all queued items."""
         add_queue_item("https://example.com/one.gguf")
         add_queue_item("https://example.com/two.gguf")
 
@@ -62,14 +64,14 @@ class QueueSchedulerTests(unittest.TestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.add_download", return_value="gid-1") as add_download,
             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
         ):
             with self.assertRaisesRegex(RuntimeError, "stop loop"):
                 process_queue()
 
-        add_download.assert_called_once()
+        self.assertEqual(add_download.call_count, 2)
 
     def test_process_queue_respects_runner_paused_state_and_starts_no_new_downloads(
         self,
@@ -94,7 +96,7 @@ class QueueSchedulerTests(unittest.TestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.add_download") as add_download,
             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
         ):
@@ -142,8 +144,8 @@ class QueueSchedulerTests(unittest.TestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
-            patch("aria_queue.core.status", return_value=active_info),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
+            patch("aria_queue.core.aria2_tell_status", return_value=active_info),
             patch(
                 "aria_queue.core.add_download", return_value="gid-new"
             ) as add_download,
@@ -152,7 +154,9 @@ class QueueSchedulerTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "stop loop"):
                 process_queue()
 
-        add_download.assert_not_called()
+        # aria2 manages concurrency via max-concurrent-downloads;
+        # ariaflow submits all queued items and lets aria2 queue them
+        add_download.assert_called_once()
 
     def test_cleanup_queue_state_collapses_duplicate_nonterminal_rows(self) -> None:
         save_queue(
@@ -284,7 +288,7 @@ class QueueSchedulerTests(unittest.TestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.add_download", return_value="gid-1"),
             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
         ):

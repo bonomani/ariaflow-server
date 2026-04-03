@@ -1,147 +1,151 @@
 # ariaflow
 
-Headless queue driver for `aria2c` with:
+Headless queue driver for `aria2c`.
 
-- simple URL enqueueing
-- sequential execution by default, one download at a time
-- pre-run bandwidth probing
-- runtime bandwidth adaptation through aria2 RPC
-- pluggable post-download actions
-- UIC pre-flight checks
-- UCC structured execution output
-- TIC-style tests
-Targets:
+**Targets:** Linux, WSL, macOS  
+**Python:** >= 3.10, zero dependencies  
+**Version:** 0.1.67
 
-- Linux
-- WSL
-- macOS
+**Features:**
 
-## Architecture
+- URL enqueueing (HTTP, magnet, torrent, metalink, mirrors)
+- Sequential execution by default, configurable concurrency
+- Adaptive bandwidth control via networkQuality probing (macOS)
+- Full aria2 1.37.0 RPC coverage (36 `aria2_*` wrapper functions)
+- REST API (16 GET + 17 POST endpoints) with SSE real-time events
+- Torrent/metalink file selection via pause-metadata flow
+- UIC pre-flight gates, UCC structured execution output
+- macOS integration (Homebrew, launchd, Bonjour/mDNS)
 
-The canonical engine architecture is documented in:
-
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md)
-
-## Commands
+## Quick Start
 
 ```bash
-ariaflow add <url>
-ariaflow preflight
-ariaflow run
-ariaflow serve
-ariaflow status
-ariaflow ucc
+pip install -e .
+ariaflow serve              # start HTTP API on 127.0.0.1:8000
+ariaflow add <url>          # enqueue a download
+ariaflow run                # start the scheduler
+ariaflow status             # show queue state
 ```
 
-You can also run it as a module:
+## CLI Commands
 
-```bash
-python -m aria_queue add <url>
-```
+| Command | Description | Key flags |
+|---|---|---|
+| `ariaflow add <url>` | Enqueue a download | `--output`, `--priority`, `--mirror`, `--torrent-data`, `--metalink-data` |
+| `ariaflow run` | Start the scheduler | `--port` (aria2 RPC port, default 6800) |
+| `ariaflow serve` | Start HTTP API server | `--host` (default 127.0.0.1), `--port` (default 8000) |
+| `ariaflow status` | Show queue and scheduler state | `--json` |
+| `ariaflow preflight` | Run UIC pre-flight checks | `--json` |
+| `ariaflow ucc` | Run structured UCC execution cycle | `--port`, `--json` |
+| `ariaflow install` | Install on macOS | `--dry-run`, `--with-aria2` |
+| `ariaflow uninstall` | Remove macOS components | `--dry-run`, `--with-aria2` |
+| `ariaflow lifecycle` | Show install and service status | |
 
-## Goals
+Also: `python -m aria_queue <command>`
 
-- Prefer finishing one download before starting the next.
-- Allow operators to raise concurrency explicitly when they need it.
-- Start with a conservative bandwidth cap derived from a short probe.
-- Lower the cap when aria2 reports retries or errors.
-- Keep post-download handling policy-driven and separate from the queue scheduler.
-- Emit a structured UCC result for each run.
+## REST API
+
+Base URL: `http://127.0.0.1:8000`
+
+### GET endpoints
+
+| Endpoint | Description |
+|---|---|
+| `/api/status` | Queue items, scheduler state, summary (2s cache) |
+| `/api/scheduler` | Scheduler status |
+| `/api/bandwidth` | Current bandwidth status and probe data |
+| `/api/log?limit=120` | Action log |
+| `/api/archive?limit=100` | Archived (removed/completed) items |
+| `/api/sessions` | Session history |
+| `/api/session/stats` | Session statistics |
+| `/api/declaration` | UIC declaration (gates, preferences, policies) |
+| `/api/options` | Alias for `/api/declaration` |
+| `/api/lifecycle` | Install and service status |
+| `/api/item/{id}/files` | File list for torrent/metalink item |
+| `/api/events` | SSE event stream (real-time state changes) |
+| `/api/openapi.yaml` | OpenAPI specification |
+| `/api/docs` | Swagger UI |
+| `/api/tests` | Run test suite |
+
+### POST endpoints
+
+| Endpoint | Body | Description |
+|---|---|---|
+| `/api/add` | `{items: [{url, output?, priority?, mirrors?, torrent_data?, metalink_data?}]}` | Enqueue downloads |
+| `/api/run` | `{action: "start"\|"stop"}` | Start/stop scheduler |
+| `/api/pause` | — | Pause all active transfers |
+| `/api/resume` | — | Resume all paused transfers |
+| `/api/item/{id}/pause` | — | Pause single item |
+| `/api/item/{id}/resume` | — | Resume single item |
+| `/api/item/{id}/remove` | — | Remove item (archive) |
+| `/api/item/{id}/retry` | — | Retry failed item |
+| `/api/item/{id}/files` | `{select: [1,3,5]}` | Select torrent/metalink files |
+| `/api/preflight` | — | Run pre-flight checks |
+| `/api/ucc` | — | Execute UCC cycle |
+| `/api/bandwidth/probe` | — | Trigger bandwidth probe |
+| `/api/cleanup` | `{max_done_age_days?, max_done_count?}` | Clean up terminal items |
+| `/api/declaration` | `{...declaration}` | Save UIC declaration |
+| `/api/aria2/options` | `{options: {...}}` | Change aria2 options (safe subset) |
+| `/api/session` | `{close_reason?}` | Create new session |
+| `/api/lifecycle/action` | `{action: ...}` | Install/service action |
+
+## Design Goals
+
+- Prefer finishing one download before starting the next
+- Allow operators to raise concurrency via `max_simultaneous_downloads` preference
+- Start with a conservative bandwidth cap derived from networkQuality probe
+- Lower the cap when aria2 reports retries or errors
+- Keep post-download handling policy-driven (`post_action_rule`)
+- Emit structured UCC results for each run
 
 ## Storage
 
-Default files live under `~/.config/aria-queue/`:
+Default state files under `~/.config/aria-queue/` (override: `ARIA_QUEUE_DIR`):
 
-- `queue.json`
-- `state.json`
-- `aria2.log`
+| File | Purpose |
+|---|---|
+| `queue.json` | Download items with status, GID, timestamps |
+| `state.json` | Scheduler state, session, bandwidth probe cache |
+| `archive.json` | Soft-deleted items |
+| `declaration.json` | UIC gates, preferences, policies |
+| `actions.jsonl` | Audit log (auto-rotated at 512 KB) |
+| `sessions.jsonl` | Session history |
+| `aria2.log` | aria2 daemon log |
+| `.storage.lock` | File lock for mutual exclusion |
 
-## Post actions
+## Documentation
 
-The post-action layer is intentionally not fixed yet. The tool exposes hooks for:
+All documentation lives in [`docs/`](./docs/):
 
-- `move`
-- `rename`
-- `verify`
-- `import`
-- custom script execution
+| Document | Description |
+|---|---|
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Engine architecture, design principles, source structure |
+| [STATES_AND_INTERACTIONS.md](./docs/STATES_AND_INTERACTIONS.md) | All states, transitions, and aria2 interaction model |
+| [ARIA2_RPC_WRAPPERS.md](./docs/ARIA2_RPC_WRAPPERS.md) | Auto-generated reference of 36 `aria2_*` wrappers |
+| [FRONTEND-GUIDE.md](./docs/FRONTEND-GUIDE.md) | Frontend integration: item fields, states, modes, API usage |
+| [RELEASE.md](./docs/RELEASE.md) | Release process and tooling |
+| [GAPS.md](./docs/GAPS.md) | Feature gap analysis |
+| [governance/](./docs/governance/) | BGS, ASM, BISS, TIC governance framework |
 
-Define rules later in `config/post-actions.json`.
-
-## UIC / UCC / TIC status
-
-- UIC: minimal pre-flight gate resolution exists.
-- UCC: structured result output exists for the main execution path.
-- TIC: tests declare intent in docstring form and verify observable result shapes.
-
-This is still a minimal compliance layer, not a full framework implementation.
-
-## Homebrew
-
-The intended macOS installation path is a Homebrew tap.
-
-- `ariaflow` installs the headless scheduler
-- `ariaflow-web` installs the local frontend
-- both are meant to run on the same Mac
-
-The web UI lives in the separate `ariaflow-web` project and talks to this
-backend over the local `/api/*` HTTP surface.
-
-`ariaflow` is API-only. It exposes a small landing page at `/` to explain the
-boundary, but the dashboard routes are not hosted here.
-
-`ariaflow` depends on `aria2` as the runtime download engine and the default Homebrew
-service bootstraps the local aria2 RPC daemon automatically. `aria2-launchd`
-remains available as an optional advanced integration. `ariaflow-web` depends on
-a running `ariaflow` af-api and connects to it through `ARIAFLOW_API_URL`.
-
-The intended Brew-only happy path is:
+## Homebrew (macOS)
 
 ```bash
-brew install ariaflow-web
+brew tap bonomani/ariaflow
+brew install ariaflow-web    # installs ariaflow + web frontend
 brew services start ariaflow
 brew services start ariaflow-web
 ```
 
-The Homebrew tap formulas live in `bonomani/homebrew-ariaflow`:
+- `ariaflow` — headless scheduler + REST API
+- `ariaflow-web` — web frontend (separate repo, connects via `ARIAFLOW_API_URL`)
 
-- `Formula/ariaflow.rb`
-- `Formula/ariaflow-web.rb`
+Tap formulas in `bonomani/homebrew-ariaflow` update automatically on each release.
 
-Both source repos now update their matching Homebrew formulas automatically
-after a stable GitHub release is published.
+## Release
 
-If an asset download location changes, update the tap formula for the new asset
-instead of patching Homebrew globally.
-
-## Release Tooling
-
-The dedicated release checklist lives in [`RELEASE.md`](./RELEASE.md).
-
-The repo ships a small publish helper:
+See [`docs/RELEASE.md`](./docs/RELEASE.md).
 
 ```bash
-python3 scripts/publish.py push
+python3 scripts/publish.py plan   # preview
+python3 scripts/publish.py push   # push + auto-release
 ```
-
-Preview the steps without changing files:
-
-```bash
-python3 scripts/publish.py plan
-```
-
-That script will:
-
-- run the local test suite
-- push `main` with a `pull --rebase` retry if needed
-- optionally trigger an explicit `workflow_dispatch` release with `release --version X.Y.Z`
-- optionally print the plan first with `plan`
-
-Normal patch releases come from the GitHub Actions workflow on `main` pushes.
-Use `release --version X.Y.Z` only when you need to force an explicit release.
-
-After the push or explicit dispatch, the GitHub release workflow publishes the release and
-updates `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly.
-
-The workflow also expects a repo secret named `ARIAFLOW_TAP_TOKEN` with write
-access to `bonomani/homebrew-ariaflow` so the formula update can be pushed.

@@ -62,7 +62,7 @@ class TestRegressions(IsolatedTestCase):
                 "aria_queue.core.load_state",
                 return_value={"session_id": "new-session"},
             ),
-            patch("aria_queue.core.active_gids", return_value=live),
+            patch("aria_queue.core.aria2_tell_active", return_value=live),
             patch("aria_queue.core.load_queue", return_value=[queue_item]),
             patch("aria_queue.core.save_queue") as save_q,
             patch("aria_queue.core.record_action"),
@@ -99,7 +99,7 @@ class TestRegressions(IsolatedTestCase):
                 "aria_queue.core.load_state",
                 return_value={"session_id": "batch-1"},
             ),
-            patch("aria_queue.core.active_gids", return_value=live),
+            patch("aria_queue.core.aria2_tell_active", return_value=live),
             patch("aria_queue.core.load_queue", return_value=[queue_item]),
             patch("aria_queue.core.save_queue") as save_q,
             patch("aria_queue.core.record_action"),
@@ -134,9 +134,9 @@ class TestRegressions(IsolatedTestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.status",
+                "aria_queue.core.aria2_tell_status",
                 side_effect=RuntimeError("connection refused"),
             ),
             patch("aria_queue.core.time.sleep", return_value=None),
@@ -169,7 +169,7 @@ class TestRegressions(IsolatedTestCase):
 
         with (
             patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
         ):
             result = resume_active_transfer()
         if result.get("resumed"):
@@ -329,7 +329,7 @@ class TestRegressions(IsolatedTestCase):
             ),
             patch("aria_queue.core.current_bandwidth", return_value={}),
             patch("aria_queue.core.set_bandwidth"),
-            patch("aria_queue.core.active_gids", return_value=[]),
+            patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.time.sleep", return_value=None),
         ):
             from aria_queue.core import process_queue

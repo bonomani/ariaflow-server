@@ -19,7 +19,7 @@ from .api import (
     add_queue_item,
     bandwidth_status,
     change_aria2_options,
-    active_gids,
+    aria2_tell_active,
     active_status,
     auto_preflight_on_run,
     aria_status,
@@ -1205,7 +1205,7 @@ INDEX_HTML = """<!doctype html>
     function badgeClass(status) {
       if (["done", "converged", "ok", "complete"].includes(status)) return "badge good";
       if (["error", "failed", "missing"].includes(status)) return "badge bad";
-      if (["paused", "queued", "unchanged", "skipped"].includes(status)) return "badge warn";
+      if (["paused", "queued", "waiting", "unchanged", "skipped"].includes(status)) return "badge warn";
       return "badge";
     }
     function formatBytes(value) {
@@ -2173,7 +2173,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         active = active_status(timeout=3)
         if active:
             payload["active"] = active
-        actives = active_gids(timeout=3)
+        actives = aria2_tell_active(timeout=3)
         if actives:
             payload["actives"] = actives
         STATUS_CACHE["ts"] = now

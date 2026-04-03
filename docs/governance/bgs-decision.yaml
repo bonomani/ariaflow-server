@@ -36,7 +36,7 @@ evidence_refs:
   - ./docs/governance/asm-state-model.md        # ASM formalized state model
   - ./docs/governance/tic-oracle.md             # TIC oracle with trace targets
   - ./src/aria_queue/contracts.py               # UCC declaration + UIC gates/preferences
-  - ./ARCHITECTURE.md                           # architectural overview
+  - ./docs/ARCHITECTURE.md                      # architectural overview
   - ./tests/
 
 owner: bonomani

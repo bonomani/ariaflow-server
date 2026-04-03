@@ -1,41 +1,35 @@
 # Repository Workflow
 
-This repository is the source repo for `ariaflow`.
+Source repo for `ariaflow`. Documentation lives in [`docs/`](./docs/).
 
-Working rules:
+## Working Rules
 
-- Treat the WSL checkout as the source repo.
-- Make edits and commits in WSL.
-- Use Git to sync any companion repo or mirror.
-- Keep release state aligned across the source repo and the Homebrew tap.
+- WSL checkout is the source repo
+- Make edits and commits in WSL
+- Use Git to sync companion repos/mirrors
+- Keep release state aligned across source and Homebrew tap
 
-Release workflow:
+## Release
 
-- Make the code change in `ariaflow`.
-- Run the local test suite before tagging.
-- Prefer the helper script:
-  - `python3 scripts/publish.py push`
-- Use `plan` first if you want to preview the exact release plan.
-- If you need an explicit stable version, use:
-  - `python3 scripts/publish.py release --version X.Y.Z`
-- If you need to do it manually, commit on `main`, push `main`, and let the
-  release workflow publish the release.
-- Verify the release is `isDraft: false` and `isPrerelease: false`.
-- The release workflow only publishes stable tags and updates `bonomani/homebrew-ariaflow/Formula/ariaflow.rb` directly after publishing the release.
+```bash
+python3 scripts/publish.py plan    # preview
+python3 scripts/publish.py push    # push main + auto-release
+```
 
-Homebrew notes:
+For explicit stable version: `python3 scripts/publish.py release --version X.Y.Z`
 
-- The release workflow writes the tap formula from `scripts/homebrew_formula.py`.
-- The generated formula tracks `main` for `--HEAD`.
-- Do not leave the tap pointing at an older stable tag after a new release is published.
+See [`docs/RELEASE.md`](./docs/RELEASE.md) for full details.
 
-Verification:
+## Verification
 
-- Check the source release on GitHub.
-- Check the Homebrew formula version in the tap repo.
-- On macOS, verify with:
-  - `brew tap bonomani/ariaflow`
-  - `brew upgrade ariaflow`
-  - `ariaflow --version`
+1. Check GitHub release is published (not draft/prerelease)
+2. Check Homebrew formula version in tap repo
+3. On macOS: `brew tap bonomani/ariaflow && brew upgrade ariaflow && ariaflow --version`
+
+## Homebrew Notes
+
+- Release workflow writes tap formula from `scripts/homebrew_formula.py`
+- Generated formula tracks `main` for `--HEAD`
+- Don't leave the tap pointing at an older tag after a new release
 
 If this file conflicts with a direct user instruction, follow the user instruction.
