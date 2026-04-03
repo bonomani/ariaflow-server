@@ -1,0 +1,438 @@
+from __future__ import annotations
+
+import time
+import threading
+from typing import Any
+
+
+def _core() -> Any:
+    """Lazy import to allow patching through aria_queue.core."""
+    from . import core
+    return core
+
+
+def start_background_process(port: int = 6800) -> dict[str, Any]:
+    core = _core()
+    with core.storage_locked():
+        state = core.ensure_state_session()
+        if state.get("running"):
+            return {"started": False, "reason": "already_running"}
+
+        state["stop_requested"] = False
+        state["running"] = True
+        state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        core.save_state(state)
+
+    def _scheduler() -> None:
+        try:
+            core.process_queue(port=port)
+        except Exception as exc:
+            current = core.load_state()
+            current["last_error"] = str(exc)
+            current["running"] = False
+            current["active_gid"] = None
+            current["active_url"] = None
+            core.save_state(current)
+        finally:
+            current = core.load_state()
+            current["running"] = False
+            current["stop_requested"] = False
+            current["active_gid"] = None
+            current["active_url"] = None
+            core.save_state(current)
+
+    thread = threading.Thread(target=_scheduler, daemon=True)
+    thread.start()
+    return {"started": True, "reason": "background"}
+
+
+def stop_background_process(port: int = 6800) -> dict[str, Any]:
+    core = _core()
+    with core.storage_locked():
+        state = core.load_state()
+        if not state.get("running"):
+            state["stop_requested"] = False
+            core.save_state(state)
+            return {"stopped": False, "reason": "not_running"}
+
+        before = {"state": dict(state), "queue": core.summarize_queue(core.load_queue())}
+        state["stop_requested"] = True
+        core.save_state(state)
+
+    gid = state.get("active_gid")
+    if gid:
+        try:
+            core.aria2_pause(gid, port=port, timeout=5)
+        except Exception:
+            pass
+        with core.storage_locked():
+            items = core.load_queue()
+            for current in items:
+                if current.get("gid") == gid:
+                    current["status"] = "paused"
+                    current["live_status"] = "paused"
+                    break
+            core.save_queue(items)
+    core.close_state_session(reason="stop_requested")
+    after = {"state": core.load_state(), "queue": core.summarize_queue(core.load_queue())}
+    core.record_action(
+        action="stop",
+        target="queue",
+        outcome="changed",
+        reason="user_stop",
+        before=before,
+        after=after,
+        detail={"gid": gid, "paused": bool(gid)},
+    )
+    return {"stopped": True, "reason": "stopping"}
+
+
+def process_queue(port: int = 6800) -> list[dict[str, Any]]:
+    core = _core()
+    core.ensure_storage()
+    core.ensure_state_session()
+    try:
+        core.cleanup_queue_state()
+    except Exception:
+        pass
+    core.ensure_aria_daemon(port=port)
+    try:
+        core.deduplicate_active_transfers(port=port)
+    except Exception:
+        pass
+    try:
+        core.reconcile_live_queue(port=port, timeout=5, adopt_missing=True)
+    except Exception:
+        pass
+    with core.storage_locked():
+        state = core.load_state()
+        probe, cap_mbps, cap_bytes_per_sec = core._apply_bandwidth_probe(
+            port=port, state=state, force=True
+        )
+        items = core.load_queue()
+        state["running"] = True
+        state["stop_requested"] = False
+        state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        core.save_state(state)
+    for item in items:
+        gid = str(item.get("gid") or "")
+        if not gid:
+            continue
+        try:
+            core.set_download_bandwidth(gid, cap_bytes_per_sec, port=port)
+        except Exception:
+            continue
+
+    limit = core.max_simultaneous_downloads()
+    if limit > 0:
+        try:
+            core.aria2_change_global_option({"max-concurrent-downloads": str(limit)}, port=port)
+        except Exception:
+            pass
+
+    def _finalize_primary_state(
+        items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]], poll_ok: bool = True
+    ) -> None:
+        current = core.load_state()
+        current["running"] = bool(current.get("running"))
+        current["paused"] = bool(current.get("paused"))
+        current["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        if active_infos:
+            best = sorted(
+                active_infos,
+                key=lambda info: (
+                    float(info.get("completedLength") or 0)
+                    / max(float(info.get("totalLength") or 1), 1.0),
+                    float(info.get("completedLength") or 0),
+                    float(info.get("downloadSpeed") or 0),
+                ),
+                reverse=True,
+            )[0]
+            current["active_gid"] = best.get("gid")
+            match = core._queue_item_for_active_info(best, items_snapshot)
+            current["active_url"] = (
+                match.get("url") if match else core._active_item_url(best)
+            )
+        elif poll_ok:
+            current["active_gid"] = None
+            current["active_url"] = None
+        core.save_state(current)
+
+    def _apply_transfer_fields(item: dict[str, Any], info: dict[str, Any]) -> None:
+        for key in ("downloadSpeed", "completedLength", "totalLength", "files"):
+            if key in info:
+                item[key] = info.get(key)
+
+    def _queued_info(
+        item: dict[str, Any], gid: str, status_name: str
+    ) -> dict[str, Any]:
+        return {
+            "gid": gid,
+            "status": status_name,
+            "completedLength": str(item.get("completedLength") or "0"),
+            "totalLength": str(item.get("totalLength") or "0"),
+            "downloadSpeed": str(item.get("downloadSpeed") or "0"),
+            "files": [{"uris": [{"uri": item.get("url")}]}] if item.get("url") else [],
+        }
+
+    _MAX_RPC_FAILURES = 5
+
+    def _poll_tracked_jobs(
+        items_snapshot: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], bool]:
+        running_infos: list[dict[str, Any]] = []
+        had_rpc_success = False
+        for item in items_snapshot:
+            if item.get("status") in {"done", "error"}:
+                continue
+            gid = str(item.get("gid") or "")
+            if not gid:
+                continue
+            before_item = dict(item)
+            try:
+                info = core.aria2_tell_status(gid, port=port, timeout=5)
+            except Exception:
+                rpc_failures = item.get("rpc_failures", 0) + 1
+                item["rpc_failures"] = rpc_failures
+                if rpc_failures >= _MAX_RPC_FAILURES:
+                    item["status"] = "error"
+                    item["error_code"] = "rpc_unreachable"
+                    item["error_message"] = (
+                        f"aria2 RPC unreachable after {rpc_failures} consecutive attempts"
+                    )
+                    item["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                    item.pop("live_status", None)
+                    item.pop("gid", None)
+                    core.record_action(
+                        action="error",
+                        target="queue_item",
+                        outcome="failed",
+                        reason="rpc_unreachable",
+                        before={"item": before_item},
+                        after={"item": dict(item)},
+                        detail={
+                            "item_id": item.get("id"),
+                            "gid": gid,
+                            "url": item.get("url"),
+                            "rpc_failures": rpc_failures,
+                        },
+                    )
+                continue
+            had_rpc_success = True
+            remote_status = str(info.get("status") or "")
+            item["gid"] = gid
+            item.pop("rpc_failures", None)
+            if remote_status:
+                item["live_status"] = remote_status
+            _apply_transfer_fields(item, info)
+            if remote_status == "active":
+                item["status"] = "downloading"
+                item["error_code"] = info.get("errorCode")
+                item["error_message"] = info.get("errorMessage")
+                running_infos.append(info)
+                core.log_transfer_poll(gid=gid, item=item, info=info, cap_mbps=cap_mbps)
+                if info.get("errorCode") and info["errorCode"] != "0":
+                    cap_local = max(
+                        int(core._BYTES_PER_MEGABIT), int(cap_bytes_per_sec * 0.75)
+                    )
+                    core.set_bandwidth(cap_local, port=port)
+                continue
+            if remote_status == "waiting":
+                item["status"] = "waiting"
+                item["error_code"] = info.get("errorCode")
+                item["error_message"] = info.get("errorMessage")
+                running_infos.append(info)
+                continue
+            if remote_status == "paused":
+                item["status"] = "paused"
+                item["error_code"] = info.get("errorCode")
+                item["error_message"] = info.get("errorMessage")
+                continue
+            if remote_status == "complete":
+                item["status"] = "done"
+                item["error_code"] = None
+                item["error_message"] = None
+                item["completed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                item["post_action"] = core.post_action(item)
+                core.record_action(
+                    action="complete",
+                    target="queue_item",
+                    outcome="converged",
+                    reason="download_complete",
+                    before={"item": before_item},
+                    after={"item": dict(item), "post_action": item.get("post_action")},
+                    detail={
+                        "item_id": item.get("id"),
+                        "gid": gid,
+                        "url": item.get("url"),
+                        "result": item.get("post_action"),
+                    },
+                )
+                continue
+            if remote_status == "error":
+                item["status"] = "error"
+                item["error_code"] = info.get("errorCode")
+                item["error_message"] = info.get("errorMessage")
+                item["error_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                core.record_action(
+                    action="error",
+                    target="queue_item",
+                    outcome="failed",
+                    reason="download_error",
+                    before={"item": before_item},
+                    after={
+                        "item": dict(item),
+                        "error_code": item.get("error_code"),
+                        "error_message": item.get("error_message"),
+                    },
+                    detail={
+                        "item_id": item.get("id"),
+                        "gid": gid,
+                        "url": item.get("url"),
+                        "error_code": item.get("error_code"),
+                        "error_message": item.get("error_message"),
+                    },
+                )
+                continue
+            if remote_status == "removed":
+                item["status"] = "stopped"
+                item["error_code"] = "removed"
+                item["error_message"] = "download removed from aria2"
+                item.pop("gid", None)
+                item.pop("live_status", None)
+        return running_infos, had_rpc_success
+
+    while True:
+        # Phase 1: load state (locked)
+        with core.storage_locked():
+            items = core.load_queue()
+            state = core.load_state()
+            stop = state.get("stop_requested")
+            is_paused = state.get("paused")
+
+        # Phase 2: RPC calls (unlocked — no storage lock held)
+        if stop:
+            active_infos = core.aria2_tell_active(port=port, timeout=5)
+            for info in active_infos:
+                gid = str(info.get("gid") or "")
+                if not gid:
+                    continue
+                try:
+                    core.aria2_pause(gid, port=port, timeout=5)
+                except Exception:
+                    pass
+                for item in items:
+                    if str(item.get("gid") or "") == gid:
+                        item["status"] = "paused"
+                        item["live_status"] = "paused"
+                        break
+            with core.storage_locked():
+                state = core.load_state()
+                state["running"] = False
+                state["stop_requested"] = False
+                state["paused"] = False
+                state["active_gid"] = None
+                state["active_url"] = None
+                core.save_state(state)
+                core.save_queue(items)
+                core.close_state_session(reason="stop_requested")
+            return items
+
+        running_infos, poll_ok = _poll_tracked_jobs(items)
+        probe, cap_mbps, cap_bytes_per_sec = core._apply_bandwidth_probe(
+            port=port, state=state
+        )
+
+        current_running_infos = list(running_infos)
+        if not is_paused:
+            for item in sorted(
+                items, key=lambda i: int(i.get("priority", 0)), reverse=True
+            ):
+                if item.get("status") != "queued":
+                    continue
+                if item.get("gid"):
+                    continue
+                before_item = dict(item)
+                try:
+                    gid = core.add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
+                except Exception:
+                    continue
+                item["status"] = "downloading"
+                item.pop("live_status", None)
+                item["gid"] = gid
+                core.record_action(
+                    action="run",
+                    target="queue_item",
+                    outcome="changed",
+                    reason="download_started",
+                    before={"item": before_item},
+                    after={"item": dict(item), "gid": gid, "cap_mbps": cap_mbps},
+                    detail={
+                        "item_id": item.get("id"),
+                        "gid": gid,
+                        "url": item.get("url"),
+                        "cap_mbps": cap_mbps,
+                    },
+                )
+                current_running_infos.append(_queued_info(item, gid, "waiting"))
+                core._apply_aria2_priority(gid, int(item.get("priority", 0)))
+
+        # Phase 3: save state (locked)
+        with core.storage_locked():
+            core.save_queue(items)
+            _finalize_primary_state(items, current_running_infos, poll_ok=poll_ok)
+
+            if not any(
+                item.get("status") in {"queued", "waiting", "downloading", "paused"}
+                for item in items
+            ):
+                current = core.load_state()
+                current["running"] = False
+                current["stop_requested"] = False
+                current["paused"] = False
+                current["active_gid"] = None
+                current["active_url"] = None
+                core.save_state(current)
+                core.save_queue(items)
+                core.close_state_session(reason="queue_complete")
+                return items
+
+        time.sleep(2)
+
+
+def auto_preflight_on_run() -> bool:
+    from .contracts import load_declaration
+
+    declaration = load_declaration()
+    for pref in declaration.get("uic", {}).get("preferences", []):
+        if pref.get("name") == "auto_preflight_on_run":
+            return bool(pref.get("value", False))
+    return False
+
+
+def get_active_progress(port: int = 6800) -> dict[str, Any] | None:
+    core = _core()
+    state = core.load_state()
+    gid = state.get("active_gid")
+    if not gid:
+        return None
+    try:
+        info = core.aria2_tell_status(gid, port=port)
+    except Exception as exc:
+        return {"gid": gid, "error": str(exc), "url": state.get("active_url")}
+
+    total = int(info.get("totalLength") or 0)
+    completed = int(info.get("completedLength") or 0)
+    speed = int(info.get("downloadSpeed") or 0)
+    percent = round((completed / total) * 100, 2) if total else None
+    return {
+        "gid": gid,
+        "url": state.get("active_url"),
+        "status": info.get("status"),
+        "download_speed": speed,
+        "completed_length": completed,
+        "total_length": total,
+        "percent": percent,
+        "error_code": info.get("errorCode"),
+        "error_message": info.get("errorMessage"),
+    }

@@ -6,7 +6,7 @@
 
 **aria2 version:** 1.37.0  
 **Total wrappers:** 36  
-**Source:** `src/aria_queue/core.py`
+**Source:** `src/aria_queue/aria2_rpc.py`
 
 ## Summary
 
@@ -145,7 +145,7 @@
 ### `aria2_tell_status`
 
 **RPC method:** `aria2.tellStatus`  
-**Signature:** `aria2_tell_status(gid: str) -> dict[str, Any]`
+**Signature:** `aria2_tell_status(gid: str, fields: list[str] | None = None) -> dict[str, Any]`
 
 ### `aria2_tell_stopped`
 
@@ -184,7 +184,7 @@
 ### `aria2_change_position`
 
 **RPC method:** `aria2.changePosition`  
-**Signature:** `aria2_change_position(gid: str, pos: int, how: str = 'POS_SET') -> int`
+**Signature:** `aria2_change_position(gid: str, pos: int, how: str) -> int`
 
 ### `aria2_change_uri`
 
@@ -248,6 +248,4 @@
 
 **RPC method:** `system.multicall`  
 **Signature:** `aria2_multicall(calls: list[dict[str, Any]]) -> list[Any]`
-
-Batch RPC calls. Each call: {"methodName": str, "params": list}.
 

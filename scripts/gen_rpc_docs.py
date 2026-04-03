@@ -17,12 +17,13 @@ from typing import Any
 _SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(_SRC))
 
+from aria_queue import aria2_rpc as _rpc_module
 from aria_queue import core
 
 
 def _extract_rpc_method(func_name: str, source: str) -> str | None:
     """Extract the aria2/system RPC method string from function source."""
-    m = re.search(r'aria_rpc\(\s*"((aria2|system)\.\w+)"', source)
+    m = re.search(r'(?:aria_rpc|_rpc)\(\s*"((aria2|system)\.\w+)"', source)
     return m.group(1) if m else None
 
 
@@ -57,10 +58,10 @@ def _format_annotation(ann: Any) -> str:
 def collect_wrappers() -> list[dict[str, Any]]:
     """Find all aria2_* functions and extract metadata."""
     wrappers: list[dict[str, Any]] = []
-    for name in sorted(dir(core)):
+    for name in sorted(dir(_rpc_module)):
         if not name.startswith("aria2_"):
             continue
-        func = getattr(core, name)
+        func = getattr(_rpc_module, name)
         if not callable(func):
             continue
         try:
@@ -127,7 +128,7 @@ def render_markdown(wrappers: list[dict[str, Any]]) -> str:
     lines.append("")
     lines.append(f"**aria2 version:** 1.37.0  ")
     lines.append(f"**Total wrappers:** {len(wrappers)}  ")
-    lines.append(f"**Source:** `src/aria_queue/core.py`")
+    lines.append(f"**Source:** `src/aria_queue/aria2_rpc.py`")
     lines.append("")
 
     # Summary table
