@@ -337,7 +337,7 @@ def _is_metadata_url(url: str) -> bool:
     )
 
 
-def add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
+def aria2_add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
 
     options: dict[str, str] = {
         "max-download-limit": _aria_speed_value(cap_bytes_per_sec),
@@ -383,7 +383,7 @@ def aria2_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     return {"reachable": True, "version": version, "error": None}
 
 
-def set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
+def aria2_set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
     aria2_change_global_option(
         {"max-overall-download-limit": _aria_speed_value(cap_bytes_per_sec)},
         port=port,
@@ -391,7 +391,7 @@ def set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) ->
     )
 
 
-def set_download_bandwidth(
+def aria2_set_download_bandwidth(
     gid: str, cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5
 ) -> None:
     aria2_change_option(
@@ -402,7 +402,7 @@ def set_download_bandwidth(
     )
 
 
-def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+def aria2_current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
         result = aria2_get_global_option(port=port, timeout=timeout)
         payload: dict[str, Any] = {
@@ -438,7 +438,7 @@ def current_bandwidth(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     return payload
 
 
-def current_global_options(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
+def aria2_current_global_options(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     try:
         return aria2_get_global_option(port=port, timeout=timeout)
     except Exception as exc:
@@ -468,12 +468,12 @@ def aria2_change_options(options: dict[str, str], port: int = 6800) -> dict[str,
         }
     if not options:
         return {"ok": False, "error": "empty_options", "message": "no options provided"}
-    before = core.current_global_options(port=port)
+    before = core.aria2_current_global_options(port=port)
     try:
         core.aria2_change_global_option(options, port=port, timeout=5)
     except Exception as exc:
         return {"ok": False, "error": "rpc_error", "message": str(exc)}
-    after = core.current_global_options(port=port)
+    after = core.aria2_current_global_options(port=port)
     core.record_action(
         action="change_options",
         target="aria2",

@@ -132,8 +132,8 @@ class TestRegressions(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
                 "aria_queue.core.aria2_tell_status",
@@ -248,8 +248,8 @@ class TestRegressions(IsolatedTestCase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth"),
             patch("aria_queue.core.save_state") as mock_save,
             patch("aria_queue.core.record_action"),
         ):
@@ -327,8 +327,8 @@ class TestRegressions(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.time.sleep", return_value=None),
         ):
@@ -381,7 +381,7 @@ class TestRegressions(IsolatedTestCase):
     # ── Bug #16: mirror URLs not deduplicated ──
 
     def test_regression_mirror_urls_deduplicated(self) -> None:
-        from aria_queue.core import add_download
+        from aria_queue.core import aria2_add_download
 
         item = {
             "url": "https://a.com/file.bin",
@@ -393,7 +393,7 @@ class TestRegressions(IsolatedTestCase):
             ],
         }
         with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
-            add_download(item, cap_bytes_per_sec=250000)
+            aria2_add_download(item, cap_bytes_per_sec=250000)
         uris = rpc.call_args[0][1][0]
         self.assertEqual(len(uris), 2)
         self.assertEqual(uris[0], "https://a.com/file.bin")

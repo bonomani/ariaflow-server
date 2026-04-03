@@ -198,7 +198,7 @@ class WebSmokeTests(unittest.TestCase):
             )
             with (
                 patch(
-                    "aria_queue.webapp.current_bandwidth", return_value={"limit": "0"}
+                    "aria_queue.webapp.aria2_current_bandwidth", return_value={"limit": "0"}
                 ),
                 patch(
                     "aria_queue.webapp.aria2_status",
@@ -208,7 +208,7 @@ class WebSmokeTests(unittest.TestCase):
                         "error": None,
                     },
                 ),
-                patch("aria_queue.webapp.active_status", return_value=None),
+                patch("aria_queue.webapp.aria2_active_status", return_value=None),
                 patch("aria_queue.webapp.aria2_tell_active", return_value=[]),
             ):
                 server = serve(host="127.0.0.1", port=0)

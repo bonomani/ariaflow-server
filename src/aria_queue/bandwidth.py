@@ -84,7 +84,7 @@ def bandwidth_status(port: int = 6800) -> dict[str, Any]:
     config = bandwidth_config()
     state = core.load_state()
     last_probe = state.get("last_bandwidth_probe")
-    bw = core.current_bandwidth(port=port)
+    bw = core.aria2_current_bandwidth(port=port)
     result: dict[str, Any] = {
         "config": config,
         "current_limit": bw,
@@ -144,7 +144,7 @@ def manual_probe(port: int = 6800) -> dict[str, Any]:
     cap = probe.get("cap_bytes_per_sec", 0)
     if cap > 0:
         try:
-            core.set_bandwidth(cap, port=port)
+            core.aria2_set_bandwidth(cap, port=port)
         except Exception:
             pass
     core.record_action(
@@ -356,9 +356,9 @@ def _apply_bandwidth_probe(
     )
     if needs_probe:
         core.save_state(state)
-        before_bandwidth = core.current_bandwidth(port=port)
+        before_bandwidth = core.aria2_current_bandwidth(port=port)
         try:
-            core.set_bandwidth(cap_bytes_per_sec, port=port)
+            core.aria2_set_bandwidth(cap_bytes_per_sec, port=port)
         except Exception:
             pass
         core.record_action(

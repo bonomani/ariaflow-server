@@ -20,10 +20,10 @@ from .api import (
     bandwidth_status,
     aria2_change_options,
     aria2_tell_active,
-    active_status,
+    aria2_active_status,
     auto_preflight_on_run,
     aria2_status,
-    current_bandwidth,
+    aria2_current_bandwidth,
     homebrew_install_ariaflow,
     homebrew_uninstall_ariaflow,
     install_aria2_launchd,
@@ -2155,7 +2155,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
         state = load_state()
         items = load_queue()
-        bandwidth = current_bandwidth(timeout=3)
+        bandwidth = aria2_current_bandwidth(timeout=3)
         payload = {
             "items": items,
             "state": state,
@@ -2170,7 +2170,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 "pid": os.getpid(),
             },
         }
-        active = active_status(timeout=3)
+        active = aria2_active_status(timeout=3)
         if active:
             payload["active"] = active
         actives = aria2_tell_active(timeout=3)
@@ -2487,7 +2487,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             before = {"state": load_state(), "queue": summarize_queue(load_queue())}
             result = preflight()
             result["aria2"] = aria2_status()
-            result["bandwidth"] = current_bandwidth()
+            result["bandwidth"] = aria2_current_bandwidth()
             record_action(
                 action="preflight",
                 target="system",

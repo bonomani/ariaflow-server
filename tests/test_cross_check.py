@@ -448,7 +448,7 @@ class TestProbeReflectedInBandwidth(CrossCheckBase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_set_bandwidth"),
         ):
             _, probed = _req(f"{self.base}/api/bandwidth/probe", "POST")
 
@@ -632,7 +632,7 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_set_bandwidth"),
         ):
             _req(f"{self.base}/api/bandwidth/probe", "POST")
         _, log = _req(f"{self.base}/api/log?limit=5")

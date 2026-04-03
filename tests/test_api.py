@@ -436,7 +436,7 @@ class TestAria2Options(APIServerPerTestCase):
     def test_safe_option_accepted(self) -> None:
         with (
             patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.current_global_options", return_value={}),
+            patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(
                 f"{self.base}/api/aria2/options",
@@ -452,7 +452,7 @@ class TestAria2Options(APIServerPerTestCase):
     def test_multiple_safe_options(self) -> None:
         with (
             patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.current_global_options", return_value={}),
+            patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(
                 f"{self.base}/api/aria2/options",
@@ -511,7 +511,7 @@ class TestAria2Options(APIServerPerTestCase):
         }
         with (
             patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.current_global_options", return_value={}),
+            patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             code, body = _request(f"{self.base}/api/aria2/options", "POST", all_safe)
         self.assertEqual(code, 200)
@@ -557,7 +557,7 @@ class TestBandwidth(APIServerPerTestCase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_set_bandwidth"),
         ):
             _request(f"{self.base}/api/bandwidth/probe", "POST")
         code, body = _request(f"{self.base}/api/bandwidth")
@@ -580,7 +580,7 @@ class TestBandwidth(APIServerPerTestCase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_set_bandwidth"),
         ):
             code, body = _request(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)
@@ -677,7 +677,7 @@ class TestEngineControl(APIServerPerTestCase):
                 },
             ),
             patch("aria_queue.webapp.aria2_status", return_value={}),
-            patch("aria_queue.webapp.current_bandwidth", return_value={}),
+            patch("aria_queue.webapp.aria2_current_bandwidth", return_value={}),
         ):
             code, body = _request(f"{self.base}/api/preflight", "POST")
         self.assertEqual(code, 200)

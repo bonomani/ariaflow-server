@@ -119,7 +119,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         if not gid:
             continue
         try:
-            core.set_download_bandwidth(gid, cap_bytes_per_sec, port=port)
+            core.aria2_set_download_bandwidth(gid, cap_bytes_per_sec, port=port)
         except Exception:
             continue
 
@@ -241,7 +241,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     cap_local = max(
                         int(core._BYTES_PER_MEGABIT), int(cap_bytes_per_sec * 0.75)
                     )
-                    core.set_bandwidth(cap_local, port=port)
+                    core.aria2_set_bandwidth(cap_local, port=port)
                 continue
             if remote_status == "waiting":
                 item["status"] = "waiting"
@@ -360,7 +360,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     continue
                 before_item = dict(item)
                 try:
-                    gid = core.add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
+                    gid = core.aria2_add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
                 except Exception:
                     continue
                 item["status"] = "active"

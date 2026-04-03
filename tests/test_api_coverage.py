@@ -269,7 +269,7 @@ class TestPostEndpoints(APIServerTestCase):
                 },
             ),
             patch("aria_queue.webapp.aria2_status", return_value={}),
-            patch("aria_queue.webapp.current_bandwidth", return_value={}),
+            patch("aria_queue.webapp.aria2_current_bandwidth", return_value={}),
         ):
             code, body, _ = _req(f"{self.base}/api/preflight", "POST")
         self.assertEqual(code, 200)
@@ -345,7 +345,7 @@ class TestPostEndpoints(APIServerTestCase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_set_bandwidth"),
         ):
             code, body, _ = _req(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)
@@ -359,7 +359,7 @@ class TestPostEndpoints(APIServerTestCase):
     def test_post_api_aria2_options_safe(self) -> None:
         with (
             patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.current_global_options", return_value={}),
+            patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             code, body, _ = _req(
                 f"{self.base}/api/aria2/options",

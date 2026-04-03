@@ -343,7 +343,7 @@ def add_queue_item(
         probe = state.get("last_bandwidth_probe") or {}
         cap = int(probe.get("cap_bytes_per_sec", 0))
         try:
-            gid = core.add_download(asdict(item), cap_bytes_per_sec=cap)
+            gid = core.aria2_add_download(asdict(item), cap_bytes_per_sec=cap)
         except Exception:
             gid = None
         if gid:
@@ -419,7 +419,7 @@ def select_item_files(
     return {"ok": True, "item_id": item_id, "gid": gid, "selected": indices}
 
 
-def discover_active_transfer(
+def aria2_discover_active_transfer(
     port: int = 6800, timeout: int = 5
 ) -> dict[str, Any] | None:
     core = _core()
@@ -493,8 +493,8 @@ def discover_active_transfer(
     return None
 
 
-def active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
-    return discover_active_transfer(port=port, timeout=timeout)
+def aria2_active_status(port: int = 6800, timeout: int = 5) -> dict[str, Any] | None:
+    return aria2_discover_active_transfer(port=port, timeout=timeout)
 
 
 def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
@@ -710,7 +710,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             probe = state.get("last_bandwidth_probe") or {}
             cap = int(probe.get("cap_bytes_per_sec", 0))
             try:
-                new_gid = core.add_download(item, cap_bytes_per_sec=cap, port=port)
+                new_gid = core.aria2_add_download(item, cap_bytes_per_sec=cap, port=port)
             except Exception:
                 new_gid = None
             if new_gid:
@@ -833,7 +833,7 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
         probe = state.get("last_bandwidth_probe") or {}
         cap = int(probe.get("cap_bytes_per_sec", 0))
         try:
-            gid = core.add_download(item, cap_bytes_per_sec=cap)
+            gid = core.aria2_add_download(item, cap_bytes_per_sec=cap)
         except Exception:
             gid = None
         if gid:

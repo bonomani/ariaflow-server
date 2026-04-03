@@ -67,7 +67,7 @@ class TestScenarioNormalDownload(ScenarioBase):
                 },
             ),
             patch("aria_queue.webapp.aria2_status", return_value={"reachable": True}),
-            patch("aria_queue.webapp.current_bandwidth", return_value={}),
+            patch("aria_queue.webapp.aria2_current_bandwidth", return_value={}),
         ):
             _, preflight, _ = _req(f"{base}/api/preflight", "POST")
         self.assertEqual(preflight["status"], "pass")
@@ -334,7 +334,7 @@ class TestScenarioBandwidth(ScenarioBase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_set_bandwidth"),
         ):
             _, probed, _ = _req(f"{base}/api/bandwidth/probe", "POST")
 
@@ -459,7 +459,7 @@ class TestScenarioAria2Options(ScenarioBase):
         # Apply safe options
         with (
             patch("aria_queue.core.aria_rpc"),
-            patch("aria_queue.core.current_global_options", return_value={}),
+            patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             _, result, _ = _req(
                 f"{base}/api/aria2/options",

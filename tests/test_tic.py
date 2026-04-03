@@ -17,7 +17,7 @@ from aria_queue.core import (
     _should_probe_bandwidth,
     add_queue_item,
     deduplicate_active_transfers,
-    discover_active_transfer,
+    aria2_discover_active_transfer,
     load_action_log,
     load_queue,
     load_state,
@@ -242,8 +242,8 @@ class TicAriaFlowTests(IsolatedTestCase):
         with (
             patch("aria_queue.core.time.time", return_value=120.0),
             patch("aria_queue.core.probe_bandwidth") as probe_bandwidth_mock,
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock,
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth") as set_bandwidth_mock,
             patch("aria_queue.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
@@ -267,8 +267,8 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch(
                 "aria_queue.core.probe_bandwidth", return_value=fresh_probe
             ) as probe_bandwidth_mock,
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth") as set_bandwidth_mock,
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth") as set_bandwidth_mock,
             patch("aria_queue.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
@@ -299,7 +299,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
         ):
-            active = discover_active_transfer()
+            active = aria2_discover_active_transfer()
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["status"], "active")
         self.assertEqual(active["percent"], 10.0)
@@ -331,7 +331,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
         ):
-            active = discover_active_transfer()
+            active = aria2_discover_active_transfer()
         self.assertEqual(active["gid"], "gid-1")
         self.assertEqual(active["url"], "https://example.com/recovered.gguf")
 
@@ -549,8 +549,8 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
                 "aria_queue.core.aria2_tell_status", side_effect=RuntimeError("connection refused")
@@ -586,15 +586,15 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth") as set_bandwidth,
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth") as aria2_set_bandwidth,
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
-            patch("aria_queue.core.add_download", return_value="gid-1"),
+            patch("aria_queue.core.aria2_add_download", return_value="gid-1"),
             patch("aria_queue.core.aria2_tell_status", return_value=complete),
             patch("aria_queue.core.time.sleep", return_value=None),
         ):
             result = process_queue()
-        set_bandwidth.assert_called_once_with(250000, port=6800)
+        aria2_set_bandwidth.assert_called_once_with(250000, port=6800)
         self.assertEqual(result[0]["status"], "complete")
         self.assertEqual(result[0]["gid"], "gid-1")
         self.assertIn("post_action", result[0])
@@ -629,8 +629,8 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "cap_bytes_per_sec": 250000,
                 },
             ),
-            patch("aria_queue.core.current_bandwidth", return_value={}),
-            patch("aria_queue.core.set_bandwidth"),
+            patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
+            patch("aria_queue.core.aria2_set_bandwidth"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
                 "aria_queue.core.aria2_tell_status",
@@ -644,12 +644,12 @@ class TicAriaFlowTests(IsolatedTestCase):
                     "files": [],
                 },
             ),
-            patch("aria_queue.core.add_download") as add_download,
+            patch("aria_queue.core.aria2_add_download") as aria2_add_download,
             patch("aria_queue.core.time.sleep", side_effect=stop_after_one_loop),
         ):
             result = process_queue()
         # Paused item should NOT have been started
-        self.assertFalse(add_download.called)
+        self.assertFalse(aria2_add_download.called)
         # Item should still be paused
         self.assertEqual(result[0]["status"], "paused")
 
@@ -894,22 +894,22 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
         self.assertFalse(_is_metadata_url("https://example.com/file.gguf"))
 
     def test_add_download_sets_pause_metadata_for_torrent(self) -> None:
-        from aria_queue.core import add_download
+        from aria_queue.core import aria2_add_download
 
         item = {"url": "https://example.com/file.torrent", "mode": "torrent"}
         with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
-            gid = add_download(item, cap_bytes_per_sec=250000)
+            gid = aria2_add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]
         options = call_args[1][1]
         self.assertEqual(options["pause-metadata"], "true")
         self.assertEqual(gid, "gid-1")
 
     def test_add_download_no_pause_metadata_for_http(self) -> None:
-        from aria_queue.core import add_download
+        from aria_queue.core import aria2_add_download
 
         item = {"url": "https://example.com/file.zip", "mode": "http"}
         with patch("aria_queue.core.aria_rpc", return_value={"result": "gid-1"}) as rpc:
-            add_download(item, cap_bytes_per_sec=250000)
+            aria2_add_download(item, cap_bytes_per_sec=250000)
         call_args = rpc.call_args[0]
         options = call_args[1][1]
         self.assertNotIn("pause-metadata", options)
@@ -968,7 +968,7 @@ class TicTorrentAndOptionsTests(IsolatedTestCase):
 
         with (
             patch("aria_queue.core.aria_rpc") as rpc,
-            patch("aria_queue.core.current_global_options", return_value={}),
+            patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
             result = aria2_change_options({"max-concurrent-downloads": "3"})
         self.assertTrue(result["ok"])
