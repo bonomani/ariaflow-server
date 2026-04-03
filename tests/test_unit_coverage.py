@@ -385,5 +385,48 @@ class TestStopBackgroundProcess(_TempDirMixin, unittest.TestCase):
         self.assertEqual(result["reason"], "not_running")
 
 
+# ── bandwidth.py ────────────────────────────────────────────────────
+
+
+class TestBandwidthConfig(_TempDirMixin, unittest.TestCase):
+    def test_returns_dict_with_free_percent(self) -> None:
+        from aria_queue.core import bandwidth_config, ensure_storage
+
+        ensure_storage()
+        result = bandwidth_config()
+        self.assertIsInstance(result, dict)
+        self.assertIn("down_free_percent", result)
+        self.assertIn("probe_interval_seconds", result)
+
+
+class TestBandwidthStatus(_TempDirMixin, unittest.TestCase):
+    @patch("aria_queue.core.aria2_current_bandwidth", return_value={"limit": "0"})
+    def test_returns_dict_with_config_and_bandwidth(self, _mock: MagicMock) -> None:
+        from aria_queue.core import bandwidth_status, ensure_storage
+
+        ensure_storage()
+        result = bandwidth_status()
+        self.assertIsInstance(result, dict)
+        self.assertIn("config", result)
+        self.assertIn("current_limit", result)
+
+
+class TestManualProbe(_TempDirMixin, unittest.TestCase):
+    @patch("aria_queue.core.probe_bandwidth", return_value={
+        "source": "default",
+        "reason": "probe_unavailable",
+        "cap_mbps": 2,
+        "cap_bytes_per_sec": 250000,
+    })
+    @patch("aria_queue.core.aria2_set_bandwidth")
+    def test_returns_probe_result(self, _set: MagicMock, _probe: MagicMock) -> None:
+        from aria_queue.core import manual_probe, ensure_storage
+
+        ensure_storage()
+        result = manual_probe()
+        self.assertIsInstance(result, dict)
+        self.assertIn("probe", result)
+
+
 if __name__ == "__main__":
     unittest.main()

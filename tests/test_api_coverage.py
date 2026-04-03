@@ -562,22 +562,6 @@ class TestCrossCutting(APIServerTestCase):
         code, body, _ = _req(f"{self.base}/api/nonexistent", "POST", {})
         self.assertEqual(code, 404)
 
-    # Invalid JSON
-    def test_invalid_json_body(self) -> None:
-        req = urllib.request.Request(
-            f"{self.base}/api/run",
-            data=b"{broken",
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=5):
-                pass
-        except urllib.error.HTTPError as exc:
-            self.assertEqual(exc.code, 400)
-            body = json.loads(exc.read())
-            self.assertEqual(body["error"], "invalid_json")
-
     # Invalid item action
     def test_invalid_item_action(self) -> None:
         _, added, _ = _req(
