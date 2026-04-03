@@ -223,7 +223,7 @@ class TestPerItemActions(APIServerPerTestCase):
         self.assertEqual(body["error"], "invalid_state")
 
     def test_pause_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/item/fake-id/pause", "POST")
+        code, body = _request(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/pause", "POST")
         self.assertEqual(code, 404)
         self.assertEqual(body["error"], "not_found")
 
@@ -269,7 +269,7 @@ class TestPerItemActions(APIServerPerTestCase):
         rpc.assert_any_call("aria2.remove", ["gid-1"], port=6800, timeout=5)
 
     def test_remove_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/item/fake-id/remove", "POST")
+        code, body = _request(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/remove", "POST")
         self.assertEqual(code, 404)
 
     def test_double_remove_returns_404(self) -> None:
@@ -377,7 +377,7 @@ class TestFileSelection(APIServerPerTestCase):
         self.assertEqual(body["gid"], "gid-torrent")
 
     def test_get_files_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/item/fake/files")
+        code, body = _request(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/files")
         self.assertEqual(code, 404)
 
     def test_select_files(self) -> None:

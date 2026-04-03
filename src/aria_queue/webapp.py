@@ -104,6 +104,43 @@ def _error_payload(error: str, message: str, **detail: object) -> dict[str, obje
     return payload
 
 
+_ALLOWED_URL_SCHEMES = {"http", "https", "ftp", "magnet"}
+
+
+def _validate_url(url: str) -> str | None:
+    """Return error message if URL is unsafe, None if OK."""
+    if url.startswith("magnet:"):
+        return None  # magnet links have no scheme in urlparse
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "malformed URL"
+    if not parsed.scheme:
+        return "URL must include a scheme (http://, https://, ftp://, magnet:)"
+    if parsed.scheme.lower() not in _ALLOWED_URL_SCHEMES:
+        return f"URL scheme '{parsed.scheme}' not allowed (use http, https, ftp, or magnet)"
+    if parsed.scheme.lower() in {"http", "https", "ftp"} and not parsed.hostname:
+        return "URL must include a hostname"
+    return None
+
+
+def _validate_output_path(output: str) -> str | None:
+    """Return error message if output path is unsafe, None if OK."""
+    if not output:
+        return None
+    if os.path.isabs(output):
+        return "output must be a relative path, not absolute"
+    if ".." in output.split(os.sep) or ".." in output.split("/"):
+        return "output must not contain '..'"
+    return None
+
+
+def _validate_item_id(item_id: str) -> bool:
+    """Check item_id looks like a UUID."""
+    import re
+    return bool(re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", item_id))
+
+
 def _parse_add_items(
     payload: object,
 ) -> tuple[list[dict[str, str | None]] | None, dict[str, object] | None]:
@@ -126,18 +163,38 @@ def _parse_add_items(
                 f"items[{index}].url must be a non-empty string",
                 index=index,
             )
+        url_error = _validate_url(url)
+        if url_error:
+            return None, _error_payload(
+                "invalid_url",
+                f"items[{index}].url: {url_error}",
+                index=index,
+            )
         output = raw_item.get("output")
         output_value = str(output).strip() if output is not None else ""
+        output_error = _validate_output_path(output_value)
+        if output_error:
+            return None, _error_payload(
+                "invalid_output",
+                f"items[{index}].output: {output_error}",
+                index=index,
+            )
         post_action_rule = raw_item.get("post_action_rule")
         post_action_value = (
             str(post_action_rule).strip() if post_action_rule is not None else ""
         )
         mirrors_raw = raw_item.get("mirrors")
-        mirrors = (
-            [str(m).strip() for m in mirrors_raw if str(m).strip()]
-            if isinstance(mirrors_raw, list)
-            else None
-        )
+        mirrors = None
+        if isinstance(mirrors_raw, list):
+            mirrors = [str(m).strip() for m in mirrors_raw if str(m).strip()]
+            for mi, mirror_url in enumerate(mirrors):
+                mirror_error = _validate_url(mirror_url)
+                if mirror_error:
+                    return None, _error_payload(
+                        "invalid_url",
+                        f"items[{index}].mirrors[{mi}]: {mirror_error}",
+                        index=index,
+                    )
         torrent_data = raw_item.get("torrent_data")
         metalink_data = raw_item.get("metalink_data")
         priority_raw = raw_item.get("priority", 0)
@@ -698,6 +755,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def _get_item_files(self, parsed: object) -> None:
         path = urlparse(self.path).path
         item_id = path.split("/")[3]
+        if not _validate_item_id(item_id):
+            self._send_json(_error_payload("invalid_id", "item ID must be a UUID"), status=400)
+            return
         result = get_item_files(item_id)
         if not result.get("ok", True):
             status_code = 404 if result.get("error") == "not_found" else 400
@@ -1044,7 +1104,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             )
             self._invalidate_status_cache()
             self._send_json(
-                {"error": "lifecycle_action_failed", "message": str(exc)},
+                {"error": "lifecycle_action_failed", "message": "internal error"},
                 status=500,
             )
             return
@@ -1128,6 +1188,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     def _post_item_files(self, payload: object, path: str) -> None:
         item_id = path.split("/")[3]
+        if not _validate_item_id(item_id):
+            self._send_json(_error_payload("invalid_id", "item ID must be a UUID"), status=400)
+            return
         select = payload.get("select") if isinstance(payload, dict) else None
         if not isinstance(select, list) or not select:
             self._send_json(
@@ -1156,6 +1219,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def _post_item_action(self, payload: object, path: str) -> None:
         parts = path.split("/")
         item_id = parts[3]
+        if not _validate_item_id(item_id):
+            self._send_json(_error_payload("invalid_id", "item ID must be a UUID"), status=400)
+            return
         action = parts[4]
         item_actions = {
             "pause": pause_queue_item,
@@ -1173,7 +1239,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         try:
             result = handler(item_id)
         except Exception as exc:
-            self._send_json(_error_payload("internal_error", str(exc)), status=500)
+            self._send_json(_error_payload("internal_error", "internal error"), status=500)
             return
         if not result.get("ok", True):
             status_code = 404 if result.get("error") == "not_found" else 400

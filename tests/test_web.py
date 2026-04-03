@@ -307,7 +307,7 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Not found
                 try:
-                    request_json(f"{base}/api/item/nonexistent/pause", method="POST")
+                    request_json(f"{base}/api/item/00000000-0000-0000-0000-000000000000/pause", method="POST")
                     self.fail("expected 404")
                 except urllib.error.HTTPError as exc:
                     self.assertEqual(exc.code, 404)

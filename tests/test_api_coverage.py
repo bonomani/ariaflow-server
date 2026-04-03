@@ -145,7 +145,7 @@ class TestGetEndpoints(APIServerTestCase):
         self.assertEqual(len(body["files"]), 1)
 
     def test_get_api_item_files_not_found(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/item/nonexistent/files")
+        code, body, _ = _req(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/files")
         self.assertEqual(code, 404)
 
     # 9. GET /api/docs
@@ -592,7 +592,7 @@ class TestCrossCutting(APIServerTestCase):
 
     # Item not found
     def test_item_not_found(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/item/does-not-exist/pause", "POST")
+        code, body, _ = _req(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/pause", "POST")
         self.assertEqual(code, 404)
 
     # State consistency: add → status reflects it
