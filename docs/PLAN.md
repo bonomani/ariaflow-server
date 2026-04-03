@@ -10,6 +10,7 @@ This is the **single plan file** for the project. Do not create separate plan fi
 
 ### Rules
 
+0. **Task 0: clean git before starting.** Before executing any plan item, verify `git status` is clean (no uncommitted changes, no untracked files except `.claude/`). Show the output as evidence. If not clean, commit or stash first. Never start work on a dirty tree.
 1. **One plan file.** All planned work goes here. No `BUGFIX_PLAN.md`, `REFACTOR_PLAN.md`, etc.
 2. **Done → remove.** When an item is completed, delete it from this file. Git history has the record.
 3. **Declined → keep briefly.** If an item was evaluated and rejected, keep a one-liner with the reason. This prevents re-proposing the same idea.
