@@ -42,8 +42,8 @@ class WebSmokeTests(unittest.TestCase):
                 page = (
                     urllib.request.urlopen(f"{base}/", timeout=5).read().decode("utf-8")
                 )
-                self.assertIn("ariaflow API", page)
-                self.assertIn("API-only", page)
+                # / redirects to /api/docs (Swagger UI)
+                self.assertIn("Ariaflow API", page)
                 for route in ("/bandwidth", "/lifecycle", "/options", "/log"):
                     with self.assertRaises(urllib.error.HTTPError) as route_error:
                         urllib.request.urlopen(f"{base}{route}", timeout=5)

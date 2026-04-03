@@ -220,67 +220,6 @@ def _lifecycle_payload() -> dict[str, object]:
 
 
 
-API_ONLY_HTML = """<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ariaflow API</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #08111f;
-      --panel: rgba(15, 23, 42, 0.92);
-      --line: rgba(148, 163, 184, 0.18);
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #7dd3fc;
-    }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      background: linear-gradient(180deg, #050b15 0%, var(--bg) 100%);
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      padding: 24px;
-    }
-    main {
-      width: min(720px, 100%);
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 24px;
-    }
-    h1 { margin: 0 0 8px; font-size: 1.8rem; }
-    p { margin: 0 0 12px; line-height: 1.5; color: var(--muted); }
-    code {
-      color: var(--accent);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    }
-    ul { margin: 16px 0 0; padding-left: 18px; }
-    li { margin: 8px 0; }
-    a { color: var(--accent); }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>ariaflow API</h1>
-    <p>This process is the headless scheduler. It is API-only and serves JSON under <code>/api/*</code>.</p>
-    <p>The dashboard is not hosted here. Use <code>ariaflow-web</code> for the browser UI.</p>
-    <ul>
-      <li><code>GET /api/status</code></li>
-      <li><code>GET /api/log</code></li>
-      <li><code>GET /api/declaration</code></li>
-      <li><code>GET /api/lifecycle</code></li>
-      <li><code>POST /api/add</code></li>
-      <li><code>POST /api/run</code></li>
-    </ul>
-  </main>
-</body>
-</html>
-"""
 
 
 def _find_openapi_spec() -> Path | None:
@@ -558,12 +497,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         if path in {"/", "/index.html"}:
-            body = API_ONLY_HTML.encode("utf-8")
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", "/api/docs")
             self.end_headers()
-            self.wfile.write(body)
             return
         if path in {"/bandwidth", "/lifecycle", "/options", "/log"}:
             self._send_json(
