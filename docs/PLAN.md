@@ -1,40 +1,6 @@
 # Plan
 
-### [R4] OpenAPI spec version sync — 1 min
-
-**What:** Update version in openapi.yaml to match pyproject.toml
-**Where:** `src/aria_queue/openapi.yaml` line 7
-**Why:** `0.1.38` vs current `0.1.98`
-**Scope:** 1 line
-
-### [R6] CONTRIBUTING.md — 20 min
-
-**What:** Write contributor guide
-**Where:** `CONTRIBUTING.md` (root)
-**Why:** No onboarding doc for new developers
-**Scope:** ~60 lines
-
-### [R7] Pre-commit hooks — 20 min
-
-**What:** Add `.pre-commit-config.yaml` with ruff + basic checks
-**Where:** `.pre-commit-config.yaml` (root)
-**Why:** No automated code quality checks before commit
-**Scope:** ~30 lines
-
-### [R5] CI matrix — 30 min
-
-**What:** Add Python 3.10/3.11 and Windows to CI
-**Where:** `.github/workflows/release.yml`
-**Why:** Only tests Python 3.12 on Ubuntu
-**Scope:** ~50 lines YAML
-
-### [R2] Unit test coverage — 6h
-
-**What:** Add direct unit tests for 35 untested public functions
-**Where:** `tests/` (new test files)
-**Why:** Functions tested only indirectly — changes may not be caught
-**Scope:** ~400 lines across multiple test files
-**Depends on:** R4-R7 done first (clean baseline)
+No open items.
 
 ---
 
