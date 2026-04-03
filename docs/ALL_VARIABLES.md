@@ -1,58 +1,60 @@
 # All Variables — ariaflow
 
-## Item Fields (31 fields stored in queue.json)
+> Auto-generated. Regenerate: `python3 -c "..." > docs/ALL_VARIABLES.md`
 
-| Field | snake_case |
+## Item Fields (31)
+
+| Field | Convention |
 |---|---|
-| `cancelled_at` | yes |
-| `completed_at` | yes |
-| `completed_length` | yes |
-| `created_at` | yes |
-| `download_speed` | yes |
-| `error_at` | yes |
-| `error_code` | yes |
-| `error_message` | yes |
-| `gid` | yes |
-| `id` | yes |
-| `live_status` | yes |
-| `metalink_data` | yes |
-| `mirrors` | yes |
-| `mode` | yes |
-| `output` | yes |
-| `paused_at` | yes |
-| `post_action` | yes |
-| `post_action_rule` | yes |
-| `priority` | yes |
-| `recovered` | yes |
-| `recovered_at` | yes |
-| `recovery_session_id` | yes |
-| `removed_at` | yes |
-| `resumed_at` | yes |
-| `rpc_failures` | yes |
-| `session_history` | yes |
-| `session_id` | yes |
-| `status` | yes |
-| `torrent_data` | yes |
-| `total_length` | yes |
-| `url` | yes |
+| `cancelled_at` | snake_case |
+| `completed_at` | snake_case |
+| `completed_length` | snake_case |
+| `created_at` | snake_case |
+| `download_speed` | snake_case |
+| `error_at` | snake_case |
+| `error_code` | snake_case |
+| `error_message` | snake_case |
+| `gid` | snake_case |
+| `id` | snake_case |
+| `live_status` | snake_case |
+| `metalink_data` | snake_case |
+| `mirrors` | snake_case |
+| `mode` | snake_case |
+| `output` | snake_case |
+| `paused_at` | snake_case |
+| `post_action` | snake_case |
+| `post_action_rule` | snake_case |
+| `priority` | snake_case |
+| `recovered` | snake_case |
+| `recovered_at` | snake_case |
+| `recovery_session_id` | snake_case |
+| `removed_at` | snake_case |
+| `resumed_at` | snake_case |
+| `rpc_failures` | snake_case |
+| `session_history` | snake_case |
+| `session_id` | snake_case |
+| `status` | snake_case |
+| `torrent_data` | snake_case |
+| `total_length` | snake_case |
+| `url` | snake_case |
 
-## State Fields (13 fields stored in state.json)
+## State Fields (13)
 
-| Field | snake_case |
+| Field | Convention |
 |---|---|
-| `_rev` | yes |
-| `active_gid` | yes |
-| `active_url` | yes |
-| `last_bandwidth_probe` | yes |
-| `last_bandwidth_probe_at` | yes |
-| `paused` | yes |
-| `running` | yes |
-| `session_closed_at` | yes |
-| `session_closed_reason` | yes |
-| `session_id` | yes |
-| `session_last_seen_at` | yes |
-| `session_started_at` | yes |
-| `stop_requested` | yes |
+| `_rev` | snake_case |
+| `active_gid` | snake_case |
+| `active_url` | snake_case |
+| `last_bandwidth_probe` | snake_case |
+| `last_bandwidth_probe_at` | snake_case |
+| `paused` | snake_case |
+| `running` | snake_case |
+| `session_closed_at` | snake_case |
+| `session_closed_reason` | snake_case |
+| `session_id` | snake_case |
+| `session_last_seen_at` | snake_case |
+| `session_started_at` | snake_case |
+| `stop_requested` | snake_case |
 
 ## Constants (22)
 
@@ -89,7 +91,7 @@
 | `queue_ops` | `QueueItem` |
 | `webapp` | `AriaFlowHandler` |
 
-## aria2_ Functions (49)
+## aria2_ Public Functions (44)
 
 | Module | Function |
 |---|---|
@@ -137,13 +139,18 @@
 | `aria2_rpc` | `aria2_tell_waiting` |
 | `aria2_rpc` | `aria2_unpause` |
 | `aria2_rpc` | `aria2_unpause_all` |
-| `platform.launchd` | `aria2_plist_path` |
-| `platform.launchd` | `aria2_session_dir` |
-| `platform.launchd` | `aria2_status` |
-| `queue_ops` | `aria2_active_status` |
-| `queue_ops` | `aria2_discover_active_transfer` |
 
-## Public Functions (88)
+## _aria2_ Private Functions (5)
+
+| Module | Function |
+|---|---|
+| `aria2_rpc` | `_aria2_rpc` |
+| `aria2_rpc` | `_aria2_speed_value` |
+| `contracts` | `_aria2_available` |
+| `queue_ops` | `_aria2_apply_priority` |
+| `queue_ops` | `_aria2_position_for_priority` |
+
+## Public Functions (93)
 
 | Module | Function |
 |---|---|
@@ -176,10 +183,15 @@
 | `platform.launchd` | `install_aria2_launchd` |
 | `platform.launchd` | `is_macos` |
 | `platform.launchd` | `launch_agents_dir` |
+| `platform.launchd` | `launchd_aria2_plist_path` |
+| `platform.launchd` | `launchd_aria2_session_dir` |
+| `platform.launchd` | `launchd_aria2_status` |
 | `platform.launchd` | `uninstall_aria2_launchd` |
+| `queue_ops` | `active_status` |
 | `queue_ops` | `add_queue_item` |
 | `queue_ops` | `dedup_active_transfer_action` |
 | `queue_ops` | `detect_download_mode` |
+| `queue_ops` | `discover_active_transfer` |
 | `queue_ops` | `find_queue_item_by_gid` |
 | `queue_ops` | `find_queue_item_by_url` |
 | `queue_ops` | `format_bytes` |
@@ -236,16 +248,14 @@
 | `storage` | `write_json` |
 | `webapp` | `serve` |
 
-## Private Functions (47)
+## Private Functions (42)
 
 | Module | Function |
 |---|---|
-| `aria2_rpc` | `_aria_speed_value` |
 | `aria2_rpc` | `_cap_bytes_per_sec_from_mbps` |
 | `aria2_rpc` | `_cap_mbps_from_bytes_per_sec` |
 | `aria2_rpc` | `_core` |
 | `aria2_rpc` | `_is_metadata_url` |
-| `aria2_rpc` | `_rpc` |
 | `bandwidth` | `_apply_bandwidth_probe` |
 | `bandwidth` | `_apply_free_bandwidth_cap` |
 | `bandwidth` | `_coerce_float` |
@@ -255,12 +265,9 @@
 | `bandwidth` | `_parse_networkquality_output` |
 | `bandwidth` | `_should_probe_bandwidth` |
 | `bonjour` | `_dns_sd_path` |
-| `contracts` | `_aria_available` |
 | `platform.launchd` | `_launchctl_list` |
 | `platform.launchd` | `_launchctl_load` |
 | `platform.launchd` | `_launchctl_unload` |
-| `queue_ops` | `_apply_aria2_priority` |
-| `queue_ops` | `_aria2_position_for_priority` |
 | `queue_ops` | `_core` |
 | `queue_ops` | `_find_queue_item_by_id` |
 | `queue_ops` | `_pref_value` |
@@ -296,7 +303,8 @@
 | State fields | 13 | snake_case |
 | Constants | 22 | UPPER_SNAKE_CASE |
 | Classes | 3 | PascalCase |
-| aria2_ functions | 49 | aria2_ + snake_case |
-| Public functions | 88 | snake_case |
-| Private functions | 47 | _snake_case |
+| aria2_ public functions | 44 | aria2_ + snake_case |
+| _aria2_ private functions | 5 | _aria2_ + snake_case |
+| Public functions | 93 | snake_case |
+| Private functions | 42 | _snake_case |
 | **Total** | **253** | |
