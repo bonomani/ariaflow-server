@@ -365,7 +365,7 @@ class TicAriaFlowTests(IsolatedTestCase):
             result = reconcile_live_queue()
         self.assertTrue(result["changed"])
         saved = save_queue.call_args[0][0]
-        self.assertEqual(saved[0]["status"], "downloading")
+        self.assertEqual(saved[0]["status"], "active")
 
     def test_reconcile_live_queue_adopts_unmatched_active_job(self) -> None:
         with (
@@ -447,7 +447,7 @@ class TicAriaFlowTests(IsolatedTestCase):
             {
                 "id": "item-2",
                 "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso",
-                "status": "downloading",
+                "status": "active",
                 "gid": "gid-9",
                 "session_id": "batch-2",
                 "completedLength": "230300000",
@@ -532,7 +532,7 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_poll_marks_item_error_after_consecutive_rpc_failures(self) -> None:
         add_queue_item("https://example.com/model.gguf")
         items = load_queue()
-        items[0]["status"] = "downloading"
+        items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
 
@@ -595,7 +595,7 @@ class TicAriaFlowTests(IsolatedTestCase):
         ):
             result = process_queue()
         set_bandwidth.assert_called_once_with(250000, port=6800)
-        self.assertEqual(result[0]["status"], "done")
+        self.assertEqual(result[0]["status"], "complete")
         self.assertEqual(result[0]["gid"], "gid-1")
         self.assertIn("post_action", result[0])
 
@@ -789,7 +789,7 @@ class TicPerItemTests(IsolatedTestCase):
 
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
-        items[0]["status"] = "downloading"
+        items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc") as rpc:
@@ -816,7 +816,7 @@ class TicPerItemTests(IsolatedTestCase):
         save_queue(items)
         with patch("aria_queue.core.aria_rpc"):
             result = resume_queue_item(item.id)
-        self.assertEqual(result["item"]["status"], "downloading")
+        self.assertEqual(result["item"]["status"], "active")
 
     def test_remove_queue_item_deletes_from_queue(self) -> None:
         from aria_queue.core import remove_queue_item
@@ -832,7 +832,7 @@ class TicPerItemTests(IsolatedTestCase):
 
         item = add_queue_item("https://example.com/file.gguf")
         items = load_queue()
-        items[0]["status"] = "downloading"
+        items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc") as rpc:

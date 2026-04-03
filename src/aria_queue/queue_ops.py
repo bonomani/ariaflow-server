@@ -22,10 +22,11 @@ def _core() -> Any:
 
 # Valid queue item statuses:
 #   discovering  — auto-detecting download mode (trying protocols)
-#   queued       — ready for scheduling
-#   downloading  — active transfer in progress
+#   queued       — ready for scheduling (fallback when aria2 unreachable)
+#   waiting      — submitted to aria2, waiting for download slot
+#   active       — active transfer in progress (aria2 "active")
 #   paused       — transfer suspended by user or af-scheduler
-#   done         — transfer completed successfully
+#   complete     — transfer completed successfully (aria2 "complete")
 #   error        — transfer failed (retryable)
 #   stopped      — stopped by af-scheduler shutdown
 #   cancelled    — cancelled by user (archived)
@@ -33,9 +34,9 @@ ITEM_STATUSES = {
     "discovering",
     "queued",
     "waiting",
-    "downloading",
+    "active",
     "paused",
-    "done",
+    "complete",
     "error",
     "stopped",
     "cancelled",
@@ -59,7 +60,7 @@ DOWNLOAD_MODES = {
     "metalink_data",
 }
 
-_TERMINAL_STATUSES = {"done", "error", "stopped", "cancelled"}
+_TERMINAL_STATUSES = {"complete", "error", "stopped", "cancelled"}
 
 
 @dataclass
@@ -351,11 +352,11 @@ def add_queue_item(
                 for it in live_items:
                     if it.get("id") == item.id:
                         it["gid"] = gid
-                        it["status"] = "downloading"
+                        it["status"] = "active"
                         break
                 core.save_queue(live_items)
             _apply_aria2_priority(gid, priority)
-            item = QueueItem(**{**asdict(item), "gid": gid, "status": "downloading"})
+            item = QueueItem(**{**asdict(item), "gid": gid, "status": "active"})
     return item
 
 
@@ -403,7 +404,7 @@ def select_item_files(
     with storage_locked():
         items, item, idx = _find_queue_item_by_id(item_id)
         if item is not None:
-            item["status"] = "downloading"
+            item["status"] = "active"
             item.pop("live_status", None)
             core.save_queue(items)
             core.record_action(
@@ -506,7 +507,7 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
     queue_gids = [
         str(item.get("gid") or "")
         for item in queue_items
-        if item.get("gid") and item.get("status") in {"downloading", "paused"}
+        if item.get("gid") and item.get("status") in {"active", "paused"}
     ]
     if not gids and not state.get("active_gid") and not queue_gids:
         return {"paused": False, "reason": "no_active_transfer"}
@@ -582,7 +583,7 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         for item in items:
             if str(item.get("gid") or "") in resumed:
-                item["status"] = "downloading"
+                item["status"] = "active"
                 item["resumed_at"] = now
                 item.pop("live_status", None)
         core.save_state(state)
@@ -614,7 +615,7 @@ def pause_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "error": "not_found",
                 "message": f"item {item_id} not found",
             }
-        if item.get("status") not in {"queued", "downloading"}:
+        if item.get("status") not in {"queued", "active"}:
             return {
                 "ok": False,
                 "error": "invalid_state",
@@ -685,7 +686,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                 "message": f"item {item_id} not found",
             }
         if gid and rpc_ok:
-            item["status"] = "downloading"
+            item["status"] = "active"
             item.pop("live_status", None)
         else:
             item["status"] = "queued"
@@ -718,12 +719,12 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
                     for it in live_items:
                         if it.get("id") == item_id:
                             it["gid"] = new_gid
-                            it["status"] = "downloading"
+                            it["status"] = "active"
                             break
                     core.save_queue(live_items)
                 _apply_aria2_priority(new_gid, int(item.get("priority", 0)))
                 item["gid"] = new_gid
-                item["status"] = "downloading"
+                item["status"] = "active"
     return {"ok": True, "item": dict(item)}
 
 
@@ -740,7 +741,7 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
         before = dict(item)
         gid = str(item.get("gid") or "")
         should_remove_aria2 = gid and item.get("status") in {
-            "downloading",
+            "active",
             "queued",
             "paused",
         }
@@ -841,12 +842,12 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
                 for it in live_items:
                     if it.get("id") == item_id:
                         it["gid"] = gid
-                        it["status"] = "downloading"
+                        it["status"] = "active"
                         break
                 core.save_queue(live_items)
             _apply_aria2_priority(gid, int(item.get("priority", 0)))
             item["gid"] = gid
-            item["status"] = "downloading"
+            item["status"] = "active"
     return {"ok": True, "item": dict(item)}
 
 

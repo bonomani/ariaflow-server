@@ -212,7 +212,7 @@ class TestResumeReflectedInStatus(CrossCheckBase):
         _, status = _req(f"{self.base}/api/status")
         item = next(i for i in status["items"] if i["id"] == item_id)
         self.assertEqual(item["url"], url)
-        self.assertIn(item["status"], ("queued", "downloading"))
+        self.assertIn(item["status"], ("queued", "active"))
 
 
 # ═══════════════════════════════════════════════════════
@@ -549,7 +549,7 @@ class TestFileSelectReflectedInStatus(CrossCheckBase):
 
         _, status = _req(f"{self.base}/api/status")
         item = next(i for i in status["items"] if i["id"] == item_id)
-        self.assertEqual(item["status"], "downloading")
+        self.assertEqual(item["status"], "active")
 
 
 # ═══════════════════════════════════════════════════════
@@ -734,7 +734,7 @@ class TestMultiStepChains(CrossCheckBase):
         _, s = _req(f"{self.base}/api/status")
         self.assertIn(
             next(i for i in s["items"] if i["id"] == item_id)["status"],
-            ("queued", "downloading"),
+            ("queued", "active"),
         )
 
         _req(f"{self.base}/api/item/{item_id}/remove", "POST")

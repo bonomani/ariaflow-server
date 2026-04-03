@@ -216,7 +216,7 @@ class TestPerItemActions(APIServerPerTestCase):
 
     def test_pause_done_item_returns_400(self) -> None:
         items = load_queue()
-        items[0]["status"] = "done"
+        items[0]["status"] = "complete"
         save_queue(items)
         code, body = _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
         self.assertEqual(code, 400)
@@ -243,7 +243,7 @@ class TestPerItemActions(APIServerPerTestCase):
         with patch("aria_queue.core.aria_rpc"):
             code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
         self.assertEqual(code, 200)
-        self.assertEqual(body["item"]["status"], "downloading")
+        self.assertEqual(body["item"]["status"], "active")
 
     def test_resume_queued_item_returns_400(self) -> None:
         code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
@@ -260,7 +260,7 @@ class TestPerItemActions(APIServerPerTestCase):
 
     def test_remove_downloading_item_calls_aria2(self) -> None:
         items = load_queue()
-        items[0]["status"] = "downloading"
+        items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc") as rpc:
@@ -316,7 +316,7 @@ class TestPerItemActions(APIServerPerTestCase):
 
     def test_retry_done_item_returns_400(self) -> None:
         items = load_queue()
-        items[0]["status"] = "done"
+        items[0]["status"] = "complete"
         save_queue(items)
         code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
         self.assertEqual(code, 400)

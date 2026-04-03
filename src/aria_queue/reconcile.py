@@ -46,7 +46,7 @@ def _queue_item_for_active_info(
     gid = str(info.get("gid") or "")
     url = _active_item_url(info)
     session_id = core.load_state().get("session_id")
-    candidates = [item for item in items if item.get("status") not in {"done", "error"}]
+    candidates = [item for item in items if item.get("status") not in {"complete", "error"}]
     if gid:
         for item in items:
             if item.get("gid") == gid:
@@ -95,19 +95,19 @@ def _queue_item_for_active_info(
 
 def _merge_active_status(status: str | None) -> str:
     if status == "active":
-        return "downloading"
+        return "active"
     if status in {"paused", "waiting", "complete", "error"}:
         return str(status)
-    return str(status or "downloading")
+    return str(status or "active")
 
 
 def _queue_item_preference(item: dict[str, Any]) -> tuple[int, float, int, int]:
     status_rank = {
-        "downloading": 3,
+        "active": 3,
         "waiting": 2,
         "paused": 2,
         "queued": 1,
-        "done": 0,
+        "complete": 0,
         "error": 0,
     }.get(str(item.get("status") or ""), 0)
     completed = _coerce_float(item.get("completedLength")) or 0.0
@@ -132,7 +132,7 @@ def _merge_queue_rows(primary: dict[str, Any], candidate: dict[str, Any]) -> boo
         if not primary.get(key) and candidate.get(key):
             primary[key] = candidate.get(key)
             changed = True
-    if primary_status not in {"done", "error"}:
+    if primary_status not in {"complete", "error"}:
         for key in ("recovery_session_id", "recovered_at"):
             if not primary.get(key) and candidate.get(key):
                 primary[key] = candidate.get(key)
@@ -167,10 +167,10 @@ def _normalize_queue_row(item: dict[str, Any]) -> bool:
         if live_status != "error":
             item["live_status"] = "error"
             changed = True
-    elif status == "done" and item.get("live_status") is not None:
+    elif status == "complete" and item.get("live_status") is not None:
         item.pop("live_status", None)
         changed = True
-    if status == "done":
+    if status == "complete":
         for key in ("recovered", "recovered_at", "recovery_session_id"):
             if item.get(key) is not None:
                 item.pop(key, None)

@@ -106,16 +106,16 @@ class TestRegressions(IsolatedTestCase):
         ):
             reconcile_live_queue()
         saved = save_q.call_args[0][0]
-        self.assertEqual(saved[0]["status"], "downloading")
+        self.assertEqual(saved[0]["status"], "active")
 
     # ── Bug #3: process_queue infinite loop on RPC failure ──
     # Fixed: after 5 consecutive RPC failures, item marked as error
-    # Before: item stayed "downloading" forever, loop never exited
+    # Before: item stayed "active" forever, loop never exited
 
     def test_regression_rpc_watchdog_marks_error_after_failures(self) -> None:
         add_queue_item("https://example.com/model.gguf")
         items = load_queue()
-        items[0]["status"] = "downloading"
+        items[0]["status"] = "active"
         items[0]["gid"] = "gid-1"
         save_queue(items)
 
@@ -154,7 +154,7 @@ class TestRegressions(IsolatedTestCase):
         self.assertEqual(action, "remove")
 
     # ── Bug #5: Resume set wrong status "queued" ──
-    # Fixed: resume_active_transfer now sets "downloading"
+    # Fixed: resume_active_transfer now sets "active"
     # Before: unpaused items set to "queued", causing re-add
 
     def test_regression_resume_sets_downloading_not_queued(self) -> None:
@@ -176,7 +176,7 @@ class TestRegressions(IsolatedTestCase):
             items = load_queue()
             resumed = [i for i in items if i.get("gid") == "gid-1"]
             if resumed:
-                self.assertEqual(resumed[0]["status"], "downloading")
+                self.assertEqual(resumed[0]["status"], "active")
 
     # ── Bug #6: Action log unbounded growth ──
     # Fixed: rotation added (truncate to 5000 lines when >10000 and >512KB)
@@ -267,7 +267,7 @@ class TestRegressions(IsolatedTestCase):
 
         add_queue_item("https://example.com/lock-test.bin")
         items = load_queue()
-        items[0]["status"] = "downloading"
+        items[0]["status"] = "active"
         items[0]["gid"] = "gid-lock"
         save_queue(items)
         item_id = items[0]["id"]
@@ -312,7 +312,7 @@ class TestRegressions(IsolatedTestCase):
         state["running"] = True
         save_state(state)
         # Simulate queue complete by having no active items
-        save_queue([{"id": "x", "url": "https://x.com/done.bin", "status": "done"}])
+        save_queue([{"id": "x", "url": "https://x.com/done.bin", "status": "complete"}])
 
         with (
             patch("aria_queue.core.ensure_aria_daemon"),

@@ -183,7 +183,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         running_infos: list[dict[str, Any]] = []
         had_rpc_success = False
         for item in items_snapshot:
-            if item.get("status") in {"done", "error"}:
+            if item.get("status") in {"complete", "error"}:
                 continue
             gid = str(item.get("gid") or "")
             if not gid:
@@ -226,7 +226,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["live_status"] = remote_status
             _apply_transfer_fields(item, info)
             if remote_status == "active":
-                item["status"] = "downloading"
+                item["status"] = "active"
                 item["error_code"] = info.get("errorCode")
                 item["error_message"] = info.get("errorMessage")
                 running_infos.append(info)
@@ -249,7 +249,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 item["error_message"] = info.get("errorMessage")
                 continue
             if remote_status == "complete":
-                item["status"] = "done"
+                item["status"] = "complete"
                 item["error_code"] = None
                 item["error_message"] = None
                 item["completed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
@@ -357,7 +357,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     gid = core.add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
                 except Exception:
                     continue
-                item["status"] = "downloading"
+                item["status"] = "active"
                 item.pop("live_status", None)
                 item["gid"] = gid
                 core.record_action(
@@ -383,7 +383,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             _finalize_primary_state(items, current_running_infos, poll_ok=poll_ok)
 
             if not any(
-                item.get("status") in {"queued", "waiting", "downloading", "paused"}
+                item.get("status") in {"queued", "waiting", "active", "paused"}
                 for item in items
             ):
                 current = core.load_state()

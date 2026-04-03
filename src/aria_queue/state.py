@@ -236,7 +236,7 @@ def _log_session_history(
         "closed_reason": state.get("session_closed_reason"),
         "items_total": len(session_items),
         "items_done": sum(
-            1 for i in session_items if i.get("status") in ("done", "complete")
+            1 for i in session_items if i.get("status") in ("complete", "complete")
         ),
         "items_error": sum(
             1 for i in session_items if i.get("status") in ("error", "failed")
@@ -285,14 +285,14 @@ def session_stats(session_id: str | None = None) -> dict[str, Any]:
         "items_active": len(session_items),
         "items_archived": len(session_archived),
         "items_done": sum(
-            1 for i in all_items if i.get("status") in ("done", "complete")
+            1 for i in all_items if i.get("status") in ("complete", "complete")
         ),
         "items_error": sum(
             1 for i in all_items if i.get("status") in ("error", "failed")
         ),
         "items_queued": sum(1 for i in all_items if i.get("status") == "queued"),
         "items_downloading": sum(
-            1 for i in all_items if i.get("status") == "downloading"
+            1 for i in all_items if i.get("status") == "active"
         ),
         "items_paused": sum(1 for i in all_items if i.get("status") == "paused"),
         "bytes_completed": sum(int(i.get("completedLength") or 0) for i in all_items),
@@ -331,7 +331,7 @@ def auto_cleanup_queue(
         archived_count = 0
         for item in items:
             if item.get("status") in (
-                "done",
+                "complete",
                 "complete",
                 "error",
                 "failed",
@@ -359,7 +359,7 @@ def auto_cleanup_queue(
                     continue
             keep.append(item)
         # Also enforce max_done_count
-        done_items = [i for i in keep if i.get("status") in ("done", "complete")]
+        done_items = [i for i in keep if i.get("status") in ("complete", "complete")]
         if len(done_items) > max_done_count:
             excess = len(done_items) - max_done_count
             done_to_archive = done_items[:excess]

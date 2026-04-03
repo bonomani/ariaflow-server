@@ -106,13 +106,13 @@ class TestScenarioNormalDownload(ScenarioBase):
         # 6. Simulate downloads completing
         items = load_queue()
         for item in items:
-            item["status"] = "done"
+            item["status"] = "complete"
             item["post_action"] = {"status": "not defined yet"}
         save_queue(items)
 
         # 7. Verify all done
         _, status, _ = _req(f"{base}/api/status")
-        self.assertEqual(status["summary"]["done"], 3)
+        self.assertEqual(status["summary"]["complete"], 3)
 
         # 8. Stop the run
         _, stop, _ = _req(f"{base}/api/run", "POST", {"action": "stop"})
@@ -429,7 +429,7 @@ class TestScenarioTorrentFileSelection(ScenarioBase):
         # Item should now be downloading
         _, status, _ = _req(f"{base}/api/status")
         item = next(i for i in status["items"] if i["id"] == item_id)
-        self.assertEqual(item["status"], "downloading")
+        self.assertEqual(item["status"], "active")
 
 
 # ═══════════════════════════════════════════════════════

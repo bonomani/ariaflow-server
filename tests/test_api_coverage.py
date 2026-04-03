@@ -399,7 +399,7 @@ class TestPostEndpoints(APIServerTestCase):
         _req(f"{self.base}/api/item/{item_id}/pause", "POST")
         code, body, _ = _req(f"{self.base}/api/item/{item_id}/resume", "POST")
         self.assertEqual(code, 200)
-        self.assertIn(body["item"]["status"], ("queued", "downloading"))
+        self.assertIn(body["item"]["status"], ("queued", "active"))
 
     # 14. POST /api/item/{id}/remove
     def test_post_api_item_remove(self) -> None:

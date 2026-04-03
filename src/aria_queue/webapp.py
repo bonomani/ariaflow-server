@@ -1203,7 +1203,7 @@ INDEX_HTML = """<!doctype html>
     }
 
     function badgeClass(status) {
-      if (["done", "converged", "ok", "complete"].includes(status)) return "badge good";
+      if (["complete", "converged", "ok", "complete"].includes(status)) return "badge good";
       if (["error", "failed", "missing"].includes(status)) return "badge bad";
       if (["paused", "queued", "waiting", "unchanged", "skipped"].includes(status)) return "badge warn";
       return "badge";
@@ -1317,7 +1317,7 @@ INDEX_HTML = """<!doctype html>
       ].filter(Boolean).join(" · ");
       const live = item.live || {};
       const shortUrl = shortName(item.output || item.url || live.url || '(no url)');
-      const activeish = ["downloading", "paused", "recovered"].includes(status) || item.recovered;
+      const activeish = ["active", "paused", "recovered"].includes(status) || item.recovered;
       const liveStatus = live.status || null;
       const speed = live.downloadSpeed || item.downloadSpeed;
       const totalLength = live.totalLength || item.totalLength;

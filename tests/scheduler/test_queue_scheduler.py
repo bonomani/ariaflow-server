@@ -114,7 +114,7 @@ class QueueSchedulerTests(unittest.TestCase):
         self._set_simultaneous_limit(1)
         items = load_queue()
         items[0]["gid"] = "gid-running"
-        items[0]["status"] = "downloading"
+        items[0]["status"] = "active"
         items[0]["live_status"] = "active"
         save_queue(items)
 
