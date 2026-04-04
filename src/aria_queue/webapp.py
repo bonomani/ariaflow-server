@@ -473,6 +473,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/options": "_get_declaration",
         "/api/aria2/get_global_option": "_get_aria2_global_option",
         "/api/aria2/get_option": "_get_aria2_option",
+        "/api/aria2/option_tiers": "_get_aria2_option_tiers",
         "/api/lifecycle": "_get_lifecycle",
         "/api/archive": "_get_archive",
         "/api/sessions": "_get_sessions",
@@ -776,6 +777,16 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 _error_payload("rpc_error", "internal error"),
                 status=500,
             )
+
+    def _get_aria2_option_tiers(self, parsed: object) -> None:
+        from .aria2_rpc import _MANAGED_ARIA2_OPTIONS, _SAFE_ARIA2_OPTIONS
+        from .core import _pref_value
+
+        self._send_json({
+            "managed": sorted(_MANAGED_ARIA2_OPTIONS),
+            "safe": sorted(_SAFE_ARIA2_OPTIONS),
+            "unsafe_enabled": bool(_pref_value("aria2_unsafe_options", False)),
+        })
 
     def _get_lifecycle(self, parsed: object) -> None:
         self._send_json(_lifecycle_payload())
