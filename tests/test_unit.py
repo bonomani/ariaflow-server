@@ -406,20 +406,6 @@ class TestBonjourCommandConstruction(unittest.TestCase):
         self.assertEqual(dns_txt, avahi_txt)
 
 
-class TestWslDetection(unittest.TestCase):
-    @patch("aria_queue.bonjour.os.uname")
-    def test_wsl_detected(self, mock_uname: MagicMock) -> None:
-        from aria_queue.bonjour import _is_wsl
-        mock_uname.return_value = type("uname", (), {"release": "5.15.0-microsoft-standard-WSL2"})()
-        self.assertTrue(_is_wsl())
-
-    @patch("aria_queue.bonjour.os.uname")
-    def test_native_linux_not_wsl(self, mock_uname: MagicMock) -> None:
-        from aria_queue.bonjour import _is_wsl
-        mock_uname.return_value = type("uname", (), {"release": "6.1.0-generic"})()
-        self.assertFalse(_is_wsl())
-
-
 # ── aria2_rpc.py ────────────────────────────────────────────────────
 
 

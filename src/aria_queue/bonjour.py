@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import platform
 import shutil
 import subprocess
@@ -17,22 +16,19 @@ def _avahi_publish_path() -> str | None:
     return shutil.which("avahi-publish-service")
 
 
-def _is_wsl() -> bool:
-    """Detect Windows Subsystem for Linux (no multicast, avahi won't work)."""
-    try:
-        return "microsoft" in os.uname().release.lower()
-    except Exception:
-        return False
-
-
 def _detect_backend() -> str | None:
-    """Detect available mDNS backend: 'dns-sd', 'avahi', or None."""
+    """Detect available mDNS backend: 'dns-sd', 'avahi', or None.
+
+    Does not check if the backend actually works — the startup
+    verification in advertise_http_service handles that (polls the
+    process after 0.2s, falls back to no-op if it exited).
+    """
     system = platform.system()
     if system == "Darwin" and _dns_sd_path():
         return "dns-sd"
     if system == "Windows" and _dns_sd_path():
         return "dns-sd"
-    if system == "Linux" and not _is_wsl() and _avahi_publish_path():
+    if system == "Linux" and _avahi_publish_path():
         return "avahi"
     return None
 
