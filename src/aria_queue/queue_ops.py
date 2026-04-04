@@ -42,6 +42,22 @@ ITEM_STATUSES = {
     "cancelled",
 }
 
+_ALLOWED_ACTIONS: dict[str, list[str]] = {
+    "discovering": [],
+    "queued": ["pause", "remove"],
+    "waiting": ["pause", "remove"],
+    "active": ["pause", "remove"],
+    "paused": ["resume", "remove"],
+    "complete": ["remove"],
+    "error": ["retry", "remove"],
+    "stopped": ["retry", "remove"],
+    "cancelled": [],
+}
+
+
+def allowed_actions(status: str) -> list[str]:
+    return list(_ALLOWED_ACTIONS.get(status, []))
+
 # Download modes:
 #   http       — HTTP/HTTPS/FTP (aria2.addUri)
 #   magnet     — magnet link (aria2.addUri)

@@ -519,8 +519,12 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
+        from .queue_ops import allowed_actions
+
         state = load_state()
         items = load_queue()
+        for item in items:
+            item["allowed_actions"] = allowed_actions(item.get("status", ""))
         bandwidth = aria2_current_bandwidth(timeout=3)
         payload = {
             "items": items,
