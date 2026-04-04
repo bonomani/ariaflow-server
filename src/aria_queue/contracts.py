@@ -97,6 +97,18 @@ DEFAULT_DECLARATION = {
                 "options": [10, 30, 60, 120, 300],
                 "rationale": "seconds between auto-retries, multiplied by retry count",
             },
+            {
+                "name": "aria2_max_tries",
+                "value": 5,
+                "options": [1, 3, 5, 10, 0],
+                "rationale": "aria2 retries per download for transient network errors (0 = unlimited)",
+            },
+            {
+                "name": "aria2_retry_wait",
+                "value": 10,
+                "options": [3, 5, 10, 30, 60],
+                "rationale": "seconds aria2 waits between retries",
+            },
         ],
         "policies": [],
     },

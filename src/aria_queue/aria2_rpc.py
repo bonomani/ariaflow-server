@@ -345,10 +345,15 @@ def _is_metadata_url(url: str) -> bool:
 
 def aria2_add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int = 6800) -> str:
 
+    core = _core()
+    max_tries = str(int(core._pref_value("aria2_max_tries", 5) or 5))
+    retry_wait = str(int(core._pref_value("aria2_retry_wait", 10) or 10))
     options: dict[str, str] = {
         "max-download-limit": _aria2_speed_value(cap_bytes_per_sec),
         "allow-overwrite": "true",
         "continue": "true",
+        "max-tries": max_tries,
+        "retry-wait": retry_wait,
     }
     mode = str(item.get("mode") or "http")
     url = str(item.get("url") or "")
