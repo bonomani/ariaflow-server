@@ -1,6 +1,54 @@
 # Plan
 
-No open items.
+### [A1] Add `allowed_actions` to each item in status response
+
+**What:** Compute and include `allowed_actions` list for each queue item based on its current status.
+**Where:** `src/aria_queue/queue_ops.py` (new helper), `src/aria_queue/webapp.py` (status response)
+**Why:** Frontend currently hardcodes which buttons to show per status. Backend should be authoritative.
+**Scope:** ~20 lines
+
+Rules:
+- `queued`: pause, remove
+- `waiting`: pause, remove
+- `active`: pause, remove
+- `paused`: resume, remove
+- `complete`: remove
+- `error`: retry, remove
+- `stopped`: retry, remove
+- `cancelled`: (none)
+
+### [A2] Scheduler auto-retry with policy
+
+**What:** Scheduler automatically retries failed items up to `max_retries` times with configurable backoff.
+**Where:** `src/aria_queue/scheduler.py` (_poll_tracked_jobs), `src/aria_queue/contracts.py` (new preferences)
+**Why:** Currently retry is manual only. Transient errors (network, aria2 restart) should auto-recover.
+**Scope:** ~40 lines
+
+New preferences:
+- `max_retries`: default 3 (0 = no auto-retry)
+- `retry_backoff_seconds`: default 30
+
+New item fields:
+- `retry_count`: incremented on each auto-retry
+- `next_retry_at`: timestamp for backoff
+
+Logic in scheduler:
+- When _poll_tracked_jobs marks an item as `error`
+- If `retry_count < max_retries` AND error is not `rpc_unreachable`
+- Set `next_retry_at = now + retry_backoff_seconds * (retry_count + 1)`
+- On next tick, if `status == error` AND `now >= next_retry_at`: auto-retry (same as manual retry + re-submit)
+- User manual retry always works regardless of retry_count
+
+### [A3] aria2 max-tries passthrough
+
+**What:** Set aria2's `--max-tries` and `--retry-wait` on add_download to handle transient network errors at aria2 level.
+**Where:** `src/aria_queue/aria2_rpc.py` (add_download options), `src/aria_queue/contracts.py` (preferences)
+**Why:** aria2 handles connection resets and timeouts internally — no need for scheduler to see them as errors.
+**Scope:** ~10 lines
+
+New preferences:
+- `aria2_max_tries`: default 5
+- `aria2_retry_wait`: default 10 (seconds)
 
 ---
 
