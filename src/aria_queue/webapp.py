@@ -470,7 +470,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/status": "_get_status",
         "/api/log": "_get_log",
         "/api/declaration": "_get_declaration",
-        "/api/options": "_get_options",
+        "/api/options": "_get_declaration",
+        "/api/aria2/get_global_option": "_get_aria2_global_option",
+        "/api/aria2/get_option": "_get_aria2_option",
         "/api/lifecycle": "_get_lifecycle",
         "/api/archive": "_get_archive",
         "/api/sessions": "_get_sessions",
@@ -489,7 +491,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/session": "_post_session",
         "/api/pause": "_post_pause",
         "/api/resume": "_post_resume",
-        "/api/aria2/options": "_post_aria2_options",
+        "/api/aria2/change_global_option": "_post_aria2_change_global_option",
+        "/api/aria2/options": "_post_aria2_change_global_option",
     }
 
     def _invalidate_status_cache(self, event: str = "state_changed") -> None:
@@ -748,8 +751,31 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
     def _get_declaration(self, parsed: object) -> None:
         self._send_json(load_declaration())
 
-    def _get_options(self, parsed: object) -> None:
-        self._send_json(load_declaration())
+    def _get_aria2_global_option(self, parsed: object) -> None:
+        self._send_json(aria2_current_global_options())
+
+    def _get_aria2_option(self, parsed: object) -> None:
+        query = dict(
+            part.split("=", 1) if "=" in part else (part, "")
+            for part in urlparse(self.path).query.split("&")
+            if part
+        )
+        gid = query.get("gid", "").strip()
+        if not gid:
+            self._send_json(
+                _error_payload("missing_gid", "gid query parameter required"),
+                status=400,
+            )
+            return
+        try:
+            from .core import aria2_get_option
+            result = aria2_get_option(gid)
+            self._send_json(result)
+        except Exception as exc:
+            self._send_json(
+                _error_payload("rpc_error", "internal error"),
+                status=500,
+            )
 
     def _get_lifecycle(self, parsed: object) -> None:
         self._send_json(_lifecycle_payload())
@@ -1171,7 +1197,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         self._invalidate_status_cache()
         self._send_json(result)
 
-    def _post_aria2_options(self, payload: object, path: str) -> None:
+    def _post_aria2_change_global_option(self, payload: object, path: str) -> None:
         if not isinstance(payload, dict) or not payload:
             self._send_json(
                 _error_payload(

@@ -133,7 +133,7 @@ class TestRegressions(IsolatedTestCase):
                 },
             ),
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
                 "aria_queue.core.aria2_tell_status",
@@ -249,7 +249,7 @@ class TestRegressions(IsolatedTestCase):
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.save_state") as mock_save,
             patch("aria_queue.core.record_action"),
         ):
@@ -328,7 +328,7 @@ class TestRegressions(IsolatedTestCase):
                 },
             ),
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.time.sleep", return_value=None),
         ):

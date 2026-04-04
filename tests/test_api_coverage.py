@@ -345,7 +345,7 @@ class TestPostEndpoints(APIServerTestCase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
         ):
             code, body, _ = _req(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)

@@ -498,14 +498,12 @@ class TestAria2Options(APIServerPerTestCase):
         code, body = _request(f"{self.base}/api/aria2/options", "POST", None)
         self.assertEqual(code, 400)
 
-    def test_all_eight_safe_options(self) -> None:
+    def test_all_six_safe_options(self) -> None:
         all_safe = {
             "max-concurrent-downloads": "3",
             "max-connection-per-server": "4",
             "split": "4",
             "min-split-size": "1M",
-            "max-overall-download-limit": "0",
-            "max-download-limit": "0",
             "timeout": "60",
             "connect-timeout": "30",
         }
@@ -515,7 +513,13 @@ class TestAria2Options(APIServerPerTestCase):
         ):
             code, body = _request(f"{self.base}/api/aria2/options", "POST", all_safe)
         self.assertEqual(code, 200)
-        self.assertEqual(len(body["applied"]), 8)
+        self.assertEqual(len(body["applied"]), 6)
+
+    def test_managed_options_rejected(self) -> None:
+        managed = {"max-overall-download-limit": "0"}
+        code, body = _request(f"{self.base}/api/aria2/options", "POST", managed)
+        self.assertEqual(code, 400)
+        self.assertEqual(body["error"], "managed_options")
 
 
 # ──────────────────────────────────────────────────────
@@ -557,7 +561,7 @@ class TestBandwidth(APIServerPerTestCase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
         ):
             _request(f"{self.base}/api/bandwidth/probe", "POST")
         code, body = _request(f"{self.base}/api/bandwidth")
@@ -580,7 +584,7 @@ class TestBandwidth(APIServerPerTestCase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
         ):
             code, body = _request(f"{self.base}/api/bandwidth/probe", "POST")
         self.assertEqual(code, 200)

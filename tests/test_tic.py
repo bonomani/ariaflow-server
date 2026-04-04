@@ -243,7 +243,7 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch("aria_queue.core.time.time", return_value=120.0),
             patch("aria_queue.core.probe_bandwidth") as probe_bandwidth_mock,
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth") as set_bandwidth_mock,
+            patch("aria_queue.core.aria2_set_max_overall_download_limit") as set_bandwidth_mock,
             patch("aria_queue.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
@@ -268,7 +268,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 "aria_queue.core.probe_bandwidth", return_value=fresh_probe
             ) as probe_bandwidth_mock,
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth") as set_bandwidth_mock,
+            patch("aria_queue.core.aria2_set_max_overall_download_limit") as set_bandwidth_mock,
             patch("aria_queue.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
@@ -550,7 +550,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
                 "aria_queue.core.aria2_tell_status", side_effect=RuntimeError("connection refused")
@@ -587,14 +587,14 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth") as aria2_set_bandwidth,
+            patch("aria_queue.core.aria2_set_max_overall_download_limit") as aria2_set_max_overall_download_limit,
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.aria2_add_download", return_value="gid-1"),
             patch("aria_queue.core.aria2_tell_status", return_value=complete),
             patch("aria_queue.core.time.sleep", return_value=None),
         ):
             result = process_queue()
-        aria2_set_bandwidth.assert_called_once_with(250000, port=6800)
+        aria2_set_max_overall_download_limit.assert_called_once_with(250000, port=6800)
         self.assertEqual(result[0]["status"], "complete")
         self.assertEqual(result[0]["gid"], "gid-1")
         self.assertIn("post_action", result[0])
@@ -630,7 +630,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
                 "aria_queue.core.aria2_tell_status",

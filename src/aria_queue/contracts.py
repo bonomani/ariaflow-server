@@ -79,6 +79,12 @@ DEFAULT_DECLARATION = {
                 "options": [60, 120, 180, 300],
                 "rationale": "seconds between automatic bandwidth probes",
             },
+            {
+                "name": "aria2_unsafe_options",
+                "value": False,
+                "options": [False, True],
+                "rationale": "allow setting any aria2 option via API (bypasses safe subset)",
+            },
         ],
         "policies": [],
     },

@@ -389,7 +389,9 @@ def aria2_status(port: int = 6800, timeout: int = 5) -> dict[str, Any]:
     return {"reachable": True, "version": version, "error": None}
 
 
-def aria2_set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5) -> None:
+def aria2_set_max_overall_download_limit(
+    cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5
+) -> None:
     aria2_change_global_option(
         {"max-overall-download-limit": _aria2_speed_value(cap_bytes_per_sec)},
         port=port,
@@ -397,12 +399,49 @@ def aria2_set_bandwidth(cap_bytes_per_sec: int, port: int = 6800, timeout: int =
     )
 
 
-def aria2_set_download_bandwidth(
+def aria2_set_max_overall_upload_limit(
+    cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5
+) -> None:
+    aria2_change_global_option(
+        {"max-overall-upload-limit": _aria2_speed_value(cap_bytes_per_sec)},
+        port=port,
+        timeout=timeout,
+    )
+
+
+def aria2_set_max_download_limit(
     gid: str, cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5
 ) -> None:
     aria2_change_option(
         gid,
         {"max-download-limit": _aria2_speed_value(cap_bytes_per_sec)},
+        port=port,
+        timeout=timeout,
+    )
+
+
+def aria2_set_max_upload_limit(
+    gid: str, cap_bytes_per_sec: int, port: int = 6800, timeout: int = 5
+) -> None:
+    aria2_change_option(
+        gid,
+        {"max-upload-limit": _aria2_speed_value(cap_bytes_per_sec)},
+        port=port,
+        timeout=timeout,
+    )
+
+
+def aria2_set_seed_ratio(ratio: float, port: int = 6800, timeout: int = 5) -> None:
+    aria2_change_global_option(
+        {"seed-ratio": str(ratio)},
+        port=port,
+        timeout=timeout,
+    )
+
+
+def aria2_set_seed_time(minutes: int, port: int = 6800, timeout: int = 5) -> None:
+    aria2_change_global_option(
+        {"seed-time": str(minutes)},
         port=port,
         timeout=timeout,
     )
@@ -451,13 +490,22 @@ def aria2_current_global_options(port: int = 6800, timeout: int = 5) -> dict[str
         return {"error": str(exc)}
 
 
+# Options managed by dedicated aria2_set_* functions — blocked from generic API
+_MANAGED_ARIA2_OPTIONS = {
+    "max-overall-download-limit",
+    "max-overall-upload-limit",
+    "max-download-limit",
+    "max-upload-limit",
+    "seed-ratio",
+    "seed-time",
+}
+
+# Options allowed via generic API without unsafe mode
 _SAFE_ARIA2_OPTIONS = {
     "max-concurrent-downloads",
     "max-connection-per-server",
     "split",
     "min-split-size",
-    "max-overall-download-limit",
-    "max-download-limit",
     "timeout",
     "connect-timeout",
 }
@@ -465,12 +513,23 @@ _SAFE_ARIA2_OPTIONS = {
 
 def aria2_change_options(options: dict[str, str], port: int = 6800) -> dict[str, Any]:
     core = _core()
-    rejected = [k for k in options if k not in _SAFE_ARIA2_OPTIONS]
+    managed = [k for k in options if k in _MANAGED_ARIA2_OPTIONS]
+    if managed:
+        return {
+            "ok": False,
+            "error": "managed_options",
+            "message": f"use dedicated aria2_set_* functions for: {managed}",
+        }
+    unsafe_mode = bool(core._pref_value("aria2_unsafe_options", False))
+    if not unsafe_mode:
+        rejected = [k for k in options if k not in _SAFE_ARIA2_OPTIONS]
+    else:
+        rejected = []
     if rejected:
         return {
             "ok": False,
             "error": "rejected_options",
-            "message": f"unsafe options: {rejected}",
+            "message": f"unsafe options (enable aria2_unsafe_options preference): {rejected}",
         }
     if not options:
         return {"ok": False, "error": "empty_options", "message": "no options provided"}

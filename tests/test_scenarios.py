@@ -334,7 +334,7 @@ class TestScenarioBandwidth(ScenarioBase):
         }
         with (
             patch("aria_queue.core.probe_bandwidth", return_value=probe_result),
-            patch("aria_queue.core.aria2_set_bandwidth"),
+            patch("aria_queue.core.aria2_set_max_overall_download_limit"),
         ):
             _, probed, _ = _req(f"{base}/api/bandwidth/probe", "POST")
 
@@ -467,11 +467,10 @@ class TestScenarioAria2Options(ScenarioBase):
                 {
                     "max-concurrent-downloads": "5",
                     "split": "4",
-                    "max-overall-download-limit": "10M",
                 },
             )
         self.assertTrue(result["ok"])
-        self.assertEqual(len(result["applied"]), 3)
+        self.assertEqual(len(result["applied"]), 2)
 
         # Verify action was logged
         _, log, _ = _req(f"{base}/api/log?limit=5")

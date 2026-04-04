@@ -142,9 +142,17 @@ def manual_probe(port: int = 6800) -> dict[str, Any]:
     state["last_bandwidth_probe_at"] = time.time()
     core.save_state(state)
     cap = probe.get("cap_bytes_per_sec", 0)
+    up_cap_bytes = int(
+        float(probe.get("up_cap_mbps") or 0) * 125_000.0
+    )
     if cap > 0:
         try:
-            core.aria2_set_bandwidth(cap, port=port)
+            core.aria2_set_max_overall_download_limit(cap, port=port)
+        except Exception:
+            pass
+    if up_cap_bytes > 0:
+        try:
+            core.aria2_set_max_overall_upload_limit(up_cap_bytes, port=port)
         except Exception:
             pass
     core.record_action(
@@ -358,9 +366,17 @@ def _apply_bandwidth_probe(
         core.save_state(state)
         before_bandwidth = core.aria2_current_bandwidth(port=port)
         try:
-            core.aria2_set_bandwidth(cap_bytes_per_sec, port=port)
+            core.aria2_set_max_overall_download_limit(cap_bytes_per_sec, port=port)
         except Exception:
             pass
+        up_cap = int(
+            float((probe or {}).get("up_cap_mbps") or 0) * _BYTES_PER_MEGABIT
+        )
+        if up_cap > 0:
+            try:
+                core.aria2_set_max_overall_upload_limit(up_cap, port=port)
+            except Exception:
+                pass
         core.record_action(
             action="probe",
             target="bandwidth",

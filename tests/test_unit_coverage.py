@@ -353,8 +353,8 @@ class TestAdvertiseHttpService(unittest.TestCase):
 class TestAria2SetDownloadBandwidth(unittest.TestCase):
     @patch("aria_queue.aria2_rpc.aria2_change_option")
     def test_calls_change_option(self, mock_co: MagicMock) -> None:
-        from aria_queue.aria2_rpc import aria2_set_download_bandwidth
-        aria2_set_download_bandwidth("gid1", 1000, port=6800)
+        from aria_queue.aria2_rpc import aria2_set_max_download_limit
+        aria2_set_max_download_limit("gid1", 1000, port=6800)
         mock_co.assert_called_once()
         args, kwargs = mock_co.call_args
         self.assertEqual(args[0], "gid1")
@@ -418,7 +418,7 @@ class TestManualProbe(_TempDirMixin, unittest.TestCase):
         "cap_mbps": 2,
         "cap_bytes_per_sec": 250000,
     })
-    @patch("aria_queue.core.aria2_set_bandwidth")
+    @patch("aria_queue.core.aria2_set_max_overall_download_limit")
     def test_returns_probe_result(self, _set: MagicMock, _probe: MagicMock) -> None:
         from aria_queue.core import manual_probe, ensure_storage
 
