@@ -22,17 +22,20 @@ Functions (aria2_set_ + exact aria2 option key, hyphens → underscores):
 **Why:** Upload cap is probed and calculated (`up_cap_mbps`) but never sent to aria2.
 **Scope:** ~5 lines
 
-### [B3] Three-tier option safety — no API change
+### [B3] Replace /api/aria2/options with 4 RPC-aligned endpoints
 
-**What:** Split `_SAFE_ARIA2_OPTIONS` into managed + safe + unsafe tiers. `POST /api/aria2/options` blocks managed options (must use dedicated function) and blocks unsafe options unless declaration preference allows.
-**Where:** `src/aria_queue/aria2_rpc.py` (option sets), `src/aria_queue/webapp.py` (endpoint handler)
-**Why:** Managed options have dedicated safe functions. Generic endpoint shouldn't bypass them.
-**Scope:** ~20 lines. No new endpoints, same `POST /api/aria2/options` behavior.
+**What:** Remove old endpoints, add 4 new ones matching aria2 RPC method names.
+**Where:** `src/aria_queue/webapp.py`
+**Scope:** Remove `POST /api/aria2/options`, `GET /api/options`. Add:
+- `POST /api/aria2/change_global_option` — sets global options (3-tier safety)
+- `POST /api/aria2/change_option` — sets per-GID options (new)
+- `GET /api/aria2/get_global_option` — reads global options
+- `GET /api/aria2/get_option?gid=X` — reads per-GID options (new)
 
-Tiers:
-- **Managed** (blocked from generic API): max-overall-download-limit, max-overall-upload-limit, max-download-limit, max-upload-limit, seed-ratio, seed-time
-- **Safe** (allowed via generic API): max-concurrent-downloads, max-connection-per-server, split, min-split-size, timeout, connect-timeout
-- **Unsafe** (allowed only with `aria2_unsafe_options: true` preference): everything else
+Safety tiers applied on POST:
+- **Managed** (blocked — must use dedicated function): max-overall-download-limit, max-overall-upload-limit, max-download-limit, max-upload-limit, seed-ratio, seed-time
+- **Safe** (allowed): max-concurrent-downloads, max-connection-per-server, split, min-split-size, timeout, connect-timeout
+- **Unsafe** (requires `aria2_unsafe_options: true` preference): everything else
 
 ### [B4] Add declaration preference for unsafe mode — no API change
 
