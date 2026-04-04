@@ -23,12 +23,12 @@ def advertise_http_service(
     if not bonjour_available():
         yield
         return
-    host = os.uname().nodename.split(".")[0] or "localhost"
+    dns_sd = _dns_sd_path() or "dns-sd"
     cmd = [
-        _dns_sd_path() or "dns-sd",
+        dns_sd,
         "-R",
-        f"ariaflow {role} {host} {port}",
-        "_http._tcp",
+        f"ariaflow-{role}",
+        "_ariaflow._tcp",
         "local",
         str(port),
         f"role={role}",
