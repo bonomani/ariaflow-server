@@ -142,7 +142,7 @@ def main() -> int:
             with advertise_http_service(
                 role="api",
                 port=args.port,
-                path="/api/status",
+                path="/api/health",
                 product="ariaflow",
                 version=__version__,
             ):

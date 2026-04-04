@@ -349,13 +349,75 @@ class TestBonjourAvailable(unittest.TestCase):
 
 
 class TestAdvertiseHttpService(unittest.TestCase):
-    @patch("aria_queue.bonjour.bonjour_available", return_value=False)
+    @patch("aria_queue.bonjour._detect_backend", return_value=None)
     def test_context_manager_noop(self, _mock: MagicMock) -> None:
         from aria_queue.bonjour import advertise_http_service
         with advertise_http_service(
             role="api", port=8080, path="/", product="test", version="0.1"
         ):
             pass  # should not crash
+
+
+class TestBonjourCommandConstruction(unittest.TestCase):
+    def test_dns_sd_cmd_structure(self) -> None:
+        from aria_queue.bonjour import build_dns_sd_cmd
+        cmd = build_dns_sd_cmd(
+            role="api", port=8000, path="/api/health",
+            product="ariaflow", version="1.0.0",
+        )
+        self.assertEqual(cmd[2], "ariaflow-api")
+        self.assertEqual(cmd[3], "_ariaflow._tcp")
+        self.assertEqual(cmd[4], "local")
+        self.assertEqual(cmd[5], "8000")
+        self.assertIn("role=api", cmd)
+        self.assertIn("path=/api/health", cmd)
+        self.assertIn("product=ariaflow", cmd)
+        self.assertIn("version=1.0.0", cmd)
+        self.assertIn("proto=http", cmd)
+
+    def test_avahi_cmd_structure(self) -> None:
+        from aria_queue.bonjour import build_avahi_cmd
+        cmd = build_avahi_cmd(
+            role="api", port=8000, path="/api/health",
+            product="ariaflow", version="1.0.0",
+        )
+        self.assertEqual(cmd[1], "ariaflow-api")
+        self.assertEqual(cmd[2], "_ariaflow._tcp")
+        self.assertEqual(cmd[3], "8000")
+        self.assertIn("role=api", cmd)
+        self.assertIn("path=/api/health", cmd)
+        self.assertIn("proto=http", cmd)
+
+    def test_dns_sd_and_avahi_same_service_type(self) -> None:
+        from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
+        kwargs = dict(role="api", port=8000, path="/api/health",
+                      product="ariaflow", version="1.0.0")
+        dns_cmd = build_dns_sd_cmd(**kwargs)
+        avahi_cmd = build_avahi_cmd(**kwargs)
+        self.assertEqual(dns_cmd[3], "_ariaflow._tcp")
+        self.assertEqual(avahi_cmd[2], "_ariaflow._tcp")
+
+    def test_dns_sd_and_avahi_same_txt_records(self) -> None:
+        from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
+        kwargs = dict(role="api", port=8000, path="/api/health",
+                      product="ariaflow", version="1.0.0")
+        dns_txt = set(s for s in build_dns_sd_cmd(**kwargs) if "=" in s)
+        avahi_txt = set(s for s in build_avahi_cmd(**kwargs) if "=" in s)
+        self.assertEqual(dns_txt, avahi_txt)
+
+
+class TestWslDetection(unittest.TestCase):
+    @patch("aria_queue.bonjour.os.uname")
+    def test_wsl_detected(self, mock_uname: MagicMock) -> None:
+        from aria_queue.bonjour import _is_wsl
+        mock_uname.return_value = type("uname", (), {"release": "5.15.0-microsoft-standard-WSL2"})()
+        self.assertTrue(_is_wsl())
+
+    @patch("aria_queue.bonjour.os.uname")
+    def test_native_linux_not_wsl(self, mock_uname: MagicMock) -> None:
+        from aria_queue.bonjour import _is_wsl
+        mock_uname.return_value = type("uname", (), {"release": "6.1.0-generic"})()
+        self.assertFalse(_is_wsl())
 
 
 # ── aria2_rpc.py ────────────────────────────────────────────────────
