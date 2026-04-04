@@ -59,7 +59,8 @@ Base URL: `http://127.0.0.1:8000`
 | `/api/sessions` | Session history |
 | `/api/session/stats` | Session statistics |
 | `/api/declaration` | UIC declaration (gates, preferences, policies) |
-| `/api/options` | Alias for `/api/declaration` |
+| `/api/aria2/get_global_option` | Current aria2 global options |
+| `/api/aria2/get_option?gid=X` | Per-GID aria2 options |
 | `/api/lifecycle` | Install and service status |
 | `/api/item/{id}/files` | File list for torrent/metalink item |
 | `/api/events` | SSE event stream (real-time state changes) |
@@ -85,7 +86,7 @@ Base URL: `http://127.0.0.1:8000`
 | `/api/bandwidth/probe` | — | Trigger bandwidth probe |
 | `/api/cleanup` | `{max_done_age_days?, max_done_count?}` | Clean up terminal items |
 | `/api/declaration` | `{...declaration}` | Save UIC declaration |
-| `/api/aria2/options` | `{options: {...}}` | Change aria2 options (safe subset) |
+| `/api/aria2/change_global_option` | `{options: {...}}` | Change aria2 global options (3-tier safety) |
 | `/api/session` | `{close_reason?}` | Create new session |
 | `/api/lifecycle/action` | `{action: ...}` | Install/service action |
 

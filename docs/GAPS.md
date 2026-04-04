@@ -26,7 +26,7 @@ Supports `.torrent`, `.metalink`, magnet URLs with `--pause-metadata=true`. File
 
 ### 4.1 aria2 global options proxy
 
-`POST /api/aria2/options` accepts a safe subset: `max-concurrent-downloads`, `max-connection-per-server`, `split`, `min-split-size`, `max-overall-download-limit`, `max-download-limit`, `timeout`, `connect-timeout`. Rejects unsafe keys. Logs changes.
+`POST /api/aria2/change_global_option` with 3-tier safety: managed options (download/upload limits, seed) blocked from generic API, safe options (concurrency, split, timeout) allowed, unsafe options require `aria2_unsafe_options` preference. Logs changes.
 
 ### 5.2 Docker image
 

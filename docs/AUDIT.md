@@ -52,7 +52,7 @@ Current: Ubuntu + Python 3.12 only. Missing: Python 3.10, 3.11; Windows.
 | install.py | 3 (version, ucc_envelope, ucc_record) | Quick |
 | bonjour.py | 2 (bonjour_available, advertise) | Medium |
 | scheduler.py | 1 (stop_background_process) | Complex |
-| aria2_rpc.py | 1 (aria2_set_download_bandwidth) | Quick |
+| aria2_rpc.py | 7 (6 new aria2_set_* + aria2_current_bandwidth) | Quick |
 | transfers.py | 1 (pause_active_transfer) | Complex |
 
 Quick (21 functions × 5 min): 1h45m
