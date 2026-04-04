@@ -319,7 +319,13 @@ def aria2_ensure_daemon(port: int = 6800) -> None:
     ]
     if session_file.exists():
         args.append(f"--input-file={session_file}")
-    subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise RuntimeError(
+            "aria2c not found — install aria2 "
+            "(brew install aria2 / apt install aria2)"
+        )
     time.sleep(2)
     try:
         aria2_get_version(port=port, timeout=5)
