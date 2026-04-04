@@ -52,9 +52,11 @@ Output: `.torrent` file bytes (base64-encodable for aria2 RPC).
 **What:** New preferences:
 - `internal_tracker_url`: default `""` (empty = distribution disabled)
 - `distribute_completed_downloads`: default `false`
-- `seed_ratio`: default `0` (seed forever)
+- `distribute_seed_ratio`: default `0` (seed forever)
+- `distribute_max_seed_hours`: default `72`
+- `distribute_max_active_seeds`: default `10`
 **Where:** `src/aria_queue/contracts.py`
-**Scope:** ~15 lines
+**Scope:** ~25 lines
 
 ### [D7] aria2 daemon: disable DHT, PEX for private torrents
 
@@ -62,10 +64,28 @@ Output: `.torrent` file bytes (base64-encodable for aria2 RPC).
 **Where:** `src/aria_queue/aria2_rpc.py` (aria2_ensure_daemon args)
 **Scope:** ~3 lines
 
+### [D8] Seed expiration policy
+
+**What:** Scheduler checks active seeds each tick. Expires seeds that exceed age or count limit.
+**Where:** `src/aria_queue/scheduler.py` (new `_expire_seeds()` in main loop)
+**Why:** Without expiration: unlimited seeds, bandwidth, Bonjour spam, .torrent accumulation.
+**Scope:** ~30 lines
+
+On expiration:
+1. `aria2_remove(gid)` — stop seeding
+2. Deregister Bonjour service for that torrent
+3. Delete `.torrent` file
+4. **Never delete the downloaded file**
+5. Update item: `distribute_status = "expired"`
+
+New preferences (D6):
+- `distribute_max_seed_hours`: default 72
+- `distribute_max_active_seeds`: default 10
+
 ### Implementation order
 
 ```
-D6 → D7 → D1 → D2 → D3 → D4 → D5
+D6 → D7 → D1 → D2 → D3 → D4 → D5 → D8
 ```
 
 D6 (preferences) and D7 (daemon args) first — foundation.
@@ -74,6 +94,7 @@ D2 (seed after download) — connects HTTP download to torrent.
 D3 (Bonjour publish) — announces to network.
 D4 (serve .torrent) — enables other instances to download the torrent file.
 D5 (list API) — visibility.
+D8 (expiration) — lifecycle cleanup.
 
 ---
 
