@@ -158,3 +158,5 @@ python3 scripts/publish.py push   # push + auto-release
 Free to **use** for personal and internal business purposes. Modification, redistribution, and commercial resale are prohibited. See [LICENSE](./LICENSE).
 
 This software communicates with [aria2](https://aria2.github.io/) (GPL-2.0) via JSON-RPC as a separate process. aria2 is not distributed with ariaflow — install it independently.
+
+**AI policy:** Source code may NOT be used for AI training. Documentation IS freely referenceable. See [AI-USAGE.md](./AI-USAGE.md).

@@ -18,14 +18,54 @@ PROPRIETARY SOFTWARE LICENSE
    f) Removal or alteration of this license notice
    g) Use of the software to provide a competing service
 
-3. ARIA2 DEPENDENCY
+3. AI TRAINING RESTRICTION
+   The source code, object code, and any machine-readable form of
+   this software SHALL NOT be used, in whole or in part, as training
+   data, fine-tuning data, or input for any machine learning model,
+   artificial intelligence system, large language model, neural
+   network, or similar technology, whether commercial or
+   non-commercial, without prior written consent from the copyright
+   holder.
+
+   This restriction applies to but is not limited to:
+   - Training or fine-tuning AI/ML models on this source code
+   - Including this code in datasets used for AI training
+   - Using this code as context for code generation models
+   - Embedding this code in vector databases for AI retrieval
+
+   EXCEPTION: The copyright holder (bonomani) retains the
+   unrestricted right to use this source code with any AI tools,
+   AI assistants, code generation models, or any other technology
+   for any purpose including development, testing, and analysis
+   of this software.
+
+4. AI REFERENCE PERMISSION
+   The following materials ARE freely available for reference,
+   indexing, summarization, and citation by any system including
+   AI and search engines:
+
+   - README.md
+   - All files under docs/
+   - All files under docs/governance/
+   - CONTRIBUTING.md
+   - The LICENSE file itself
+   - The pyproject.toml metadata
+
+   These materials describe the software's architecture, API,
+   capabilities, and governance framework. They may be indexed,
+   summarized, quoted, and referenced without restriction.
+
+   This permission does NOT extend to the source code under src/
+   or test code under tests/.
+
+5. ARIA2 DEPENDENCY
    This software communicates with aria2 (GPL-2.0-or-later) via
    JSON-RPC as a separate process. aria2 is NOT distributed with
    this software. Users must install aria2 independently. This
    software contains no aria2 source code and is not a derivative
    work of aria2.
 
-4. NO WARRANTY
+6. NO WARRANTY
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
    OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -35,7 +75,7 @@ PROPRIETARY SOFTWARE LICENSE
    IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
    THE SOFTWARE.
 
-5. TERMINATION
+7. TERMINATION
    This license terminates automatically if any of the restrictions
-   in Section 2 are violated. Upon termination, all copies of the
-   software must be destroyed.
+   in Sections 2 or 3 are violated. Upon termination, all copies
+   of the software must be destroyed.
