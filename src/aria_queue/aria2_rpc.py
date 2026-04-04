@@ -370,7 +370,11 @@ def aria2_add_download(item: dict[str, Any], cap_bytes_per_sec: int, port: int =
         if not data_b64:
             raise RuntimeError("metalink_data mode but no metalink_data provided")
         gids = aria2_add_metalink(data_b64, options=options, port=port)
-        return gids[0] if isinstance(gids, list) and gids else str(gids)
+        if isinstance(gids, list) and gids:
+            return gids[0]
+        if isinstance(gids, str) and gids:
+            return gids
+        raise RuntimeError("aria2.addMetalink returned no GIDs")
 
     if mode == "mirror":
         mirrors = item.get("mirrors") or []

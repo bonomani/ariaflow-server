@@ -133,6 +133,14 @@ def _validate_output_path(output: str) -> str | None:
         return "output must be a relative path, not absolute"
     if ".." in output.split(os.sep) or ".." in output.split("/"):
         return "output must not contain '..'"
+    # Resolve and verify the path stays relative (catches mixed separators, symlink tricks)
+    try:
+        resolved = Path(output).resolve()
+        cwd = Path.cwd().resolve()
+        if not str(resolved).startswith(str(cwd)):
+            return "output path escapes current directory"
+    except (ValueError, OSError):
+        return "output path is invalid"
     return None
 
 
