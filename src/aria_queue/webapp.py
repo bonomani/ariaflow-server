@@ -336,7 +336,7 @@ def _api_discovery() -> dict[str, object]:
                 {"path": "/api/options", "description": "Alias for /api/declaration"},
                 {"path": "/api/lifecycle", "description": "Install/service status"},
                 {
-                    "path": "/api/item/{id}/files",
+                    "path": "/api/downloads/{id}/files",
                     "description": "List torrent/metalink files",
                 },
                 {"path": "/api/docs", "description": "Swagger UI"},
@@ -363,7 +363,7 @@ def _api_discovery() -> dict[str, object]:
                 },
             ],
             "POST": [
-                {"path": "/api/queue/add", "description": "Enqueue URLs"},
+                {"path": "/api/downloads/add", "description": "Enqueue URLs"},
                 {"path": "/api/scheduler/start", "description": "Start queue processor"},
                 {"path": "/api/scheduler/stop", "description": "Stop queue processor"},
                 {"path": "/api/scheduler/preflight", "description": "Run preflight checks"},
@@ -377,22 +377,22 @@ def _api_discovery() -> dict[str, object]:
                     "description": "Run bandwidth probe manually",
                 },
                 {
-                    "path": "/api/queue/cleanup",
+                    "path": "/api/downloads/cleanup",
                     "description": "Archive stale done/error items",
                 },
                 {
                     "path": "/api/aria2/change_global_option",
                     "description": "Change aria2 global options (3-tier safety)",
                 },
-                {"path": "/api/item/{id}/pause", "description": "Pause a queue item"},
+                {"path": "/api/downloads/{id}/pause", "description": "Pause a queue item"},
                 {
-                    "path": "/api/item/{id}/resume",
+                    "path": "/api/downloads/{id}/resume",
                     "description": "Resume a paused item",
                 },
-                {"path": "/api/item/{id}/remove", "description": "Remove a queue item"},
-                {"path": "/api/item/{id}/retry", "description": "Retry a failed item"},
+                {"path": "/api/downloads/{id}/remove", "description": "Remove a queue item"},
+                {"path": "/api/downloads/{id}/retry", "description": "Retry a failed item"},
                 {
-                    "path": "/api/item/{id}/files",
+                    "path": "/api/downloads/{id}/files",
                     "description": "Select torrent/metalink files",
                 },
                 {
@@ -493,8 +493,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     _POST_ROUTES: dict[str, str] = {
         "/api/bandwidth/probe": "_post_bandwidth_probe",
-        "/api/queue/add": "_post_add",
-        "/api/queue/cleanup": "_post_cleanup",
+        "/api/downloads/add": "_post_add",
+        "/api/downloads/cleanup": "_post_cleanup",
         "/api/scheduler/start": "_post_scheduler_start",
         "/api/scheduler/stop": "_post_scheduler_stop",
         "/api/scheduler/pause": "_post_pause",
@@ -633,8 +633,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 status=400,
             )
             return
-        # Parameterized route: /api/item/{id}/files
-        if path.startswith("/api/item/") and path.endswith("/files") and path.count("/") == 4:
+        # Parameterized route: /api/downloads/{id}/files
+        if path.startswith("/api/downloads/") and path.endswith("/files") and path.count("/") == 4:
             self._get_item_files(parsed)
             return
         # Parameterized route: /api/torrents/{infohash}.torrent
@@ -918,9 +918,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             )
             return
 
-        # Parameterized route: /api/item/{id}/files (POST)
+        # Parameterized route: /api/downloads/{id}/files (POST)
         if (
-            path.startswith("/api/item/")
+            path.startswith("/api/downloads/")
             and path.endswith("/files")
             and path.count("/") == 4
         ):
@@ -941,8 +941,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._post_torrent_stop({"infohash": infohash}, path)
             return
 
-        # Parameterized route: /api/item/{id}/{action}
-        if path.startswith("/api/item/") and path.count("/") == 4:
+        # Parameterized route: /api/downloads/{id}/{action}
+        if path.startswith("/api/downloads/") and path.count("/") == 4:
             self._post_item_action(payload, path)
             return
 

@@ -51,7 +51,7 @@ paths:
                   aria2:
                     type: object
 
-  /api/queue/add:
+  /api/downloads/add:
     post:
       tags: [Queue]
       summary: Add URLs to queue
@@ -99,7 +99,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
-  /api/item/{item_id}/pause:
+  /api/downloads/{id}/pause:
     post:
       tags: [Queue]
       summary: Pause a queue item
@@ -114,7 +114,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/item/{item_id}/resume:
+  /api/downloads/{id}/resume:
     post:
       tags: [Queue]
       summary: Resume a paused item
@@ -129,7 +129,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/item/{item_id}/remove:
+  /api/downloads/{id}/remove:
     post:
       tags: [Queue]
       summary: Remove a queue item
@@ -153,7 +153,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/item/{item_id}/retry:
+  /api/downloads/{id}/retry:
     post:
       tags: [Queue]
       summary: Retry a failed item
@@ -168,7 +168,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/item/{item_id}/files:
+  /api/downloads/{id}/files:
     get:
       tags: [Queue]
       summary: List files in a torrent/metalink download
@@ -242,7 +242,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/run:
+  /api/scheduler/start_and_stop_DEPRECATED:
     post:
       tags: [Engine]
       summary: Start or stop the queue processor
@@ -349,7 +349,7 @@ paths:
                       outcome:
                         type: string
 
-  /api/pause:
+  /api/scheduler/pause_DEPRECATED:
     post:
       tags: [Engine]
       summary: Pause all active transfers
@@ -369,7 +369,7 @@ paths:
                     items:
                       type: string
 
-  /api/resume:
+  /api/scheduler/resume_DEPRECATED:
     post:
       tags: [Engine]
       summary: Resume all paused transfers

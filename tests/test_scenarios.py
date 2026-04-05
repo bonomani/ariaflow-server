@@ -75,7 +75,7 @@ class TestScenarioNormalDownload(ScenarioBase):
 
         # 3. Add multiple URLs
         _, added, _ = _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -138,7 +138,7 @@ class TestScenarioPauseResumeCancel(ScenarioBase):
 
         # Add 3 items
         _, added, _ = _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -152,7 +152,7 @@ class TestScenarioPauseResumeCancel(ScenarioBase):
 
         # Pause all 3
         for item_id in (id_a, id_b, id_c):
-            code, body, _ = _req(f"{base}/api/item/{item_id}/pause", "POST")
+            code, body, _ = _req(f"{base}/api/downloads/{item_id}/pause", "POST")
             self.assertEqual(code, 200)
 
         # Verify all paused in status
@@ -161,11 +161,11 @@ class TestScenarioPauseResumeCancel(ScenarioBase):
         self.assertEqual(paused_count, 3)
 
         # Resume only A
-        _, resumed, _ = _req(f"{base}/api/item/{id_a}/resume", "POST")
+        _, resumed, _ = _req(f"{base}/api/downloads/{id_a}/resume", "POST")
         self.assertEqual(resumed["item"]["status"], "queued")
 
         # Remove B
-        _, removed, _ = _req(f"{base}/api/item/{id_b}/remove", "POST")
+        _, removed, _ = _req(f"{base}/api/downloads/{id_b}/remove", "POST")
         self.assertTrue(removed["removed"])
 
         # C stays paused, A is queued, B is gone
@@ -176,7 +176,7 @@ class TestScenarioPauseResumeCancel(ScenarioBase):
         self.assertEqual(items_by_id[id_c]["status"], "paused")
 
         # Try to pause A again → should work (it's queued)
-        _, paused, _ = _req(f"{base}/api/item/{id_a}/pause", "POST")
+        _, paused, _ = _req(f"{base}/api/downloads/{id_a}/pause", "POST")
         self.assertEqual(paused["item"]["status"], "paused")
 
 
@@ -193,7 +193,7 @@ class TestScenarioErrorRetry(ScenarioBase):
 
         # Add items
         _, added, _ = _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -220,13 +220,13 @@ class TestScenarioErrorRetry(ScenarioBase):
         self.assertEqual(len(errors), 2)
 
         # Retry first one
-        _, retried, _ = _req(f"{base}/api/item/{id_1}/retry", "POST")
+        _, retried, _ = _req(f"{base}/api/downloads/{id_1}/retry", "POST")
         self.assertEqual(retried["item"]["status"], "queued")
         self.assertNotIn("error_code", retried["item"])
         self.assertNotIn("gid", retried["item"])
 
         # Remove second one
-        _req(f"{base}/api/item/{id_2}/remove", "POST")
+        _req(f"{base}/api/downloads/{id_2}/remove", "POST")
 
         # Final state: 1 queued, 0 errors
         _, status, _ = _req(f"{base}/api/status")
@@ -234,7 +234,7 @@ class TestScenarioErrorRetry(ScenarioBase):
         self.assertEqual(status["summary"].get("error", 0), 0)
 
         # Can't retry a queued item
-        code, body, _ = _req(f"{base}/api/item/{id_1}/retry", "POST")
+        code, body, _ = _req(f"{base}/api/downloads/{id_1}/retry", "POST")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_state")
 
@@ -252,7 +252,7 @@ class TestScenarioSessionManagement(ScenarioBase):
 
         # Add item → creates session
         _, added, _ = _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/session-work.bin"}],
@@ -273,7 +273,7 @@ class TestScenarioSessionManagement(ScenarioBase):
 
         # Add another item → same session
         _, added2, _ = _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/session-work-2.bin"}],
@@ -368,7 +368,7 @@ class TestScenarioTorrentFileSelection(ScenarioBase):
 
         # Add torrent URL
         _, added, _ = _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/linux.torrent"}],
@@ -406,13 +406,13 @@ class TestScenarioTorrentFileSelection(ScenarioBase):
             },
         ]
         with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
-            _, file_list, _ = _req(f"{base}/api/item/{item_id}/files")
+            _, file_list, _ = _req(f"{base}/api/downloads/{item_id}/files")
         self.assertEqual(len(file_list["files"]), 3)
 
         # Select only the ISO
         with patch("aria_queue.core.aria_rpc") as rpc:
             _, selected, _ = _req(
-                f"{base}/api/item/{item_id}/files",
+                f"{base}/api/downloads/{item_id}/files",
                 "POST",
                 {"select": [1]},
             )
@@ -538,11 +538,11 @@ class TestScenarioDuplicateHandling(ScenarioBase):
         url = f"https://example.com/dedup-{time.time()}.bin"
 
         # Add once
-        _, first, _ = _req(f"{base}/api/queue/add", "POST", {"items": [{"url": url}]})
+        _, first, _ = _req(f"{base}/api/downloads/add", "POST", {"items": [{"url": url}]})
         first_id = first["added"][0]["id"]
 
         # Add same URL again
-        _, second, _ = _req(f"{base}/api/queue/add", "POST", {"items": [{"url": url}]})
+        _, second, _ = _req(f"{base}/api/downloads/add", "POST", {"items": [{"url": url}]})
         second_id = second["added"][0]["id"]
 
         # Same item returned
@@ -577,7 +577,7 @@ class TestScenarioFrontendConsistency(ScenarioBase):
 
         # Mutate state
         _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -629,7 +629,7 @@ class TestScenarioSSE(ScenarioBase):
 
         # Trigger a state change via add
         _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": f"https://example.com/sse-{time.time()}.bin"}],
@@ -773,7 +773,7 @@ class TestScenarioConcurrent(ScenarioBase):
 
         def add_item(i: int) -> None:
             code, body, _ = _req(
-                f"{base}/api/queue/add",
+                f"{base}/api/downloads/add",
                 "POST",
                 {
                     "items": [
@@ -803,7 +803,7 @@ class TestScenarioConcurrent(ScenarioBase):
 
         # Add items
         _, added, _ = _req(
-            f"{base}/api/queue/add",
+            f"{base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -818,7 +818,7 @@ class TestScenarioConcurrent(ScenarioBase):
         results: list[int] = []
 
         def pause(item_id: str) -> None:
-            code, _, _ = _req(f"{base}/api/item/{item_id}/pause", "POST")
+            code, _, _ = _req(f"{base}/api/downloads/{item_id}/pause", "POST")
             results.append(code)
 
         threads = [threading.Thread(target=pause, args=(item_id,)) for item_id in ids]

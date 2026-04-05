@@ -107,7 +107,7 @@ class WebSmokeTests(unittest.TestCase):
                 )
                 self.assertTrue(saved["saved"])
                 added = request_json(
-                    f"{base}/api/queue/add",
+                    f"{base}/api/downloads/add",
                     method="POST",
                     payload={
                         "items": [
@@ -127,7 +127,7 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertEqual(added["added"][0]["output"], "file.gguf")
                 self.assertEqual(added["added"][0]["post_action_rule"], "pending")
                 added_many = request_json(
-                    f"{base}/api/queue/add",
+                    f"{base}/api/downloads/add",
                     method="POST",
                     payload={
                         "items": [
@@ -245,7 +245,7 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Add an item
                 added = request_json(
-                    f"{base}/api/queue/add",
+                    f"{base}/api/downloads/add",
                     method="POST",
                     payload={
                         "items": [{"url": "https://example.com/test.bin"}],
@@ -256,21 +256,21 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertEqual(added["added"][0]["status"], "queued")
 
                 # Pause it
-                paused = request_json(f"{base}/api/item/{item_id}/pause", method="POST")
+                paused = request_json(f"{base}/api/downloads/{item_id}/pause", method="POST")
                 self.assertTrue(paused["ok"])
                 self.assertEqual(paused["item"]["status"], "paused")
 
                 # Resume it
                 resumed = request_json(
-                    f"{base}/api/item/{item_id}/resume", method="POST"
+                    f"{base}/api/downloads/{item_id}/resume", method="POST"
                 )
                 self.assertTrue(resumed["ok"])
                 self.assertEqual(resumed["item"]["status"], "queued")
 
                 # Pause again, then verify double-pause is rejected
-                request_json(f"{base}/api/item/{item_id}/pause", method="POST")
+                request_json(f"{base}/api/downloads/{item_id}/pause", method="POST")
                 try:
-                    request_json(f"{base}/api/item/{item_id}/pause", method="POST")
+                    request_json(f"{base}/api/downloads/{item_id}/pause", method="POST")
                     self.fail("expected 400")
                 except urllib.error.HTTPError as exc:
                     self.assertEqual(exc.code, 400)
@@ -278,7 +278,7 @@ class WebSmokeTests(unittest.TestCase):
                     self.assertEqual(body["error"], "invalid_state")
 
                 # Resume, then manually set to error for retry test
-                request_json(f"{base}/api/item/{item_id}/resume", method="POST")
+                request_json(f"{base}/api/downloads/{item_id}/resume", method="POST")
                 from aria_queue.core import load_queue, save_queue
 
                 items = load_queue()
@@ -288,7 +288,7 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Retry
                 retried = request_json(
-                    f"{base}/api/item/{item_id}/retry", method="POST"
+                    f"{base}/api/downloads/{item_id}/retry", method="POST"
                 )
                 self.assertTrue(retried["ok"])
                 self.assertEqual(retried["item"]["status"], "queued")
@@ -296,7 +296,7 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Remove
                 removed = request_json(
-                    f"{base}/api/item/{item_id}/remove", method="POST"
+                    f"{base}/api/downloads/{item_id}/remove", method="POST"
                 )
                 self.assertTrue(removed["ok"])
                 self.assertTrue(removed["removed"])
@@ -307,14 +307,14 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Not found
                 try:
-                    request_json(f"{base}/api/item/00000000-0000-0000-0000-000000000000/pause", method="POST")
+                    request_json(f"{base}/api/downloads/00000000-0000-0000-0000-000000000000/pause", method="POST")
                     self.fail("expected 404")
                 except urllib.error.HTTPError as exc:
                     self.assertEqual(exc.code, 404)
 
                 # Invalid action
                 try:
-                    request_json(f"{base}/api/item/{item_id}/explode", method="POST")
+                    request_json(f"{base}/api/downloads/{item_id}/explode", method="POST")
                     self.fail("expected 400")
                 except urllib.error.HTTPError as exc:
                     self.assertEqual(exc.code, 400)

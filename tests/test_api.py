@@ -81,7 +81,7 @@ class TestStatusEndpoint(APIServerPerTestCase):
 
     def test_status_summary_counts_match_items(self) -> None:
         _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -97,7 +97,7 @@ class TestStatusEndpoint(APIServerPerTestCase):
 
     def test_status_includes_session_info(self) -> None:
         _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/x.bin"}]},
         )
@@ -119,7 +119,7 @@ class TestStatusEndpoint(APIServerPerTestCase):
 class TestAddEndpoint(APIServerPerTestCase):
     def test_add_single_item(self) -> None:
         code, body = _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/file.bin"}],
@@ -134,7 +134,7 @@ class TestAddEndpoint(APIServerPerTestCase):
 
     def test_add_multiple_items(self) -> None:
         code, body = _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -151,7 +151,7 @@ class TestAddEndpoint(APIServerPerTestCase):
 
     def test_add_with_output_and_post_action(self) -> None:
         code, body = _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [
@@ -168,14 +168,14 @@ class TestAddEndpoint(APIServerPerTestCase):
 
     def test_add_duplicate_url_returns_same_id(self) -> None:
         _, first = _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/dup.bin"}],
             },
         )
         _, second = _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/dup.bin"}],
@@ -184,18 +184,18 @@ class TestAddEndpoint(APIServerPerTestCase):
         self.assertEqual(first["added"][0]["id"], second["added"][0]["id"])
 
     def test_add_empty_items_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/queue/add", "POST", {"items": []})
+        code, body = _request(f"{self.base}/api/downloads/add", "POST", {"items": []})
         self.assertEqual(code, 400)
 
     def test_add_missing_items_returns_400(self) -> None:
         code, body = _request(
-            f"{self.base}/api/queue/add", "POST", {"url": "https://example.com/x"}
+            f"{self.base}/api/downloads/add", "POST", {"url": "https://example.com/x"}
         )
         self.assertEqual(code, 400)
 
     def test_add_invalid_json_returns_400(self) -> None:
         code, _, _ = _raw_request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             method="POST",
             data=b"not json",
             content_type="application/json",
@@ -203,7 +203,7 @@ class TestAddEndpoint(APIServerPerTestCase):
         self.assertEqual(code, 400)
 
     def test_add_no_body_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/queue/add", "POST", None)
+        code, body = _request(f"{self.base}/api/downloads/add", "POST", None)
         self.assertEqual(code, 400)
 
 
@@ -216,7 +216,7 @@ class TestPerItemActions(APIServerPerTestCase):
     def setUp(self) -> None:
         super().setUp()
         _, added = _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/item.bin"}],
@@ -227,14 +227,14 @@ class TestPerItemActions(APIServerPerTestCase):
     # ── Pause ──
 
     def test_pause_queued_item(self) -> None:
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/pause", "POST")
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertEqual(body["item"]["status"], "paused")
 
     def test_pause_already_paused_returns_400(self) -> None:
-        _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        _request(f"{self.base}/api/downloads/{self.item_id}/pause", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/pause", "POST")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_state")
 
@@ -242,20 +242,20 @@ class TestPerItemActions(APIServerPerTestCase):
         items = load_queue()
         items[0]["status"] = "complete"
         save_queue(items)
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/pause", "POST")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_state")
 
     def test_pause_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/pause", "POST")
+        code, body = _request(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/pause", "POST")
         self.assertEqual(code, 404)
         self.assertEqual(body["error"], "not_found")
 
     # ── Resume ──
 
     def test_resume_paused_item_without_gid(self) -> None:
-        _request(f"{self.base}/api/item/{self.item_id}/pause", "POST")
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
+        _request(f"{self.base}/api/downloads/{self.item_id}/pause", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/resume", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "queued")
 
@@ -265,19 +265,19 @@ class TestPerItemActions(APIServerPerTestCase):
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc"):
-            code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
+            code, body = _request(f"{self.base}/api/downloads/{self.item_id}/resume", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "active")
 
     def test_resume_queued_item_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/resume", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/resume", "POST")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_state")
 
     # ── Remove ──
 
     def test_remove_queued_item(self) -> None:
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
         self.assertEqual(code, 200)
         self.assertTrue(body["removed"])
         self.assertEqual(len(load_queue()), 0)
@@ -288,17 +288,17 @@ class TestPerItemActions(APIServerPerTestCase):
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc") as rpc:
-            code, body = _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
+            code, body = _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
         self.assertEqual(code, 200)
         rpc.assert_any_call("aria2.remove", ["gid-1"], port=6800, timeout=5)
 
     def test_remove_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/remove", "POST")
+        code, body = _request(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/remove", "POST")
         self.assertEqual(code, 404)
 
     def test_double_remove_returns_404(self) -> None:
-        _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/remove", "POST")
+        _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
         self.assertEqual(code, 404)
 
     # ── Retry ──
@@ -310,7 +310,7 @@ class TestPerItemActions(APIServerPerTestCase):
         items[0]["error_message"] = "download failed"
         items[0]["gid"] = "gid-dead"
         save_queue(items)
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/retry", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "queued")
         self.assertNotIn("error_code", body["item"])
@@ -321,7 +321,7 @@ class TestPerItemActions(APIServerPerTestCase):
         items = load_queue()
         items[0]["status"] = "failed"
         save_queue(items)
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/retry", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "queued")
 
@@ -329,12 +329,12 @@ class TestPerItemActions(APIServerPerTestCase):
         items = load_queue()
         items[0]["status"] = "stopped"
         save_queue(items)
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/retry", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "queued")
 
     def test_retry_queued_item_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/retry", "POST")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_state")
 
@@ -342,13 +342,13 @@ class TestPerItemActions(APIServerPerTestCase):
         items = load_queue()
         items[0]["status"] = "complete"
         save_queue(items)
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/retry", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/retry", "POST")
         self.assertEqual(code, 400)
 
     # ── Invalid action ──
 
     def test_invalid_action_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/explode", "POST")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/explode", "POST")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_action")
 
@@ -362,7 +362,7 @@ class TestFileSelection(APIServerPerTestCase):
     def setUp(self) -> None:
         super().setUp()
         _, added = _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/archive.torrent"}],
@@ -371,7 +371,7 @@ class TestFileSelection(APIServerPerTestCase):
         self.item_id = added["added"][0]["id"]
 
     def test_get_files_no_gid_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/item/{self.item_id}/files")
+        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/files")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "no_gid")
 
@@ -394,14 +394,14 @@ class TestFileSelection(APIServerPerTestCase):
             },
         ]
         with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
-            code, body = _request(f"{self.base}/api/item/{self.item_id}/files")
+            code, body = _request(f"{self.base}/api/downloads/{self.item_id}/files")
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertEqual(len(body["files"]), 2)
         self.assertEqual(body["gid"], "gid-torrent")
 
     def test_get_files_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/files")
+        code, body = _request(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/files")
         self.assertEqual(code, 404)
 
     def test_select_files(self) -> None:
@@ -411,7 +411,7 @@ class TestFileSelection(APIServerPerTestCase):
         save_queue(items)
         with patch("aria_queue.core.aria_rpc") as rpc:
             code, body = _request(
-                f"{self.base}/api/item/{self.item_id}/files",
+                f"{self.base}/api/downloads/{self.item_id}/files",
                 "POST",
                 {"select": [1, 3, 5]},
             )
@@ -428,7 +428,7 @@ class TestFileSelection(APIServerPerTestCase):
 
     def test_select_files_empty_returns_400(self) -> None:
         code, body = _request(
-            f"{self.base}/api/item/{self.item_id}/files",
+            f"{self.base}/api/downloads/{self.item_id}/files",
             "POST",
             {"select": []},
         )
@@ -436,7 +436,7 @@ class TestFileSelection(APIServerPerTestCase):
 
     def test_select_files_missing_select_returns_400(self) -> None:
         code, body = _request(
-            f"{self.base}/api/item/{self.item_id}/files",
+            f"{self.base}/api/downloads/{self.item_id}/files",
             "POST",
             {"indices": [1, 2]},
         )
@@ -444,7 +444,7 @@ class TestFileSelection(APIServerPerTestCase):
 
     def test_select_files_non_integer_returns_400(self) -> None:
         code, body = _request(
-            f"{self.base}/api/item/{self.item_id}/files",
+            f"{self.base}/api/downloads/{self.item_id}/files",
             "POST",
             {"select": ["a", "b"]},
         )
@@ -789,7 +789,7 @@ class TestSession(APIServerPerTestCase):
     def test_new_session(self) -> None:
         # Create initial session via add
         _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/x.bin"}],
@@ -806,7 +806,7 @@ class TestSession(APIServerPerTestCase):
 
     def test_new_session_closes_previous(self) -> None:
         _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/y.bin"}]},
         )
@@ -833,7 +833,7 @@ class TestActionLog(APIServerPerTestCase):
         # Add items to generate log entries
         for i in range(5):
             _request(
-                f"{self.base}/api/queue/add",
+                f"{self.base}/api/downloads/add",
                 "POST",
                 {"items": [{"url": f"https://example.com/{i}.bin"}]},
             )
@@ -842,7 +842,7 @@ class TestActionLog(APIServerPerTestCase):
 
     def test_log_entries_have_timestamps(self) -> None:
         _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/log.bin"}]},
         )
@@ -852,7 +852,7 @@ class TestActionLog(APIServerPerTestCase):
 
     def test_log_records_add_action(self) -> None:
         _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/tracked.bin"}]},
         )
@@ -987,7 +987,7 @@ class TestMetaEndpoints(APIServerPerTestCase):
 
     def test_revision_counter_in_status(self) -> None:
         _request(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/rev.bin"}],
@@ -1063,7 +1063,7 @@ class TestErrorHandling(APIServerPerTestCase):
 
         def add_item() -> None:
             r = _request(
-                f"{self.base}/api/queue/add",
+                f"{self.base}/api/downloads/add",
                 "POST",
                 {
                     "items": [
@@ -1186,21 +1186,21 @@ class TestGetEndpoints(APIServerTestCase):
         self.assertIn("ariaflow", body)
         self.assertEqual(body["ariaflow"]["meta"]["contract"], "UCC")
 
-    # 8. GET /api/item/{id}/files
+    # 8. GET /api/downloads/{id}/files
     def test_get_api_item_files_no_gid(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/t.torrent"}]},
         )
         item_id = added["added"][0]["id"]
-        code, body, _ = _req(f"{self.base}/api/item/{item_id}/files")
+        code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/files")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "no_gid")
 
     def test_get_api_item_files_with_gid(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/t2.torrent"}]},
         )
@@ -1212,12 +1212,12 @@ class TestGetEndpoints(APIServerTestCase):
         save_queue(items)
         files = [{"index": "1", "path": "/f.mkv", "length": "999", "selected": "true"}]
         with patch("aria_queue.core.aria_rpc", return_value={"result": files}):
-            code, body, _ = _req(f"{self.base}/api/item/{item_id}/files")
+            code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/files")
         self.assertEqual(code, 200)
         self.assertEqual(len(body["files"]), 1)
 
     def test_get_api_item_files_not_found(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/files")
+        code, body, _ = _req(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/files")
         self.assertEqual(code, 404)
 
     # 9. GET /api/docs
@@ -1285,7 +1285,7 @@ class TestPostEndpoints(APIServerTestCase):
     # 1. POST /api/add
     def test_post_api_add(self) -> None:
         code, body, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/post-add.bin"}],
@@ -1296,7 +1296,7 @@ class TestPostEndpoints(APIServerTestCase):
         self.assertEqual(body["count"], 1)
 
     def test_post_api_add_invalid(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/queue/add", "POST", {"items": []})
+        code, body, _ = _req(f"{self.base}/api/downloads/add", "POST", {"items": []})
         self.assertEqual(code, 400)
 
     # 2. POST /api/scheduler/start
@@ -1387,7 +1387,7 @@ class TestPostEndpoints(APIServerTestCase):
     def test_post_api_session(self) -> None:
         # Ensure a session exists first
         _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/sess.bin"}]},
         )
@@ -1447,47 +1447,47 @@ class TestPostEndpoints(APIServerTestCase):
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "rejected_options")
 
-    # 12. POST /api/item/{id}/pause
+    # 12. POST /api/downloads/{id}/pause
     def test_post_api_item_pause(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/pause-me.bin"}]},
         )
         item_id = added["added"][0]["id"]
-        code, body, _ = _req(f"{self.base}/api/item/{item_id}/pause", "POST")
+        code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "paused")
 
-    # 13. POST /api/item/{id}/resume
+    # 13. POST /api/downloads/{id}/resume
     def test_post_api_item_resume(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/resume-me.bin"}]},
         )
         item_id = added["added"][0]["id"]
-        _req(f"{self.base}/api/item/{item_id}/pause", "POST")
-        code, body, _ = _req(f"{self.base}/api/item/{item_id}/resume", "POST")
+        _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
+        code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/resume", "POST")
         self.assertEqual(code, 200)
         self.assertIn(body["item"]["status"], ("queued", "active"))
 
-    # 14. POST /api/item/{id}/remove
+    # 14. POST /api/downloads/{id}/remove
     def test_post_api_item_remove(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/remove-me.bin"}]},
         )
         item_id = added["added"][0]["id"]
-        code, body, _ = _req(f"{self.base}/api/item/{item_id}/remove", "POST")
+        code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/remove", "POST")
         self.assertEqual(code, 200)
         self.assertTrue(body["removed"])
 
-    # 15. POST /api/item/{id}/retry
+    # 15. POST /api/downloads/{id}/retry
     def test_post_api_item_retry(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/retry-me.bin"}]},
         )
@@ -1498,14 +1498,14 @@ class TestPostEndpoints(APIServerTestCase):
                 item["status"] = "error"
                 item["error_code"] = "99"
         save_queue(items)
-        code, body, _ = _req(f"{self.base}/api/item/{item_id}/retry", "POST")
+        code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/retry", "POST")
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "queued")
 
-    # 16. POST /api/item/{id}/files (select)
+    # 16. POST /api/downloads/{id}/files (select)
     def test_post_api_item_files_select(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/sel.torrent"}]},
         )
@@ -1518,20 +1518,20 @@ class TestPostEndpoints(APIServerTestCase):
         save_queue(items)
         with patch("aria_queue.core.aria_rpc"):
             code, body, _ = _req(
-                f"{self.base}/api/item/{item_id}/files", "POST", {"select": [1, 2]}
+                f"{self.base}/api/downloads/{item_id}/files", "POST", {"select": [1, 2]}
             )
         self.assertEqual(code, 200)
         self.assertEqual(body["selected"], [1, 2])
 
     def test_post_api_item_files_select_invalid(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/sel2.torrent"}]},
         )
         item_id = added["added"][0]["id"]
         code, body, _ = _req(
-            f"{self.base}/api/item/{item_id}/files", "POST", {"select": []}
+            f"{self.base}/api/downloads/{item_id}/files", "POST", {"select": []}
         )
         self.assertEqual(code, 400)
 
@@ -1615,7 +1615,7 @@ class TestCrossCutting(APIServerTestCase):
         rev1 = s1["_rev"]
         # Trigger state change
         _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/rev-inc.bin"}]},
         )
@@ -1636,24 +1636,24 @@ class TestCrossCutting(APIServerTestCase):
     # Invalid item action
     def test_invalid_item_action(self) -> None:
         _, added, _ = _req(
-            f"{self.base}/api/queue/add",
+            f"{self.base}/api/downloads/add",
             "POST",
             {"items": [{"url": "https://example.com/inv.bin"}]},
         )
         item_id = added["added"][0]["id"]
-        code, body, _ = _req(f"{self.base}/api/item/{item_id}/explode", "POST")
+        code, body, _ = _req(f"{self.base}/api/downloads/{item_id}/explode", "POST")
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_action")
 
     # Item not found
     def test_item_not_found(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/item/00000000-0000-0000-0000-000000000000/pause", "POST")
+        code, body, _ = _req(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/pause", "POST")
         self.assertEqual(code, 404)
 
     # State consistency: add → status reflects it
     def test_add_reflected_in_status(self) -> None:
         url = f"https://example.com/consistency-{time.time()}.bin"
-        _req(f"{self.base}/api/queue/add", "POST", {"items": [{"url": url}]})
+        _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
         _, status, _ = _req(f"{self.base}/api/status")
         urls = [item["url"] for item in status["items"]]
         self.assertIn(url, urls)
@@ -1661,9 +1661,9 @@ class TestCrossCutting(APIServerTestCase):
     # State consistency: remove → status reflects it
     def test_remove_reflected_in_status(self) -> None:
         url = f"https://example.com/remove-check-{time.time()}.bin"
-        _, added, _ = _req(f"{self.base}/api/queue/add", "POST", {"items": [{"url": url}]})
+        _, added, _ = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
         item_id = added["added"][0]["id"]
-        _req(f"{self.base}/api/item/{item_id}/remove", "POST")
+        _req(f"{self.base}/api/downloads/{item_id}/remove", "POST")
         _, status, _ = _req(f"{self.base}/api/status")
         ids = [item["id"] for item in status["items"]]
         self.assertNotIn(item_id, ids)
@@ -1671,7 +1671,7 @@ class TestCrossCutting(APIServerTestCase):
     # Action log records operations
     def test_actions_logged(self) -> None:
         url = f"https://example.com/logged-{time.time()}.bin"
-        _req(f"{self.base}/api/queue/add", "POST", {"items": [{"url": url}]})
+        _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
         _, log, _ = _req(f"{self.base}/api/log?limit=5")
         actions = [e.get("action") for e in log["items"]]
         self.assertIn("add", actions)

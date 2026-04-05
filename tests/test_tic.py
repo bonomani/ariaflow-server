@@ -1014,7 +1014,7 @@ class TicOpenAPITests(unittest.TestCase):
         self.assertEqual(data["openapi"], "3.0.3")
         self.assertIn("paths", data)
         self.assertIn("/api/status", data["paths"])
-        self.assertIn("/api/item/{item_id}/pause", data["paths"])
+        self.assertIn("/api/downloads/{id}/pause", data["paths"])
         self.assertIn("/api/aria2/change_global_option", data["paths"])
 
 
