@@ -5,7 +5,7 @@ TIC ref: tic@7cfba80
 Generated: 2026-04-05
 Test runner: `python -m unittest discover -s tests -v`
 
-## Test Inventory — All 455 Tests
+## Test Inventory — All 473 Tests
 
 ---
 

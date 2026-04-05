@@ -33,9 +33,10 @@ def _api_discovery() -> dict[str, object]:
         "endpoints": {
             "GET": [
                 {"path": "/api", "description": "API discovery (this endpoint)"},
+                {"path": "/api/health", "description": "Health check, version, disk usage"},
                 {
                     "path": "/api/scheduler",
-                    "description": "Scheduler state (idle/running/paused/stopping)",
+                    "description": "Scheduler state (running/paused)",
                 },
                 {
                     "path": "/api/status",

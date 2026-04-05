@@ -45,5 +45,5 @@ date: 2026-04-05
 limitations:
   - BISS classification covers 16 boundaries and 9 interaction classes; needs expansion as new boundaries are added
   - ASM state model formalized in docs/governance/asm-state-model.md
-  - TIC oracle covers all 455 tests with trace targets across ASM/UIC/UCC/BISS
-  - UIC has 2 preflight gates and 17 preferences
+  - TIC oracle covers all 473 tests with trace targets across ASM/UIC/UCC/BISS
+  - UIC has 2 preflight gates and 27 preferences
