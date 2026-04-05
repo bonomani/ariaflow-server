@@ -22,7 +22,9 @@ def _core() -> Any:
 
 
 # Valid queue item statuses:
-#   discovering  — auto-detecting download mode (trying protocols)
+#   discovering  — reserved for future async mode detection (not implemented;
+#                  mode detection is currently synchronous so items skip this
+#                  state and go directly to queued/active)
 #   queued       — ready for scheduling (fallback when aria2 unreachable)
 #   waiting      — submitted to aria2, waiting for download slot
 #   active       — active transfer in progress (aria2 "active")
