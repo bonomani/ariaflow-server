@@ -237,6 +237,7 @@ def _parse_add_items(
                     f"items[{index}].metalink_data must be valid base64",
                     index=index,
                 )
+        distribute = bool(raw_item.get("distribute", False))
         items.append(
             {
                 "url": url,
@@ -246,6 +247,7 @@ def _parse_add_items(
                 "torrent_data": torrent_data_str,
                 "metalink_data": metalink_data_str,
                 "priority": priority_val,
+                "distribute": distribute,
             }
         )
     return items, None
@@ -502,6 +504,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/pause": "_post_pause",
         "/api/resume": "_post_resume",
         "/api/aria2/change_global_option": "_post_aria2_change_global_option",
+        "/api/aria2/change_option": "_post_aria2_change_option",
+        "/api/aria2/set_limits": "_post_aria2_set_limits",
+        "/api/torrents/stop": "_post_torrent_stop",
         "/api/aria2/options": "_post_aria2_change_global_option",
     }
 
@@ -953,6 +958,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
                 torrent_data=item.get("torrent_data"),
                 metalink_data=item.get("metalink_data"),
                 priority=item.get("priority", 0),
+                distribute=item.get("distribute", False),
             ).__dict__
             for item in items
         ]
@@ -1276,6 +1282,113 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
         self._send_json(result)
 
+    def _post_torrent_stop(self, payload: object, path: str) -> None:
+        """Stop seeding a specific torrent by infohash."""
+        if not isinstance(payload, dict):
+            self._send_json(_error_payload("invalid_payload", "expected {infohash}"), status=400)
+            return
+        infohash = str(payload.get("infohash", "")).strip()
+        if not infohash:
+            self._send_json(_error_payload("invalid_payload", "infohash required"), status=400)
+            return
+        from .core import load_queue, save_queue, aria2_remove, record_action
+        items = load_queue()
+        found = False
+        for item in items:
+            if item.get("distribute_infohash") == infohash and item.get("distribute_status") == "seeding":
+                seed_gid = item.get("distribute_seed_gid")
+                if seed_gid:
+                    try:
+                        aria2_remove(seed_gid)
+                    except Exception:
+                        pass
+                torrent_path = item.get("distribute_torrent_path")
+                if torrent_path:
+                    try:
+                        import os
+                        os.remove(torrent_path)
+                    except Exception:
+                        pass
+                item["distribute_status"] = "stopped"
+                item.pop("distribute_seed_gid", None)
+                found = True
+                record_action(
+                    action="seed_stopped",
+                    target="queue_item",
+                    outcome="changed",
+                    reason="user_stop_seed",
+                    before={},
+                    after={"item_id": item.get("id"), "infohash": infohash},
+                    detail={"item_id": item.get("id"), "infohash": infohash},
+                )
+                break
+        if found:
+            save_queue(items)
+            self._invalidate_status_cache()
+            self._send_json({"ok": True, "infohash": infohash, "status": "stopped"})
+        else:
+            self._send_json(_error_payload("not_found", f"no active seed for {infohash}"), status=404)
+
+    def _post_aria2_set_limits(self, payload: object, path: str) -> None:
+        """Set managed bandwidth/seed options via dedicated functions."""
+        if not isinstance(payload, dict):
+            self._send_json(
+                _error_payload("invalid_payload", "expected JSON object"),
+                status=400,
+            )
+            return
+        from .core import (
+            aria2_set_max_overall_download_limit,
+            aria2_set_max_overall_upload_limit,
+            aria2_set_max_download_limit,
+            aria2_set_max_upload_limit,
+            aria2_set_seed_ratio,
+            aria2_set_seed_time,
+        )
+        applied = {}
+        errors = []
+        setters = {
+            "max_overall_download_limit": lambda v: aria2_set_max_overall_download_limit(int(v)),
+            "max_overall_upload_limit": lambda v: aria2_set_max_overall_upload_limit(int(v)),
+            "max_download_limit": lambda v: aria2_set_max_download_limit(str(payload["gid"]), int(v)) if "gid" in payload else None,
+            "max_upload_limit": lambda v: aria2_set_max_upload_limit(str(payload["gid"]), int(v)) if "gid" in payload else None,
+            "seed_ratio": lambda v: aria2_set_seed_ratio(float(v)),
+            "seed_time": lambda v: aria2_set_seed_time(int(v)),
+        }
+        for key, setter in setters.items():
+            if key in payload:
+                try:
+                    setter(payload[key])
+                    applied[key] = payload[key]
+                except Exception:
+                    errors.append(key)
+        self._send_json({"ok": len(errors) == 0, "applied": applied, "errors": errors})
+
+    def _post_aria2_change_option(self, payload: object, path: str) -> None:
+        if not isinstance(payload, dict):
+            self._send_json(
+                _error_payload("invalid_payload", "expected {gid, options}"),
+                status=400,
+            )
+            return
+        gid = str(payload.get("gid", "")).strip()
+        options = payload.get("options")
+        if not gid or not isinstance(options, dict):
+            self._send_json(
+                _error_payload("invalid_payload", "expected {gid: string, options: {...}}"),
+                status=400,
+            )
+            return
+        try:
+            from .core import aria2_change_option
+            aria2_change_option(gid, {str(k): str(v) for k, v in options.items()})
+            self._send_json({"ok": True, "gid": gid, "applied": options})
+        except Exception:
+            self._send_json(
+                _error_payload("rpc_error", "internal error"),
+                status=500,
+            )
+
     def _post_item_files(self, payload: object, path: str) -> None:
         item_id = path.split("/")[3]
         if not _validate_item_id(item_id):
@@ -1313,6 +1426,30 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(_error_payload("invalid_id", "item ID must be a UUID"), status=400)
             return
         action = parts[4]
+        if action == "priority":
+            p = payload.get("priority") if isinstance(payload, dict) else None
+            if p is None:
+                self._send_json(
+                    _error_payload("invalid_payload", "expected {priority: N}"),
+                    status=400,
+                )
+                return
+            try:
+                pval = int(p)
+            except (TypeError, ValueError):
+                self._send_json(
+                    _error_payload("invalid_payload", "priority must be an integer"),
+                    status=400,
+                )
+                return
+            from .queue_ops import set_item_priority
+            result = set_item_priority(item_id, pval)
+            if not result.get("ok", True):
+                self._send_json(result, status=404 if result.get("error") == "not_found" else 400)
+                return
+            self._invalidate_status_cache()
+            self._send_json(result)
+            return
         item_actions = {
             "pause": pause_queue_item,
             "resume": resume_queue_item,

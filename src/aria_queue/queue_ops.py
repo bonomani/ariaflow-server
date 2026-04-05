@@ -190,6 +190,7 @@ def add_queue_item(
     torrent_data: str | None = None,
     metalink_data: str | None = None,
     priority: int = 0,
+    distribute: bool = False,
 ) -> QueueItem:
     from .contracts import load_declaration
 
@@ -285,7 +286,10 @@ def add_queue_item(
             if sid
             else None,
         )
-        items.append(asdict(item))
+        item_dict = asdict(item)
+        if distribute:
+            item_dict["distribute"] = True
+        items.append(item_dict)
         core.save_queue(items)
         core.record_action(
             action="add",
@@ -559,6 +563,35 @@ def remove_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             detail={"item_id": item_id, "gid": gid},
         )
     return {"ok": True, "removed": True, "item": before}
+
+
+def set_item_priority(item_id: str, priority: int, port: int = 6800) -> dict[str, Any]:
+    core = _core()
+    with storage_locked():
+        items, item, idx = _find_queue_item_by_id(item_id)
+        if item is None:
+            return {
+                "ok": False,
+                "error": "not_found",
+                "message": f"item {item_id} not found",
+            }
+        before = dict(item)
+        item["priority"] = priority
+        core.save_queue(items)
+        core.record_action(
+            action="priority",
+            target="queue_item",
+            outcome="changed",
+            reason="user_set_priority",
+            before={"item": before},
+            after={"item": dict(item)},
+            detail={"item_id": item_id, "priority": priority},
+        )
+    # Reorder in aria2 if item has a GID
+    gid = item.get("gid")
+    if gid and priority > 0:
+        _aria2_apply_priority(gid, priority, port=port)
+    return {"ok": True, "item": dict(item)}
 
 
 def retry_queue_item(item_id: str) -> dict[str, Any]:
