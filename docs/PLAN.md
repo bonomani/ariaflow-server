@@ -7,27 +7,48 @@
 **Why:** 40 handlers in one file. Grouping by resource matches the API structure.
 **Scope:** ~1290 lines moved, 0 logic changes.
 
+**Pre-cleanup:**
+- Remove dead `_session_fields` function (0 callers)
+
+**Rule:** Only truly shared helpers go in `helpers.py`. Single-use helpers move with their handler.
+
 Files:
 - `routes/__init__.py` — re-exports all handlers (webapp.py dispatch unchanged)
-- `routes/helpers.py` — _error_payload, _validate_url, _validate_output_path, _validate_item_id, _parse_add_items, _resolve_auto_preflight_override, _ALLOWED_URL_SCHEMES
-- `routes/downloads.py` — post_add, post_cleanup, get_archive, get_status, get_item_files, post_item_files, post_item_action (~300 lines)
-- `routes/scheduler.py` — get_scheduler, post_scheduler_start, post_scheduler_stop, post_pause, post_resume, post_preflight, post_ucc (~250 lines)
-- `routes/aria2.py` — get_aria2_global_option, get_aria2_option, get_aria2_option_tiers, post_aria2_change_global_option, post_aria2_change_option, post_aria2_set_limits (~200 lines)
-- `routes/torrents.py` — get_torrents, get_torrent_file, post_torrent_stop (~100 lines)
-- `routes/sessions.py` — get_sessions, get_session_stats, post_session (~60 lines)
-- `routes/config.py` — get_declaration, post_declaration, patch_declaration_preferences (~100 lines)
-- `routes/meta.py` — get_health, get_api, get_docs, get_openapi_yaml, get_tests, get_events (~150 lines)
-- `routes/lifecycle.py` — get_lifecycle, post_lifecycle_action (~80 lines)
-- `routes/bandwidth.py` — get_bandwidth, post_bandwidth_probe (~50 lines)
+- `routes/helpers.py` (~30 lines) — `_error_payload`, `_validate_item_id`, `_ALLOWED_URL_SCHEMES`
+- `routes/downloads.py` (~300 lines) — get_status, get_archive, get_item_files, post_add, post_cleanup, post_item_files, post_item_action + single-use: `_parse_add_items`, `_validate_url`, `_validate_output_path`
+- `routes/scheduler.py` (~170 lines) — get_scheduler, post_scheduler_start, post_scheduler_stop, post_pause, post_resume, post_preflight, post_ucc + single-use: `_resolve_auto_preflight_override`
+- `routes/aria2.py` (~120 lines) — get_aria2_global_option, get_aria2_option, get_aria2_option_tiers, post_aria2_change_global_option, post_aria2_change_option, post_aria2_set_limits
+- `routes/torrents.py` (~80 lines) — get_torrents, get_torrent_file, post_torrent_stop
+- `routes/sessions.py` (~50 lines) — get_sessions, get_session_stats, post_session
+- `routes/config.py` (~100 lines) — get_declaration, post_declaration, patch_declaration_preferences
+- `routes/meta.py` (~250 lines) — get_health, get_api, get_docs, get_openapi_yaml, get_tests, get_events, get_log + single-use: `_api_discovery`, `_run_tests`, `_swagger_ui_html`, `_find_openapi_spec`
+- `routes/lifecycle.py` (~120 lines) — get_lifecycle, post_lifecycle_action + single-use: `_lifecycle_payload`
+- `routes/bandwidth.py` (~10 lines) — get_bandwidth, post_bandwidth_probe
 
-Steps:
-1. Create `routes/` directory
-2. Create `helpers.py` with shared utilities
-3. Create each resource file, importing from helpers
-4. Create `__init__.py` re-exporting all handlers
-5. Delete old `routes.py`
-6. Update `gen_openapi.py` to read from `routes/` package
-7. Run tests — all 441 must pass
+**Implementation order:**
+1. Remove dead `_session_fields` — cleanup before split
+2. Create `routes/` directory + `__init__.py`
+3. Create `routes/helpers.py` — shared by all other files, must exist first
+4. Create `routes/meta.py` — no dependencies on other route files
+5. Create `routes/config.py` — no dependencies on other route files
+6. Create `routes/sessions.py` — no dependencies
+7. Create `routes/bandwidth.py` — no dependencies
+8. Create `routes/aria2.py` — no dependencies
+9. Create `routes/torrents.py` — no dependencies
+10. Create `routes/lifecycle.py` — no dependencies
+11. Create `routes/scheduler.py` — no dependencies
+12. Create `routes/downloads.py` — imports helpers (validate_url etc.)
+13. Update `routes/__init__.py` with all re-exports
+14. Delete old `routes.py`
+15. Update `gen_openapi.py` to read from `routes/` package
+16. Run tests — all 441 must pass
+
+**Why this order:**
+- Step 1: clean dead code before moving anything
+- Step 2-3: foundation (package + shared helpers)
+- Steps 4-12: each route file is independent — order doesn't matter, but meta first because it has the most single-use helpers to absorb
+- Steps 13-14: switch over — __init__.py re-exports, delete old file
+- Steps 15-16: update tooling + verify
 
 _D1-D8 (private torrent distribution pipeline) implemented. See git history._
 
