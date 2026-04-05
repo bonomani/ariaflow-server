@@ -37,3 +37,16 @@ Dockerfile installs aria2 + ariaflow + ariaflow-web. Exposes ports 8000/8001. Vo
 ### 3.2 DirectURL / file serving — deferred
 
 Completed files sit in aria2's download directory with no API to serve them. **Recommendation:** document how to point a static file server (nginx, caddy) at the download directory (zero code). Add `GET /api/files` later if demand exists.
+
+## Cross-project gaps
+
+Backend gaps reported by the frontend project (`ariaflow-web`) are tracked in:
+- **`../ariaflow-web/BACKEND_GAPS.md`** — gaps the backend must fix
+- **`../ariaflow-web/FRONTEND_GAPS.md`** — frontend-side gaps (some blocked by backend)
+
+Current open backend gaps from frontend:
+
+| ID | Gap | Impact | Status |
+|---|---|---|---|
+| BG-1 | SSE pushes rev-only, not full payload | Frontend must poll after every event | Planned (see PLAN.md) |
+| BG-2 | No PATCH for declaration preferences | Read-modify-write race on concurrent updates | Planned (see PLAN.md) |
