@@ -13,7 +13,7 @@ The architecture is orthogonal — each concept answers exactly one question:
 | **Status / Readiness** | Can the system run safely? | Service status, preflight checks, dependency checks |
 | **Policy** | How should the scheduler behave? | Concurrency, dedup, ordering, post-action rules |
 | **Session** | Under which context is ariaflow operating? | session_id, started_at, closed_at, close_reason |
-| **Run** | What is the scheduler doing now? | running, paused, stop_requested |
+| **Run** | What is the scheduler doing now? | running, paused |
 | **Queue** | What work exists and in what order? | Priority-ordered list of download items |
 | **Group** | Which jobs belong together? | Named set of jobs within a queue |
 | **Job** | What is the state of one download? | status, gid, url, mode, progress |
@@ -56,7 +56,7 @@ Policy
 Session
 ├── session_id, started_at, last_seen_at, closed_at
 └── Run
-    ├── state: running / paused / stop_requested / idle
+    ├── state: running / paused (auto-starts with serve)
     └── Queue
         ├── Group A (priority: 10)
         │   ├── Job A1 (priority: default, post_action: inherited)

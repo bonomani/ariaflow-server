@@ -36,6 +36,7 @@ tags:
 
 
 
+
 paths:
   /api:
     get:
@@ -526,6 +527,17 @@ paths:
             application/json:
               schema:
                 type: object
+  /api/peers:
+    get:
+      tags: [Meta]
+      summary: GET peers peers
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
   /api/scheduler:
     get:
       tags: [Scheduler]
@@ -577,42 +589,6 @@ paths:
     post:
       tags: [Scheduler]
       summary: Resume all paused transfers
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-        "400":
-          description: Bad request
-  /api/scheduler/start:
-    post:
-      tags: [Scheduler]
-      summary: Start the scheduler
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-        "400":
-          description: Bad request
-  /api/scheduler/stop:
-    post:
-      tags: [Scheduler]
-      summary: Stop the scheduler
       requestBody:
         content:
           application/json:
@@ -927,5 +903,6 @@ components:
                 type: boolean
               item:
                 $ref: "#/components/schemas/QueueItem"
+
 
 

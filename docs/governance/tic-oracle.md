@@ -265,8 +265,8 @@ Core scheduler, state machine, and UCC contract tests.
 |---|---|---|---|---|
 | 152 | `test_post_api_add` | POST /api/downloads/add succeeds | code 200, ok, count == 1 | UCC: execution |
 | 153 | `test_post_api_add_invalid` | POST /api/downloads/add with empty items returns 400 | code 400 | UCC: error semantics |
-| 154 | `test_post_api_scheduler_start` | POST /api/scheduler/start returns ok | code 200, ok, action == "start" | ASM: Run axis |
-| 155 | `test_post_api_scheduler_stop` | POST /api/scheduler/stop returns ok | code 200, action == "stop" | ASM: Run axis |
+| 154 | `test_run_start_returns_404` | POST /api/scheduler/start returns 404 (removed) | code == 404 | ASM: Run axis |
+| 155 | `test_run_stop_returns_404` | POST /api/scheduler/stop returns 404 (removed) | code == 404 | ASM: Run axis |
 | 156 | `test_post_api_scheduler_invalid_path` | POST /api/scheduler/boom returns 404 | code 404 | UCC: error semantics |
 | 157 | `test_post_api_preflight` | POST /api/scheduler/preflight returns pass | code 200, status == "pass" | UIC: gate evaluation |
 | 158 | `test_post_api_ucc` | POST /api/scheduler/ucc returns structured result | code 200, meta + result present | UCC: contract shape |
@@ -498,7 +498,7 @@ Storage path resolution for all persistent files.
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
-| 233 | `test_not_running_returns_stopped_false` | stop_background_process when not running returns stopped=False | stopped == False, reason == "not_running" | ASM: Run axis |
+| 233 | `test_scheduler_always_running` | start_background_process is importable and scheduler auto-starts | function importable from aria_queue.core | ASM: Run axis |
 
 ### `tests/test_unit.py` — TestBandwidthConfig (1 test)
 
