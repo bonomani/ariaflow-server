@@ -697,12 +697,9 @@ class TestScenarioLifecycle(ScenarioBase):
             ),
         ):
             _, result, _ = _req(
-                f"{base}/api/lifecycle/ariaflow/install",
+                f"{base}/api/lifecycle/ariaflow/uninstall",
                 "POST",
-                {
-                    "target": "ariaflow",
-                    "action": "uninstall",
-                },
+                {},
             )
         self.assertTrue(result["ok"])
 

@@ -515,6 +515,8 @@ class TestRunReflectedInStatus(CrossCheckBase):
         )
         _req(f"{self.base}/api/scheduler/stop", "POST", {})
 
+        import time
+        time.sleep(0.5)  # scheduler thread needs time to drain
         _, status = _req(f"{self.base}/api/status")
         self.assertFalse(status["state"]["running"])
 
