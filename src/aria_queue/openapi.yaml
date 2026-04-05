@@ -51,7 +51,7 @@ paths:
                   aria2:
                     type: object
 
-  /api/add:
+  /api/queue/add:
     post:
       tags: [Queue]
       summary: Add URLs to queue
@@ -283,7 +283,7 @@ paths:
         "409":
           description: Preflight blocked start
 
-  /api/preflight:
+  /api/scheduler/preflight:
     post:
       tags: [Engine]
       summary: Run preflight checks
@@ -321,7 +321,7 @@ paths:
                   exit_code:
                     type: integer
 
-  /api/ucc:
+  /api/scheduler/ucc:
     post:
       tags: [Engine]
       summary: Execute UCC cycle
@@ -578,7 +578,7 @@ paths:
               schema:
                 type: object
 
-  /api/lifecycle/action:
+  /api/lifecycle/{target}/{action}:
     post:
       tags: [Lifecycle]
       summary: Run lifecycle action

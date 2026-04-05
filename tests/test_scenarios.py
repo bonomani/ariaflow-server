@@ -69,13 +69,13 @@ class TestScenarioNormalDownload(ScenarioBase):
             patch("aria_queue.webapp.aria2_status", return_value={"reachable": True}),
             patch("aria_queue.webapp.aria2_current_bandwidth", return_value={}),
         ):
-            _, preflight, _ = _req(f"{base}/api/preflight", "POST")
+            _, preflight, _ = _req(f"{base}/api/scheduler/preflight", "POST")
         self.assertEqual(preflight["status"], "pass")
         self.assertTrue(preflight["gates"][0]["satisfied"])
 
         # 3. Add multiple URLs
         _, added, _ = _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [
@@ -138,7 +138,7 @@ class TestScenarioPauseResumeCancel(ScenarioBase):
 
         # Add 3 items
         _, added, _ = _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [
@@ -193,7 +193,7 @@ class TestScenarioErrorRetry(ScenarioBase):
 
         # Add items
         _, added, _ = _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [
@@ -252,7 +252,7 @@ class TestScenarioSessionManagement(ScenarioBase):
 
         # Add item → creates session
         _, added, _ = _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/session-work.bin"}],
@@ -273,7 +273,7 @@ class TestScenarioSessionManagement(ScenarioBase):
 
         # Add another item → same session
         _, added2, _ = _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/session-work-2.bin"}],
@@ -368,7 +368,7 @@ class TestScenarioTorrentFileSelection(ScenarioBase):
 
         # Add torrent URL
         _, added, _ = _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [{"url": "https://example.com/linux.torrent"}],
@@ -538,11 +538,11 @@ class TestScenarioDuplicateHandling(ScenarioBase):
         url = f"https://example.com/dedup-{time.time()}.bin"
 
         # Add once
-        _, first, _ = _req(f"{base}/api/add", "POST", {"items": [{"url": url}]})
+        _, first, _ = _req(f"{base}/api/queue/add", "POST", {"items": [{"url": url}]})
         first_id = first["added"][0]["id"]
 
         # Add same URL again
-        _, second, _ = _req(f"{base}/api/add", "POST", {"items": [{"url": url}]})
+        _, second, _ = _req(f"{base}/api/queue/add", "POST", {"items": [{"url": url}]})
         second_id = second["added"][0]["id"]
 
         # Same item returned
@@ -577,7 +577,7 @@ class TestScenarioFrontendConsistency(ScenarioBase):
 
         # Mutate state
         _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [
@@ -629,7 +629,7 @@ class TestScenarioSSE(ScenarioBase):
 
         # Trigger a state change via add
         _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [{"url": f"https://example.com/sse-{time.time()}.bin"}],
@@ -679,7 +679,7 @@ class TestScenarioLifecycle(ScenarioBase):
             ),
         ):
             _, result, _ = _req(
-                f"{base}/api/lifecycle/action",
+                f"{base}/api/lifecycle/ariaflow/install",
                 "POST",
                 {
                     "target": "ariaflow",
@@ -697,7 +697,7 @@ class TestScenarioLifecycle(ScenarioBase):
             ),
         ):
             _, result, _ = _req(
-                f"{base}/api/lifecycle/action",
+                f"{base}/api/lifecycle/ariaflow/install",
                 "POST",
                 {
                     "target": "ariaflow",
@@ -773,7 +773,7 @@ class TestScenarioConcurrent(ScenarioBase):
 
         def add_item(i: int) -> None:
             code, body, _ = _req(
-                f"{base}/api/add",
+                f"{base}/api/queue/add",
                 "POST",
                 {
                     "items": [
@@ -803,7 +803,7 @@ class TestScenarioConcurrent(ScenarioBase):
 
         # Add items
         _, added, _ = _req(
-            f"{base}/api/add",
+            f"{base}/api/queue/add",
             "POST",
             {
                 "items": [

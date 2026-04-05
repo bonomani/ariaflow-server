@@ -363,11 +363,11 @@ def _api_discovery() -> dict[str, object]:
                 },
             ],
             "POST": [
-                {"path": "/api/add", "description": "Enqueue URLs"},
+                {"path": "/api/queue/add", "description": "Enqueue URLs"},
                 {"path": "/api/scheduler/start", "description": "Start queue processor"},
                 {"path": "/api/scheduler/stop", "description": "Stop queue processor"},
-                {"path": "/api/preflight", "description": "Run preflight checks"},
-                {"path": "/api/ucc", "description": "Execute UCC cycle"},
+                {"path": "/api/scheduler/preflight", "description": "Run preflight checks"},
+                {"path": "/api/scheduler/ucc", "description": "Execute UCC cycle"},
                 {"path": "/api/scheduler/pause", "description": "Pause all active transfers"},
                 {"path": "/api/scheduler/resume", "description": "Resume all paused transfers"},
                 {"path": "/api/session", "description": "Create new session"},
@@ -377,7 +377,7 @@ def _api_discovery() -> dict[str, object]:
                     "description": "Run bandwidth probe manually",
                 },
                 {
-                    "path": "/api/cleanup",
+                    "path": "/api/queue/cleanup",
                     "description": "Archive stale done/error items",
                 },
                 {
@@ -396,7 +396,7 @@ def _api_discovery() -> dict[str, object]:
                     "description": "Select torrent/metalink files",
                 },
                 {
-                    "path": "/api/lifecycle/action",
+                    "path": "/api/lifecycle/{target}/{action}",
                     "description": "Install/uninstall components (macOS)",
                 },
             ],
@@ -493,16 +493,15 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
 
     _POST_ROUTES: dict[str, str] = {
         "/api/bandwidth/probe": "_post_bandwidth_probe",
-        "/api/cleanup": "_post_cleanup",
-        "/api/add": "_post_add",
-        "/api/preflight": "_post_preflight",
+        "/api/queue/add": "_post_add",
+        "/api/queue/cleanup": "_post_cleanup",
         "/api/scheduler/start": "_post_scheduler_start",
         "/api/scheduler/stop": "_post_scheduler_stop",
         "/api/scheduler/pause": "_post_pause",
         "/api/scheduler/resume": "_post_resume",
-        "/api/ucc": "_post_ucc",
+        "/api/scheduler/preflight": "_post_preflight",
+        "/api/scheduler/ucc": "_post_ucc",
         "/api/declaration": "_post_declaration",
-        "/api/lifecycle/action": "_post_lifecycle_action",
         "/api/session": "_post_session",
         "/api/aria2/change_global_option": "_post_aria2_change_global_option",
         "/api/aria2/change_option": "_post_aria2_change_option",
@@ -926,6 +925,14 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             and path.count("/") == 4
         ):
             self._post_item_files(payload, path)
+            return
+
+        # Parameterized route: /api/lifecycle/{target}/{action}
+        if path.startswith("/api/lifecycle/") and path.count("/") == 4:
+            parts = path.split("/")
+            target = parts[3]
+            action = parts[4]
+            self._post_lifecycle_action({"target": target, "action": action}, path)
             return
 
         # Parameterized route: /api/torrents/{infohash}/stop

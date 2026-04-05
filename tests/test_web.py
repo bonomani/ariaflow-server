@@ -94,7 +94,7 @@ class WebSmokeTests(unittest.TestCase):
                     ),
                 ):
                     lifecycle_action = request_json(
-                        f"{base}/api/lifecycle/action",
+                        f"{base}/api/lifecycle/ariaflow/install",
                         method="POST",
                         payload={"target": "ariaflow", "action": "install"},
                     )
@@ -107,7 +107,7 @@ class WebSmokeTests(unittest.TestCase):
                 )
                 self.assertTrue(saved["saved"])
                 added = request_json(
-                    f"{base}/api/add",
+                    f"{base}/api/queue/add",
                     method="POST",
                     payload={
                         "items": [
@@ -127,7 +127,7 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertEqual(added["added"][0]["output"], "file.gguf")
                 self.assertEqual(added["added"][0]["post_action_rule"], "pending")
                 added_many = request_json(
-                    f"{base}/api/add",
+                    f"{base}/api/queue/add",
                     method="POST",
                     payload={
                         "items": [
@@ -245,7 +245,7 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Add an item
                 added = request_json(
-                    f"{base}/api/add",
+                    f"{base}/api/queue/add",
                     method="POST",
                     payload={
                         "items": [{"url": "https://example.com/test.bin"}],
