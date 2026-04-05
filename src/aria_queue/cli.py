@@ -8,6 +8,7 @@ from . import __version__
 from .bonjour import advertise_http_service
 from .contracts import preflight, run_ucc
 from .core import add_queue_item, aria2_ensure_daemon, load_queue
+from .scheduler import start_background_process
 from .webapp import serve as serve_api
 
 
@@ -137,6 +138,7 @@ def main() -> int:
             print(f"Unable to start aria2 runtime: {exc}", file=sys.stderr)
             return 1
         server = serve_api(host=args.host, port=args.port)
+        start_background_process(port=6800)
         print(f"Serving API on http://{args.host}:{args.port}")
         try:
             with advertise_http_service(port=args.port):

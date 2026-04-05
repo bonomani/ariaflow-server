@@ -555,12 +555,14 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch(
                 "aria_queue.core.aria2_tell_status", side_effect=RuntimeError("connection refused")
             ),
-            patch("aria_queue.core.time.sleep", return_value=None),
+            patch("aria_queue.core.time.sleep", side_effect=[None] * 10 + [StopIteration("stop")]),
         ):
-            result = process_queue()
-        self.assertEqual(result[0]["status"], "error")
-        self.assertEqual(result[0]["error_code"], "rpc_unreachable")
-        self.assertIn("5", result[0]["error_message"])
+            with self.assertRaises(StopIteration):
+                process_queue()
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "error")
+        self.assertEqual(items[0]["error_code"], "rpc_unreachable")
+        self.assertIn("5", items[0]["error_message"])
 
     def test_process_queue_marks_completed_tracked_download_done(self) -> None:
         add_queue_item("https://example.com/model.gguf")
@@ -591,13 +593,15 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.aria2_add_download", return_value="gid-1"),
             patch("aria_queue.core.aria2_tell_status", return_value=complete),
-            patch("aria_queue.core.time.sleep", return_value=None),
+            patch("aria_queue.core.time.sleep", side_effect=[None, StopIteration("stop")]),
         ):
-            result = process_queue()
+            with self.assertRaises(StopIteration):
+                process_queue()
         aria2_set_max_overall_download_limit.assert_called_once_with(250000, port=6800)
-        self.assertEqual(result[0]["status"], "complete")
-        self.assertEqual(result[0]["gid"], "gid-1")
-        self.assertIn("post_action", result[0])
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "complete")
+        self.assertEqual(items[0]["gid"], "gid-1")
+        self.assertIn("post_action", items[0])
 
     def test_process_queue_does_not_auto_resume_paused_items(self) -> None:
         """Paused items stay paused — user must explicitly resume."""
@@ -611,10 +615,11 @@ class TicAriaFlowTests(IsolatedTestCase):
         state["paused"] = False
         save_state(state)
 
+        class _StopLoop(Exception):
+            pass
+
         def stop_after_one_loop(_seconds: float) -> None:
-            s = load_state()
-            s["stop_requested"] = True
-            save_state(s)
+            raise _StopLoop()
 
         with (
             patch("aria_queue.core.aria2_ensure_daemon"),
@@ -647,11 +652,13 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch("aria_queue.core.aria2_add_download") as aria2_add_download,
             patch("aria_queue.core.time.sleep", side_effect=stop_after_one_loop),
         ):
-            result = process_queue()
+            with self.assertRaises(_StopLoop):
+                process_queue()
         # Paused item should NOT have been started
         self.assertFalse(aria2_add_download.called)
-        # Item should still be paused
-        self.assertEqual(result[0]["status"], "paused")
+        # Item should still be paused in the queue
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "paused")
 
     def test_ucc_returns_structured_result(self) -> None:
         add_queue_item("https://example.com/model.gguf")

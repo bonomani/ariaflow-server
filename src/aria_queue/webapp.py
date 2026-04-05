@@ -93,8 +93,6 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         "/api/bandwidth/probe": routes.post_bandwidth_probe,
         "/api/downloads/add": routes.post_add,
         "/api/downloads/cleanup": routes.post_cleanup,
-        "/api/scheduler/start": routes.post_scheduler_start,
-        "/api/scheduler/stop": routes.post_scheduler_stop,
         "/api/scheduler/pause": routes.post_pause,
         "/api/scheduler/resume": routes.post_resume,
         "/api/scheduler/preflight": routes.post_preflight,

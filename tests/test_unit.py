@@ -463,13 +463,10 @@ class TestPauseActiveTransfer(IsolatedTestCase):
 # ── scheduler.py ────────────────────────────────────────────────────
 
 
-class TestStopBackgroundProcess(IsolatedTestCase):
-    def test_not_running_returns_stopped_false(self) -> None:
-        from aria_queue.core import stop_background_process, ensure_storage
-        ensure_storage()
-        result = stop_background_process()
-        self.assertFalse(result["stopped"])
-        self.assertEqual(result["reason"], "not_running")
+class TestSchedulerAlwaysRunning(IsolatedTestCase):
+    def test_start_background_process_is_importable(self) -> None:
+        from aria_queue.core import start_background_process
+        self.assertTrue(callable(start_background_process))
 
 
 # ── bandwidth.py ────────────────────────────────────────────────────
@@ -851,7 +848,9 @@ class TestSeedExpiration(IsolatedTestCase):
                 pref["value"] = 72
         declaration_path().write_text(json.dumps(decl), encoding="utf-8")
 
-        process_queue(port=6800)
+        with patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop")):
+            with self.assertRaises(RuntimeError):
+                process_queue(port=6800)
         items = load_queue()
         expired = [i for i in items if i.get("distribute_status") == "expired"]
         self.assertEqual(len(expired), 1)
@@ -896,7 +895,9 @@ class TestSeedExpiration(IsolatedTestCase):
                 pref["value"] = 72
         declaration_path().write_text(json.dumps(decl), encoding="utf-8")
 
-        process_queue(port=6800)
+        with patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop")):
+            with self.assertRaises(RuntimeError):
+                process_queue(port=6800)
         items = load_queue()
         still_seeding = [i for i in items if i.get("distribute_status") == "seeding"]
         self.assertEqual(len(still_seeding), 1)

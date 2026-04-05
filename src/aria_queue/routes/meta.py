@@ -86,8 +86,6 @@ def _api_discovery() -> dict[str, object]:
             ],
             "POST": [
                 {"path": "/api/downloads/add", "description": "Enqueue URLs"},
-                {"path": "/api/scheduler/start", "description": "Start queue processor"},
-                {"path": "/api/scheduler/stop", "description": "Stop queue processor"},
                 {"path": "/api/scheduler/preflight", "description": "Run preflight checks"},
                 {"path": "/api/scheduler/ucc", "description": "Execute UCC cycle"},
                 {"path": "/api/scheduler/pause", "description": "Pause all active transfers"},

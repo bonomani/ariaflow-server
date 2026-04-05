@@ -139,11 +139,15 @@ class TestRegressions(IsolatedTestCase):
                 "aria_queue.core.aria2_tell_status",
                 side_effect=RuntimeError("connection refused"),
             ),
-            patch("aria_queue.core.time.sleep", return_value=None),
+            patch("aria_queue.core.time.sleep", side_effect=[None] * 10 + [StopIteration("stop")]),
         ):
-            result = process_queue()
-        self.assertEqual(result[0]["status"], "error")
-        self.assertEqual(result[0]["error_code"], "rpc_unreachable")
+            try:
+                process_queue()
+            except StopIteration:
+                pass
+        items = load_queue()
+        self.assertEqual(items[0]["status"], "error")
+        self.assertEqual(items[0]["error_code"], "rpc_unreachable")
 
     # ── Bug #4: Dedup policy default mismatch ──
     # Fixed: code fallback changed from "pause" to "remove"
@@ -302,16 +306,14 @@ class TestRegressions(IsolatedTestCase):
         rev2 = state.get("_rev", 0)
         self.assertGreater(rev2, rev1)
 
-    # ── Bug #13: state["paused"] not cleared on queue completion ──
-    # Fixed: queue_complete exit now clears paused flag
-    # Before: paused stayed True after normal completion
+    # ── Bug #13: paused flag persists correctly ──
+    # Scheduler now runs continuously; paused is only cleared by user resume.
 
-    def test_regression_paused_cleared_on_queue_complete(self) -> None:
+    def test_regression_paused_persists_while_running(self) -> None:
         state = load_state()
         state["paused"] = True
         state["running"] = True
         save_state(state)
-        # Simulate queue complete by having no active items
         save_queue([{"id": "x", "url": "https://x.com/done.bin", "status": "complete"}])
 
         with (
@@ -330,14 +332,17 @@ class TestRegressions(IsolatedTestCase):
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
             patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
-            patch("aria_queue.core.time.sleep", return_value=None),
+            patch("aria_queue.core.time.sleep", side_effect=StopIteration("stop")),
         ):
             from aria_queue.core import process_queue
 
-            process_queue()
+            try:
+                process_queue()
+            except StopIteration:
+                pass
         state = load_state()
-        self.assertFalse(state.get("paused"))
-        self.assertFalse(state.get("running"))
+        self.assertTrue(state.get("paused"))
+        self.assertTrue(state.get("running"))
 
     # ── Bug #14: aria2_ensure_daemon doesn't verify startup ──
     # Fixed: now retries RPC after spawn, raises on failure

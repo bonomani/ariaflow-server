@@ -150,7 +150,6 @@ def load_state() -> dict[str, Any]:
                 "active_gid": None,
                 "active_url": None,
                 "running": False,
-                "stop_requested": False,
                 "session_id": None,
                 "session_started_at": None,
                 "session_last_seen_at": None,

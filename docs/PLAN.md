@@ -1,41 +1,5 @@
 # Plan
 
-### [P1] Auto-start scheduler + pause/resume only
-
-**What:** Scheduler starts automatically with `ariaflow serve`. Remove start/stop — user can only pause/resume.
-
-**Why:** Discovery (P2) needs the scheduler always running. Start/stop adds complexity with no real benefit — the scheduler should process the queue whenever ariaflow is running.
-
-**ASM state model change (Axis 2: Run):**
-```
-Before: idle → running → stop_requested → idle
-                       → paused → running
-
-After:  running ↔ paused
-```
-
-**Steps:**
-1. `cli.py` — call `start_background_process()` automatically in `serve` command, before `server.serve_forever()`
-2. `scheduler.py` — `start_background_process()` no longer needs to check "already running" (always starts). Remove `stop_background_process()`. Add `pause_scheduler()` and `resume_scheduler()` that set `state["paused"]`.
-3. `routes/scheduler.py` — remove `post_scheduler_start`, `post_scheduler_stop`. Keep `post_pause`, `post_resume`.
-4. `webapp.py` — remove `/api/scheduler/start` and `/api/scheduler/stop` from dispatch table
-5. Update `routes/meta.py` — remove start/stop from API discovery
-6. Update openapi.yaml via `make docs`
-7. Update ASM state model doc
-8. Update tests
-9. Run all tests
-
-**API change (breaking):**
-- Remove `POST /api/scheduler/start`
-- Remove `POST /api/scheduler/stop`
-- Keep `POST /api/scheduler/pause`
-- Keep `POST /api/scheduler/resume`
-
-**Scope:** ~60 lines removed, ~20 lines added.
-**Depends on:** Nothing.
-
----
-
 ### [P2] Peer discovery and auto-download
 
 **What:** Background thread that browses `_ariaflow._tcp`, resolves peers, polls their `GET /api/torrents`, and auto-downloads new torrents.

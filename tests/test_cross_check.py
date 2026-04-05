@@ -484,45 +484,7 @@ class TestSessionReflectedInStatus(CrossCheckBase):
         self.assertIsNone(status["state"]["session_closed_at"])
 
 
-# ═══════════════════════════════════════════════════════
-# Run start/stop → Status
-# ═══════════════════════════════════════════════════════
-
-
-class TestRunReflectedInStatus(CrossCheckBase):
-    def test_run_start_sets_running(self) -> None:
-        _, run = _req(
-            f"{self.base}/api/scheduler/start",
-            "POST",
-            {
-                "auto_preflight_on_run": False,
-            },
-        )
-        self.assertTrue(run["ok"])
-
-        _, status = _req(f"{self.base}/api/status")
-        # running may be True or already finished (empty queue)
-        # but the run action should have been accepted
-        self.assertIn("running", status["state"])
-
-    def test_run_stop_clears_running(self) -> None:
-        _req(
-            f"{self.base}/api/scheduler/start",
-            "POST",
-            {
-                "auto_preflight_on_run": False,
-            },
-        )
-        _req(f"{self.base}/api/scheduler/stop", "POST", {})
-
-        # Scheduler thread drains asynchronously (2s tick cycle)
-        import time
-        for _ in range(10):
-            time.sleep(0.5)
-            _, status = _req(f"{self.base}/api/status")
-            if not status["state"]["running"]:
-                break
-        self.assertFalse(status["state"]["running"])
+# Run start/stop removed — scheduler auto-starts, no start/stop endpoints
 
 
 # ═══════════════════════════════════════════════════════
@@ -643,17 +605,7 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
         actions = [e.get("action") for e in log["items"]]
         self.assertIn("probe", actions)
 
-    def test_run_logged(self) -> None:
-        _req(
-            f"{self.base}/api/scheduler/start",
-            "POST",
-            {
-                "auto_preflight_on_run": False,
-            },
-        )
-        _, log = _req(f"{self.base}/api/log?limit=5")
-        actions = [e.get("action") for e in log["items"]]
-        self.assertIn("run", actions)
+    # test_run_logged removed — scheduler auto-starts, no start endpoint
 
 
 # ═══════════════════════════════════════════════════════

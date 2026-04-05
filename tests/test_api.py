@@ -652,30 +652,17 @@ class TestBandwidth(APIServerPerTestCase):
 
 
 class TestEngineControl(APIServerPerTestCase):
-    def test_run_start(self) -> None:
-        code, body = _request(
-            f"{self.base}/api/scheduler/start",
-            "POST",
-            {
-                "auto_preflight_on_run": False,
-            },
-        )
-        self.assertEqual(code, 200)
-        self.assertTrue(body["ok"])
-        self.assertEqual(body["action"], "start")
+    def test_run_start_returns_404(self) -> None:
+        code, body = _request(f"{self.base}/api/scheduler/start", "POST", {})
+        self.assertEqual(code, 404)
 
-    def test_run_stop(self) -> None:
+    def test_run_stop_returns_404(self) -> None:
         code, body = _request(f"{self.base}/api/scheduler/stop", "POST", {})
-        self.assertEqual(code, 200)
-        self.assertEqual(body["action"], "stop")
+        self.assertEqual(code, 404)
 
     def test_run_invalid_endpoint_returns_404(self) -> None:
         code, body = _request(f"{self.base}/api/scheduler/restart", "POST", {})
         self.assertEqual(code, 404)
-
-    def test_run_start_empty_body_ok(self) -> None:
-        code, body = _request(f"{self.base}/api/scheduler/start", "POST", {})
-        self.assertEqual(code, 200)
 
     def test_global_pause_resume(self) -> None:
         code, paused = _request(f"{self.base}/api/scheduler/pause", "POST")
@@ -710,31 +697,7 @@ class TestEngineControl(APIServerPerTestCase):
         self.assertEqual(body["status"], "pass")
         self.assertIn("gates", body)
 
-    def test_preflight_blocked_start(self) -> None:
-        with (
-            patch("aria_queue.webapp.auto_preflight_on_run", return_value=False),
-            patch(
-                "aria_queue.webapp.preflight",
-                return_value={
-                    "status": "fail",
-                    "exit_code": 1,
-                    "gates": [],
-                    "preferences": [],
-                    "policies": [],
-                    "warnings": [],
-                    "hard_failures": ["aria2_available"],
-                },
-            ),
-        ):
-            code, body = _request(
-                f"{self.base}/api/scheduler/start",
-                "POST",
-                {
-                    "auto_preflight_on_run": True,
-                },
-            )
-        self.assertEqual(code, 409)
-        self.assertEqual(body["error"], "preflight_blocked")
+    # test_preflight_blocked_start removed — no start endpoint
 
 
 # ──────────────────────────────────────────────────────
@@ -1041,7 +1004,7 @@ class TestErrorHandling(APIServerPerTestCase):
 
     def test_invalid_json_body(self) -> None:
         code, _, _ = _raw_request(
-            f"{self.base}/api/scheduler/start",
+            f"{self.base}/api/scheduler/pause",
             method="POST",
             data=b"{broken",
             content_type="application/json",
@@ -1050,7 +1013,7 @@ class TestErrorHandling(APIServerPerTestCase):
 
     def test_empty_post_body(self) -> None:
         code, _, _ = _raw_request(
-            f"{self.base}/api/scheduler/start",
+            f"{self.base}/api/scheduler/pause",
             method="POST",
             data=b"",
             content_type="application/json",
@@ -1299,24 +1262,15 @@ class TestPostEndpoints(APIServerTestCase):
         code, body, _ = _req(f"{self.base}/api/downloads/add", "POST", {"items": []})
         self.assertEqual(code, 400)
 
-    # 2. POST /api/scheduler/start
-    def test_post_api_scheduler_start(self) -> None:
-        code, body, _ = _req(
-            f"{self.base}/api/scheduler/start",
-            "POST",
-            {
-                "auto_preflight_on_run": False,
-            },
-        )
-        self.assertEqual(code, 200)
-        self.assertTrue(body["ok"])
-        self.assertEqual(body["action"], "start")
+    # 2. POST /api/scheduler/start — removed (auto-starts)
+    def test_post_api_scheduler_start_returns_404(self) -> None:
+        code, body, _ = _req(f"{self.base}/api/scheduler/start", "POST", {})
+        self.assertEqual(code, 404)
 
-    # 3. POST /api/scheduler/stop
-    def test_post_api_scheduler_stop(self) -> None:
+    # 3. POST /api/scheduler/stop — removed (no stop)
+    def test_post_api_scheduler_stop_returns_404(self) -> None:
         code, body, _ = _req(f"{self.base}/api/scheduler/stop", "POST", {})
-        self.assertEqual(code, 200)
-        self.assertEqual(body["action"], "stop")
+        self.assertEqual(code, 404)
 
     def test_post_api_scheduler_invalid_path(self) -> None:
         code, body, _ = _req(f"{self.base}/api/scheduler/boom", "POST", {})

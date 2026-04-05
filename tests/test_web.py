@@ -142,14 +142,6 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertIn("paused", paused)
                 resumed = request_json(f"{base}/api/scheduler/resume", method="POST")
                 self.assertIn("resumed", resumed)
-                run = request_json(
-                    f"{base}/api/scheduler/start",
-                    method="POST",
-                    payload={"auto_preflight_on_run": False},
-                )
-                self.assertTrue(run["ok"])
-                self.assertEqual(run["action"], "start")
-                self.assertTrue(run["result"]["started"])
             finally:
                 server.shutdown()
                 server.server_close()
@@ -415,46 +407,5 @@ class WebSmokeTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
 
-    def test_run_start_honors_request_auto_preflight_override(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            os.environ["ARIA_QUEUE_DIR"] = tmp
-            server = serve(host="127.0.0.1", port=0)
-            port = server.server_address[1]
-            thread = threading.Thread(target=server.serve_forever, daemon=True)
-            thread.start()
-            time.sleep(0.2)
-            try:
-                base = f"http://127.0.0.1:{port}"
-                preflight_result = {
-                    "status": "fail",
-                    "exit_code": 1,
-                    "gates": [],
-                    "preferences": [],
-                    "policies": [],
-                    "warnings": [],
-                    "hard_failures": ["aria2_available"],
-                }
-                with (
-                    patch(
-                        "aria_queue.webapp.auto_preflight_on_run", return_value=False
-                    ),
-                    patch("aria_queue.webapp.preflight", return_value=preflight_result),
-                    patch(
-                        "aria_queue.webapp.start_background_process"
-                    ) as start_background_process,
-                ):
-                    with self.assertRaises(urllib.error.HTTPError) as run_error:
-                        request_json(
-                            f"{base}/api/scheduler/start",
-                            method="POST",
-                            payload={"auto_preflight_on_run": True},
-                        )
-                self.assertEqual(run_error.exception.code, 409)
-                body = json.loads(run_error.exception.read().decode("utf-8"))
-                self.assertFalse(body["ok"])
-                self.assertEqual(body["error"], "preflight_blocked")
-                self.assertTrue(body["effective_auto_preflight_on_run"])
-                start_background_process.assert_not_called()
-            finally:
-                server.shutdown()
-                server.server_close()
+    # test_run_start_honors_request_auto_preflight_override removed —
+    # scheduler auto-starts, no start endpoint

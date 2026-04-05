@@ -19,7 +19,6 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
         if state.get("running"):
             return {"started": False, "reason": "already_running"}
 
-        state["stop_requested"] = False
         state["running"] = True
         state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         core.save_state(state)
@@ -34,61 +33,11 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
             current["active_gid"] = None
             current["active_url"] = None
             core.save_state(current)
-        finally:
-            current = core.load_state()
-            current["running"] = False
-            current["stop_requested"] = False
-            current["active_gid"] = None
-            current["active_url"] = None
-            core.save_state(current)
 
     thread = threading.Thread(target=_scheduler, daemon=True)
     thread.start()
     return {"started": True, "reason": "background"}
 
-
-def stop_background_process(port: int = 6800) -> dict[str, Any]:
-    core = _core()
-    with core.storage_locked():
-        state = core.load_state()
-        if not state.get("running"):
-            state["stop_requested"] = False
-            core.save_state(state)
-            return {"stopped": False, "reason": "not_running"}
-
-        before = {"state": dict(state), "queue": core.summarize_queue(core.load_queue())}
-        state["stop_requested"] = True
-        core.save_state(state)
-
-    gid = state.get("active_gid")
-    if gid:
-        try:
-            core.aria2_pause(gid, port=port, timeout=5)
-        except Exception as exc:
-            core.record_action(
-                action="stop", target="queue", outcome="failed",
-                reason="aria2_pause_failed", detail={"gid": gid, "error": str(exc)},
-            )
-        with core.storage_locked():
-            items = core.load_queue()
-            for current in items:
-                if current.get("gid") == gid:
-                    current["status"] = "paused"
-                    current["live_status"] = "paused"
-                    break
-            core.save_queue(items)
-    core.close_state_session(reason="stop_requested")
-    after = {"state": core.load_state(), "queue": core.summarize_queue(core.load_queue())}
-    core.record_action(
-        action="stop",
-        target="queue",
-        outcome="changed",
-        reason="user_stop",
-        before=before,
-        after=after,
-        detail={"gid": gid, "paused": bool(gid)},
-    )
-    return {"stopped": True, "reason": "stopping"}
 
 
 def process_queue(port: int = 6800) -> list[dict[str, Any]]:
@@ -124,7 +73,6 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         )
         items = core.load_queue()
         state["running"] = True
-        state["stop_requested"] = False
         state["session_last_seen_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         core.save_state(state)
     for item in items:
@@ -372,37 +320,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         with core.storage_locked():
             items = core.load_queue()
             state = core.load_state()
-            stop = state.get("stop_requested")
             is_paused = state.get("paused")
 
         # Phase 2: RPC calls (unlocked — no storage lock held)
-        if stop:
-            active_infos = core.aria2_tell_active(port=port, timeout=5)
-            for info in active_infos:
-                gid = str(info.get("gid") or "")
-                if not gid:
-                    continue
-                try:
-                    core.aria2_pause(gid, port=port, timeout=5)
-                except Exception:
-                    pass
-                for item in items:
-                    if str(item.get("gid") or "") == gid:
-                        item["status"] = "paused"
-                        item["live_status"] = "paused"
-                        break
-            with core.storage_locked():
-                state = core.load_state()
-                state["running"] = False
-                state["stop_requested"] = False
-                state["paused"] = False
-                state["active_gid"] = None
-                state["active_url"] = None
-                core.save_state(state)
-                core.save_queue(items)
-                core.close_state_session(reason="stop_requested")
-            return items
-
         running_infos, poll_ok = _poll_tracked_jobs(items)
         probe, cap_mbps, cap_bytes_per_sec = core._apply_bandwidth_probe(
             port=port, state=state
@@ -546,24 +466,10 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 core._aria2_apply_priority(gid, int(item.get("priority", 0)))
 
         # Phase 3: save state (locked)
+        # Phase 3: save state (locked)
         with core.storage_locked():
             core.save_queue(items)
             _finalize_primary_state(items, current_running_infos, poll_ok=poll_ok)
-
-            if not any(
-                item.get("status") in {"queued", "waiting", "active", "paused"}
-                for item in items
-            ):
-                current = core.load_state()
-                current["running"] = False
-                current["stop_requested"] = False
-                current["paused"] = False
-                current["active_gid"] = None
-                current["active_url"] = None
-                core.save_state(current)
-                core.save_queue(items)
-                core.close_state_session(reason="queue_complete")
-                return items
 
         time.sleep(2)
 

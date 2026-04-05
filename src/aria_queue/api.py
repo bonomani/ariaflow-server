@@ -33,7 +33,6 @@ from .core import (
     session_stats,
     start_background_process,
     start_new_state_session,
-    stop_background_process,
     summarize_queue,
 )
 from .install import (
@@ -85,7 +84,6 @@ __all__ = [
     "start_background_process",
     "start_new_state_session",
     "status_all",
-    "stop_background_process",
     "summarize_queue",
     "homebrew_install_ariaflow",
     "homebrew_uninstall_ariaflow",

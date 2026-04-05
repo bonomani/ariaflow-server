@@ -92,37 +92,25 @@ class TestScenarioNormalDownload(ScenarioBase):
         self.assertEqual(status["summary"]["queued"], 3)
         self.assertEqual(status["summary"]["total"], 3)
 
-        # 5. Start the run
-        _, run, _ = _req(
-            f"{base}/api/scheduler/start",
-            "POST",
-            {
-                "auto_preflight_on_run": False,
-            },
-        )
-        self.assertTrue(run["ok"])
-
-        # 6. Simulate downloads completing
+        # 5. Scheduler is auto-started — simulate downloads completing
         items = load_queue()
         for item in items:
             item["status"] = "complete"
             item["post_action"] = {"status": "not defined yet"}
         save_queue(items)
 
-        # 7. Verify all done
+        # Wait for status cache to expire (2s TTL)
+        time.sleep(2.1)
+
+        # 6. Verify all done
         _, status, _ = _req(f"{base}/api/status")
         self.assertEqual(status["summary"]["complete"], 3)
 
-        # 8. Stop the run
-        _, stop, _ = _req(f"{base}/api/scheduler/stop", "POST", {})
-        self.assertEqual(stop["action"], "stop")
-
-        # 9. Check action log recorded the workflow
+        # 7. Check action log recorded the workflow
         _, log, _ = _req(f"{base}/api/log?limit=20")
         actions = [e.get("action") for e in log["items"]]
         self.assertIn("add", actions)
         self.assertIn("preflight", actions)
-        self.assertIn("run", actions)
 
 
 # ═══════════════════════════════════════════════════════
@@ -477,52 +465,7 @@ class TestScenarioAria2Options(ScenarioBase):
         self.assertIn("change_options", actions)
 
 
-# ═══════════════════════════════════════════════════════
-# Scenario 8: Preflight blocks run start
-# ═══════════════════════════════════════════════════════
-
-
-class TestScenarioPreflightBlocked(ScenarioBase):
-    """Auto-preflight fails, blocking the run from starting."""
-
-    def test_preflight_blocks_start(self) -> None:
-        base = self.base
-
-        failed_preflight = {
-            "contract": "UCC",
-            "version": "2.0",
-            "gates": [
-                {"name": "aria2_available", "satisfied": False, "blocking": "hard"},
-                {"name": "queue_readable", "satisfied": True, "blocking": "hard"},
-            ],
-            "preferences": [],
-            "policies": [],
-            "warnings": [],
-            "hard_failures": ["aria2_available"],
-            "status": "fail",
-            "exit_code": 1,
-        }
-
-        with (
-            patch("aria_queue.webapp.auto_preflight_on_run", return_value=False),
-            patch("aria_queue.webapp.preflight", return_value=failed_preflight),
-        ):
-            code, body, _ = _req(
-                f"{base}/api/scheduler/start",
-                "POST",
-                {
-                    "auto_preflight_on_run": True,
-                },
-            )
-
-        self.assertEqual(code, 409)
-        self.assertEqual(body["error"], "preflight_blocked")
-        self.assertIn("preflight", body)
-        self.assertFalse(body["preflight"]["gates"][0]["satisfied"])
-
-        # Verify the engine did NOT start
-        _, status, _ = _req(f"{base}/api/status")
-        self.assertFalse(status["state"]["running"])
+# Scenario 8 removed — scheduler auto-starts, no start endpoint
 
 
 # ═══════════════════════════════════════════════════════
