@@ -20,6 +20,7 @@ check: ## Run all checks (tests + naming + lint)
 docs: ## Regenerate auto-generated docs
 	python scripts/gen_rpc_docs.py
 	python scripts/gen_all_variables.py
+	python scripts/gen_openapi.py
 
 install: ## Install in development mode
 	pip install -e .
