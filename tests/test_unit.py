@@ -1079,5 +1079,32 @@ class TestDiscoveryParsers(unittest.TestCase):
         self.assertIsInstance(list_peers(), list)
 
 
+# ── webapp.py — metrics ────────────────────────────────────────────
+
+
+class TestWebappMetrics(unittest.TestCase):
+    def test_get_metrics_has_all_fields(self) -> None:
+        from aria_queue.webapp import get_metrics
+        m = get_metrics()
+        for field in ("requests_total", "bytes_sent_total", "bytes_received_total",
+                      "errors_total", "uptime_seconds", "started_at", "sse_clients"):
+            self.assertIn(field, m)
+
+    def test_uptime_seconds_is_positive(self) -> None:
+        from aria_queue.webapp import get_metrics
+        self.assertGreaterEqual(get_metrics()["uptime_seconds"], 0)
+
+    def test_uptime_seconds_is_monotonic(self) -> None:
+        from aria_queue.webapp import get_metrics
+        t1 = get_metrics()["uptime_seconds"]
+        time.sleep(0.01)
+        t2 = get_metrics()["uptime_seconds"]
+        self.assertGreater(t2, t1)
+
+    def test_sse_clients_is_int(self) -> None:
+        from aria_queue.webapp import get_metrics
+        self.assertIsInstance(get_metrics()["sse_clients"], int)
+
+
 if __name__ == "__main__":
     unittest.main()

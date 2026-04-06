@@ -37,11 +37,23 @@ API_SCHEMA_VERSION = "2"
 
 # ── Request metrics ──
 _metrics_lock = threading.Lock()
-_metrics: dict[str, int] = {"requests_total": 0, "bytes_sent_total": 0, "bytes_received_total": 0}
+_metrics: dict[str, int] = {
+    "requests_total": 0,
+    "bytes_sent_total": 0,
+    "bytes_received_total": 0,
+    "errors_total": 0,
+}
+_start_monotonic = time.monotonic()
+_started_at = time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
-def get_metrics() -> dict[str, int]:
+def get_metrics() -> dict[str, object]:
     with _metrics_lock:
-        return dict(_metrics)
+        snapshot: dict[str, object] = dict(_metrics)
+    snapshot["uptime_seconds"] = round(time.monotonic() - _start_monotonic, 3)
+    snapshot["started_at"] = _started_at
+    with _sse_lock:
+        snapshot["sse_clients"] = len(_sse_clients)
+    return snapshot
 
 
 # ── SSE event bus ──
@@ -209,6 +221,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
         with _metrics_lock:
             _metrics["bytes_sent_total"] += len(body)
+            if status >= 400:
+                _metrics["errors_total"] += 1
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
