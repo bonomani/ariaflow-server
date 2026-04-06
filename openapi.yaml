@@ -37,6 +37,7 @@ tags:
 
 
 
+
 paths:
   /api:
     get:
@@ -49,6 +50,21 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  docs:
+                    type: string
+                  endpoints:
+                    type: object
+                  name:
+                    type: string
+                  openapi:
+                    type: string
+                  version:
+                    type: string
   /api/aria2/change_global_option:
     post:
       tags: [aria2]
@@ -96,6 +112,11 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
   /api/aria2/get_option:
     get:
       tags: [aria2]
@@ -107,6 +128,26 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  error:
+                    nullable: true
+                    type: string
+                  gid:
+                    nullable: true
+                    type: string
+                  message:
+                    nullable: true
+                    type: string
+                  ok:
+                    nullable: true
+                    type: boolean
+                  options:
+                    nullable: true
+                    type: object
   /api/aria2/option_tiers:
     get:
       tags: [aria2]
@@ -118,6 +159,21 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  managed:
+                    items:
+                      type: string
+                    type: array
+                  safe:
+                    items:
+                      type: string
+                    type: array
+                  unsafe_enabled:
+                    type: boolean
   /api/aria2/set_limits:
     post:
       tags: [aria2]
@@ -147,6 +203,43 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  cap_bytes_per_sec:
+                    nullable: true
+                    type: integer
+                  config:
+                    type: object
+                  current_limit:
+                    nullable: true
+                    type: object
+                  down_cap_mbps:
+                    nullable: true
+                    type: number
+                  downlink_mbps:
+                    nullable: true
+                    type: number
+                  interface:
+                    nullable: true
+                    type: string
+                  last_probe:
+                    nullable: true
+                    type: object
+                  last_probe_at:
+                    nullable: true
+                    type: string
+                  responsiveness_rpm:
+                    nullable: true
+                    type: number
+                  up_cap_mbps:
+                    nullable: true
+                    type: number
+                  uplink_mbps:
+                    nullable: true
+                    type: number
   /api/bandwidth/probe:
     post:
       tags: [Bandwidth]
@@ -176,6 +269,26 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  bandwidth:
+                    nullable: true
+                    type: object
+                  gates:
+                    nullable: true
+                    type: object
+                  preferences:
+                    nullable: true
+                    type: object
+                  updated_at:
+                    nullable: true
+                    type: string
+                  version:
+                    nullable: true
+                    type: integer
     post:
       tags: [Config]
       summary: Save UIC declaration
@@ -251,6 +364,15 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  items:
+                    items:
+                      type: object
+                    type: array
   /api/downloads/cleanup:
     post:
       tags: [Queue]
@@ -286,6 +408,30 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  error:
+                    nullable: true
+                    type: string
+                  files:
+                    items:
+                      type: object
+                    nullable: true
+                    type: array
+                  gid:
+                    nullable: true
+                    type: string
+                  item_id:
+                    nullable: true
+                    type: string
+                  message:
+                    nullable: true
+                    type: string
+                  ok:
+                    type: boolean
         "404":
           description: Not found
     post:
@@ -465,6 +611,33 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  bytes_received_total:
+                    type: integer
+                  bytes_sent_total:
+                    type: integer
+                  disk_ok:
+                    type: boolean
+                  disk_usage_percent:
+                    type: number
+                  errors_total:
+                    type: integer
+                  requests_total:
+                    type: integer
+                  sse_clients:
+                    type: integer
+                  started_at:
+                    type: string
+                  status:
+                    type: string
+                  uptime_seconds:
+                    type: number
+                  version:
+                    type: string
   /api/lifecycle:
     get:
       tags: [Lifecycle]
@@ -476,6 +649,38 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  aria2:
+                    nullable: true
+                    type: object
+                  ariaflow:
+                    nullable: true
+                    type: object
+                  homebrew:
+                    nullable: true
+                    type: object
+                  launchd:
+                    nullable: true
+                    type: object
+                  session_closed_at:
+                    nullable: true
+                    type: string
+                  session_closed_reason:
+                    nullable: true
+                    type: string
+                  session_id:
+                    nullable: true
+                    type: string
+                  session_last_seen_at:
+                    nullable: true
+                    type: string
+                  session_started_at:
+                    nullable: true
+                    type: string
   /api/lifecycle/{target}/{action}:
     post:
       tags: [Lifecycle]
@@ -516,6 +721,15 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  items:
+                    items:
+                      type: object
+                    type: array
   /api/openapi.yaml:
     get:
       tags: [Meta]
@@ -538,6 +752,15 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  peers:
+                    items:
+                      type: object
+                    type: array
   /api/scheduler:
     get:
       tags: [Scheduler]
@@ -549,6 +772,28 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _rev:
+                    type: integer
+                  _schema:
+                    type: string
+                  paused:
+                    type: boolean
+                  running:
+                    type: boolean
+                  session_closed_at:
+                    nullable: true
+                    type: string
+                  session_id:
+                    nullable: true
+                    type: string
+                  session_started_at:
+                    nullable: true
+                    type: string
+                  status:
+                    type: string
   /api/scheduler/pause:
     post:
       tags: [Scheduler]
@@ -632,6 +877,15 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  sessions:
+                    items:
+                      type: object
+                    type: array
   /api/sessions/new:
     post:
       tags: [Sessions]
@@ -661,6 +915,35 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  bytes_downloaded:
+                    nullable: true
+                    type: integer
+                  bytes_uploaded:
+                    nullable: true
+                    type: integer
+                  closed_at:
+                    nullable: true
+                    type: string
+                  items_done:
+                    nullable: true
+                    type: integer
+                  items_error:
+                    nullable: true
+                    type: integer
+                  items_total:
+                    nullable: true
+                    type: integer
+                  session_id:
+                    nullable: true
+                    type: string
+                  started_at:
+                    nullable: true
+                    type: string
   /api/status:
     get:
       tags: [Queue]
@@ -672,6 +955,39 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _rev:
+                    type: integer
+                  _schema:
+                    type: string
+                  active:
+                    nullable: true
+                    type: object
+                  actives:
+                    items:
+                      type: object
+                    nullable: true
+                    type: array
+                  aria2:
+                    type: object
+                  ariaflow:
+                    type: object
+                  bandwidth:
+                    nullable: true
+                    type: object
+                  filtered:
+                    nullable: true
+                    type: boolean
+                  items:
+                    items:
+                      type: object
+                    type: array
+                  state:
+                    type: object
+                  summary:
+                    type: object
   /api/tests:
     get:
       tags: [Meta]
@@ -683,6 +999,28 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  error:
+                    nullable: true
+                    type: string
+                  message:
+                    nullable: true
+                    type: string
+                  ok:
+                    type: boolean
+                  returncode:
+                    nullable: true
+                    type: integer
+                  stderr:
+                    nullable: true
+                    type: string
+                  stdout:
+                    nullable: true
+                    type: string
   /api/torrents:
     get:
       tags: [Torrents]
@@ -694,6 +1032,17 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  count:
+                    type: integer
+                  torrents:
+                    items:
+                      type: object
+                    type: array
   /api/torrents/{infohash}.torrent:
     get:
       tags: [Torrents]
@@ -711,6 +1060,17 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  error:
+                    nullable: true
+                    type: string
+                  message:
+                    nullable: true
+                    type: string
         "404":
           description: Not found
   /api/torrents/{infohash}/stop:
@@ -795,8 +1155,6 @@ components:
         running:
           type: boolean
         paused:
-          type: boolean
-        stop_requested:
           type: boolean
         active_gid:
           type: string
@@ -903,6 +1261,7 @@ components:
                 type: boolean
               item:
                 $ref: "#/components/schemas/QueueItem"
+
 
 
 

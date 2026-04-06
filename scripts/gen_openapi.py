@@ -15,6 +15,12 @@ from pathlib import Path
 _PROJECT = Path(__file__).resolve().parents[1]
 _SRC = _PROJECT / "src" / "aria_queue"
 
+sys.path.insert(0, str(_PROJECT / "src"))
+try:
+    from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+except Exception:
+    RESPONSE_SCHEMAS = {}
+
 # Tag assignment by path prefix
 _TAG_MAP = {
     "/api/downloads": "Queue",
@@ -169,11 +175,22 @@ def _generate_path_entry(method: str, path: str, func_name: str, docstrings: dic
     """Generate a single path operation."""
     tag = _tag_for_path(path)
     summary = _summary_from_func(func_name, docstrings, path, method)
+    # Look up explicit response schema (BG-3)
+    schema_key = f"{method.upper()} {path}"
+    response_schema: dict
+    if schema_key in RESPONSE_SCHEMAS:
+        props = RESPONSE_SCHEMAS[schema_key]
+        response_schema = {
+            "type": "object",
+            "properties": dict(props),
+        }
+    else:
+        response_schema = {"type": "object"}
     entry: dict = {
         "tags": [tag],
         "summary": summary,
         "responses": {
-            "200": {"description": "Success", "content": {"application/json": {"schema": {"type": "object"}}}},
+            "200": {"description": "Success", "content": {"application/json": {"schema": response_schema}}},
         },
     }
     params = _path_params(path)
@@ -268,7 +285,24 @@ def render_yaml(gets: dict, posts: dict, parameterized: list, docstrings: dict) 
                     lines.append("          content:")
                     lines.append("            application/json:")
                     lines.append("              schema:")
+                    schema = resp["content"]["application/json"]["schema"]
                     lines.append("                type: object")
+                    props = schema.get("properties")
+                    if props:
+                        lines.append("                properties:")
+                        for pname in sorted(props.keys()):
+                            pdef = props[pname]
+                            lines.append(f"                  {pname}:")
+                            for k in sorted(pdef.keys()):
+                                v = pdef[k]
+                                if isinstance(v, bool):
+                                    lines.append(f"                    {k}: {str(v).lower()}")
+                                elif isinstance(v, dict):
+                                    lines.append(f"                    {k}:")
+                                    for sk, sv in sorted(v.items()):
+                                        lines.append(f"                      {sk}: {sv}")
+                                else:
+                                    lines.append(f"                    {k}: {v}")
 
     lines.append("")
     lines.append(components)

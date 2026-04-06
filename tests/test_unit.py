@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import unittest
 from pathlib import Path
@@ -1104,6 +1105,38 @@ class TestWebappMetrics(unittest.TestCase):
     def test_sse_clients_is_int(self) -> None:
         from aria_queue.webapp import get_metrics
         self.assertIsInstance(get_metrics()["sse_clients"], int)
+
+
+# ── openapi_schemas coverage ───────────────────────────────────────
+
+
+class TestOpenapiSchemas(unittest.TestCase):
+    def test_schemas_cover_all_json_get_endpoints(self) -> None:
+        """Every GET endpoint returning JSON must have a RESPONSE_SCHEMAS entry."""
+        from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+        # Non-JSON endpoints (HTML, YAML, SSE) are excluded
+        excluded = {"/api/docs", "/api/openapi.yaml", "/api/events"}
+        import aria_queue.webapp as wa
+        # Read the dispatch table from source
+        text = Path(wa.__file__).read_text()
+        match = re.search(r"_GET_ROUTES\s*=\s*\{(.*?)\n\s*\}", text, re.DOTALL)
+        self.assertIsNotNone(match)
+        paths = re.findall(r'"(/api[^"]*)"', match.group(1))
+        missing = []
+        for path in paths:
+            if path in excluded:
+                continue
+            key = f"GET {path}"
+            if key not in RESPONSE_SCHEMAS:
+                missing.append(key)
+        self.assertEqual(missing, [], f"Missing response schemas: {missing}")
+
+    def test_every_schema_has_meta_fields(self) -> None:
+        """Every schema must include _schema and _request_id (added by _send_json)."""
+        from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+        for key, props in RESPONSE_SCHEMAS.items():
+            self.assertIn("_schema", props, f"{key} missing _schema")
+            self.assertIn("_request_id", props, f"{key} missing _request_id")
 
 
 if __name__ == "__main__":

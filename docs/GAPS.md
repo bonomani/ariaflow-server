@@ -49,4 +49,4 @@ Current status:
 |---|---|---|
 | BG-1 | SSE pushes rev-only | Done (SSE now pushes full payload) |
 | BG-2 | No PATCH for declaration preferences | Done (`PATCH /api/declaration/preferences` added) |
-| BG-3 | openapi.yaml lacks response field schemas | Open (see PLAN.md) |
+| BG-3 | openapi.yaml lacks response field schemas | Done (openapi_schemas.py + gen_openapi.py) |
