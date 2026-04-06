@@ -270,11 +270,6 @@ def _browse_avahi() -> None:
 
 # ── Poll ───────────────────────────────────────────────────────────
 
-def _pref_value(name: str, default: Any = None) -> Any:
-    from .transfers import _pref_value as _pv
-    return _pv(name, default)
-
-
 def _poll_peer_torrents(peer: dict[str, Any]) -> list[dict[str, Any]]:
     """Fetch torrent list from a peer's API."""
     base_url = peer.get("base_url", "")
@@ -364,10 +359,11 @@ def _matches_allowlist(peer: dict[str, Any], allowlist: str) -> bool:
 def _poll_loop() -> None:
     """Periodically poll all known peers for new torrents."""
     while not _stop_event.is_set():
-        interval = int(_pref_value("peer_poll_interval_seconds", 60) or 60)
-        max_downloads = int(_pref_value("peer_max_auto_downloads", 5) or 5)
-        content_filter = str(_pref_value("peer_content_filter", "") or "")
-        allowlist = str(_pref_value("peer_allowlist", "") or "")
+        from .contracts import pref_value
+        interval = int(pref_value("peer_poll_interval_seconds", 60) or 60)
+        max_downloads = int(pref_value("peer_max_auto_downloads", 5) or 5)
+        content_filter = str(pref_value("peer_content_filter", "") or "")
+        allowlist = str(pref_value("peer_allowlist", "") or "")
 
         with _peers_lock:
             peers_snapshot = list(_peers.values())

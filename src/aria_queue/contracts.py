@@ -215,6 +215,14 @@ def load_declaration() -> dict[str, Any]:
     return ensure_declaration()
 
 
+def pref_value(name: str, default: Any = None) -> Any:
+    """Return the current value of a UIC preference by name."""
+    for pref in load_declaration().get("uic", {}).get("preferences", []):
+        if pref.get("name") == name:
+            return pref.get("value", default)
+    return default
+
+
 def save_declaration(declaration: dict[str, Any]) -> dict[str, Any]:
     with storage_locked():
         path = declaration_path()

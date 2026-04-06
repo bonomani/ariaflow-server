@@ -39,12 +39,12 @@ def get_aria2_option(h: object, parsed: object) -> None:
 
 def get_aria2_option_tiers(h: object, parsed: object) -> None:
     from ..aria2_rpc import _MANAGED_ARIA2_OPTIONS, _SAFE_ARIA2_OPTIONS
-    from ..core import _pref_value
+    from ..contracts import pref_value
 
     h._send_json({
         "managed": sorted(_MANAGED_ARIA2_OPTIONS),
         "safe": sorted(_SAFE_ARIA2_OPTIONS),
-        "unsafe_enabled": bool(_pref_value("aria2_unsafe_options", False)),
+        "unsafe_enabled": bool(pref_value("aria2_unsafe_options", False)),
     })
 
 

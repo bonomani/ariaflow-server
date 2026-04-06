@@ -13,12 +13,8 @@ def _core() -> Any:
 
 
 def _pref_value(name: str, default: Any = None) -> Any:
-    from .contracts import load_declaration
-
-    for pref in load_declaration().get("uic", {}).get("preferences", []):
-        if pref.get("name") == name:
-            return pref.get("value", default)
-    return default
+    from .contracts import pref_value
+    return pref_value(name, default)
 
 
 def dedup_active_transfer_action() -> str:
