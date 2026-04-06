@@ -15,12 +15,26 @@
 
 _No open gaps._
 
+---
+
+## Explicit non-requests (do not implement)
+
+Decisions made to prevent re-proposal by future agents. None of these will
+ever be filed as BG entries.
+
+| Topic | Decision | Reason |
+|-------|----------|--------|
+| Per-interface RX/TX byte counters | **Do not add** | Ariaflow is a download manager, not a network monitor. Users have `htop`/`btop`/Activity Monitor for network stats. The existing per-download speed + aggregate sparkline + bandwidth probe already answer "how much is flowing" for this domain. |
+| Interface enumeration via API | **Do not add** | Exposes network topology. The frontend already enumerates its own interfaces via `local_identity()` in `bonjour.py`. Remote clients don't need to see the backend's interfaces; they already have one working URL. |
+
+---
+
+Historical resolved entries are preserved in git history.
+
 ## Resolved
 
 | ID | What | Blocks frontend gap | Resolution |
 |----|------|---------------------|------------|
-| BG-1 | SSE pushed rev-only | FE-7 (poll after each event) | SSE now pushes full payload (items, state, summary) |
-| BG-2 | No PATCH for preferences | FE-8 (GET→merge→POST race) | `PATCH /api/declaration/preferences` added |
-| BG-3 | openapi.yaml lacks response field schemas | (none — infrastructure; now consumed by frontend `TestBackendFieldCoverage` auto-discovery) | `openapi_schemas.py` + `gen_openapi.py` emit explicit `properties` per endpoint |
-| BG-4 | openapi.yaml `info.version` stale | (none — spec hygiene) | `gen_openapi.py` now injects `__version__` into `info.version` on every regeneration |
-| BG-5 | Bonjour instance name user+model vs hostname | (none — cosmetic) | `_instance_name()` now returns the short hostname directly (service type identifies software) |
+| BG-6 | Bonjour TXT records need hostname | FE-14 (skip self-discoveries) | Added `hostname=<short_hostname>` TXT record to `_ariaflow._tcp` registration |
+
+*(BG-1 through BG-5 cleaned 2026-04-06 — see git log for history)*

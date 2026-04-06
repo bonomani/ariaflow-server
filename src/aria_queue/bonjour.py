@@ -71,6 +71,7 @@ def build_dns_sd_cmd(*, port: int, path: str) -> list[str]:
         str(port),
         f"path={path}",
         "tls=0",
+        f"hostname={_short_hostname()}",
     ]
 
 
@@ -84,6 +85,7 @@ def build_avahi_cmd(*, port: int, path: str) -> list[str]:
         str(port),
         f"path={path}",
         "tls=0",
+        f"hostname={_short_hostname()}",
     ]
 
 

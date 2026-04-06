@@ -369,6 +369,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
         self.assertEqual(cmd[5], "8000")
         self.assertIn("path=/api", cmd)
         self.assertIn("tls=0", cmd)
+        self.assertIn("hostname=myhost", cmd)
 
     @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
     def test_avahi_cmd_structure(self, _h: MagicMock) -> None:
@@ -379,6 +380,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
         self.assertEqual(cmd[3], "8000")
         self.assertIn("path=/api", cmd)
         self.assertIn("tls=0", cmd)
+        self.assertIn("hostname=myhost", cmd)
 
     @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
     def test_dns_sd_and_avahi_same_service_type(self, _h: MagicMock) -> None:
