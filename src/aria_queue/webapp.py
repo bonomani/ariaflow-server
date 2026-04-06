@@ -35,6 +35,15 @@ _STATUS_CACHE_LOCK = threading.Lock()
 STATUS_CACHE_TTL = 2.0
 API_SCHEMA_VERSION = "2"
 
+# ── Request metrics ──
+_metrics_lock = threading.Lock()
+_metrics: dict[str, int] = {"requests_total": 0, "bytes_sent_total": 0, "bytes_received_total": 0}
+
+def get_metrics() -> dict[str, int]:
+    with _metrics_lock:
+        return dict(_metrics)
+
+
 # ── SSE event bus ──
 _sse_clients: list[queue.Queue[str]] = []
 _sse_lock = threading.Lock()
@@ -198,6 +207,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(body)
+        with _metrics_lock:
+            _metrics["bytes_sent_total"] += len(body)
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
@@ -214,6 +225,8 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
+        with _metrics_lock:
+            _metrics["requests_total"] += 1
         parsed = urlparse(self.path)
         path = parsed.path
         # Special routes (redirect, non-API)
@@ -244,9 +257,13 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             self._send_json(routes._error_payload("not_found", "resource not found"), status=404)
 
     def do_POST(self) -> None:  # noqa: N802
+        with _metrics_lock:
+            _metrics["requests_total"] += 1
         path = urlparse(self.path).path
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+        with _metrics_lock:
+            _metrics["bytes_received_total"] += length
         try:
             payload = json.loads(raw or "{}")
         except json.JSONDecodeError:

@@ -201,12 +201,14 @@ def _run_tests() -> dict[str, object]:
 
 def get_health(h: object, parsed: object) -> None:
     from ..scheduler import check_disk_space
+    from ..webapp import get_metrics
     disk_ok, disk_percent = check_disk_space()
     h._send_json({
         "status": "ok",
         "version": __version__,
         "disk_usage_percent": disk_percent,
         "disk_ok": disk_ok,
+        **get_metrics(),
     })
 
 
