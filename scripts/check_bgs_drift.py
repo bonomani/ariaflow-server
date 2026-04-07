@@ -21,7 +21,7 @@ _MEMBER_REPOS = {
     "uic": _PROJECT.parent / "uic",
     "asm": _PROJECT.parent / "asm",
     "tic": _PROJECT.parent / "tic",
-    "bgs": _PROJECT.parent / "bgs",
+    "bgs": _PROJECT.parent / "BGSPrivate",
 }
 
 # Slice requirements: which members must appear in members_used

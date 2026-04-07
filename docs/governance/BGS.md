@@ -27,7 +27,7 @@ external_controls:
   rate_limiting_and_budget_control: implemented
   privacy_and_data_boundary_control: not_applicable
 
-bgs_version_ref: bgs@e459816
+bgs_version_ref: bgs@58c1467
 member_version_refs:
   ucc: ucc@370c1f7
   uic: uic@11bd400

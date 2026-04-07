@@ -7,7 +7,7 @@ decision_reason: >
   depends on installation, runtime readiness, recovery, and transition
   legality — an ASM-based slice is the natural fit per CR-1b.
 
-bgs_version_ref: bgs@e459816
+bgs_version_ref: bgs@58c1467
 
 members_used:
   - BISS

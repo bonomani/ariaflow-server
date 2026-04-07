@@ -1,6 +1,64 @@
 # Plan
 
-No open items.
+## Open items
+
+Source: `docs/governance/BGS-GAPS.md` (analysis of BGSPrivate @ 58c1467).
+Goal: make `check-bgs-compliance.py` pass against ariaflow.
+
+### [P1] Fix entry-relative paths in BGS.md and bgs-decision.yaml (G2 + G3)
+
+**What:** Rewrite `decision_record_path` and every `evidence_refs` entry so they resolve relative to their own file's directory (the validator joins them to the parent dir, not the project root).
+**Where:**
+- `docs/governance/BGS.md:11` — `decision_record_path: ./bgs-decision.yaml`
+- `docs/governance/bgs-decision.yaml:34-40` — rewrite each evidence path (`./biss-classification.md`, `../../src/aria_queue/contracts.py`, `../../tests/`, etc.)
+- Re-check `read_next:` paths in `BGS.md` for the same issue.
+**Why:** Validator currently FAILs with `decision record not found` and 6× `evidence_ref not found`.
+**Scope:** ~10 lines, 2 files.
+**Verify:** `python ../BGSPrivate/bgs/tools/check-bgs-compliance.py docs/governance/BGS.md --member-repos-root ../BGSPrivate` — path errors gone.
+
+### [P1] Repin members for BGSPrivate monorepo layout (G1)
+
+**What:** Replace per-member SHAs with a single BGSPrivate ref. BGSPrivate is one git repo; `ucc/`, `uic/`, `asm/`, `tic/` are subfolders without `.git`, so `ucc@370c1f7` etc. cannot resolve.
+**Where:**
+- `docs/governance/bgs-decision.yaml:21-25` — set every entry to `<name>@58c1467` (the BGSPrivate HEAD).
+- `docs/governance/BGS.md:31-35` — same.
+- `scripts/check_bgs_drift.py:19-25` — point all five members at `_PROJECT.parent / "BGSPrivate"`.
+**Why:** Without this, the upstream validator FAILs 4× on member refs and the local drift checker drifts from upstream truth.
+**Scope:** ~15 lines, 3 files.
+**Decision needed first:** confirm option (A) "pin everything to bgs@<sha>" before editing — see G1 in BGS-GAPS.md.
+**Depends on:** none, but do after the path fixes so each commit is independently green.
+
+### [P2] Schema-align external_controls casing + add biss ref (G5 + G6)
+
+**What:** Lowercase `IAM_and_authorization` → `iam_and_authorization` in both files; add `biss: bgs@58c1467` to `member_version_refs` since `BISS` is in `members_used`.
+**Where:**
+- `docs/governance/bgs-decision.yaml:28`
+- `docs/governance/BGS.md:24`
+- `docs/governance/bgs-decision.yaml:21` and `BGS.md:31` (add biss line).
+**Why:** Validator passes today via key normalization, but the JSON schema declares the canonical key as lowercase — any stricter runner fails. Adding `biss` matches the declared members list.
+**Scope:** 4 lines, 2 files.
+
+### [P2] Wire upstream validator into make check-drift (G7)
+
+**What:** Have `scripts/check_bgs_drift.py` shell out to `../BGSPrivate/bgs/tools/check-bgs-compliance.py docs/governance/BGS.md --member-repos-root ../BGSPrivate` and propagate its exit code. Surface stdout on failure.
+**Where:** `scripts/check_bgs_drift.py` (add a step at the end of `main()`); no Makefile change needed since it already calls this script.
+**Why:** Local `make check-drift` currently reports `BGS clean` while upstream reports 10 FAILs. The two checks must agree.
+**Scope:** ~20 lines, 1 file.
+**Depends on:** P1 items above (otherwise the new step fails immediately).
+
+### [P3] Refresh last_reviewed (G9)
+
+**What:** Bump `last_reviewed: 2026-04-05` → `2026-04-07` in `BGS.md`.
+**Where:** `docs/governance/BGS.md:12`.
+**Why:** Reflect that the entry was just re-validated against the new suite.
+**Scope:** 1 line.
+**Depends on:** all P1/P2 items merged (only bump after the file is actually clean).
+
+---
+
+Deferred (informational only, no action this round):
+- **G4** — document the single-SHA pinning convention once G1 lands.
+- **G8** — Grade-2 fields (`profiles[]`, `policies[]`) — adopt only if we ship a typed profile.
 
 ---
 
