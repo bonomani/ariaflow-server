@@ -4,13 +4,6 @@
 
 Source: coherence analysis 2026-04-07 (governance ↔ code, governance ↔ governance, ASM rules ↔ enforcement).
 
-### [P2] Decide promotion of STATES_AND_INTERACTIONS.md and ARIA2_RPC_WRAPPERS.md
-
-**What:** Both files appear in `BGS.md read_next:` but not in `bgs-decision.yaml evidence_refs:`. Either promote them to evidence (if they support the claim) or accept them as docs-only and document the distinction.
-**Where:** `docs/governance/bgs-decision.yaml` evidence_refs block.
-**Why:** A reader following `read_next` sees governance-relevant material that the decision record does not cite, so the decision record is incomplete relative to its own entry file.
-**Scope:** 2 lines, 1 file (or a one-line note explaining the deliberate split).
-
 ### [P3] Add inline ASM CR-N traceability comments
 
 **What:** The 5 ASM coherence rules (CR-1…CR-5) are enforced in code but with no inline `# ASM CR-N` markers, so traceability is implicit.
