@@ -1025,5 +1025,103 @@ class TicOpenAPITests(unittest.TestCase):
         self.assertIn("/api/aria2/change_global_option", data["paths"])
 
 
+class TicAsmCoherenceTests(IsolatedTestCase):
+    """
+    Name: test_tic_asm_coherence
+    Intent: pin the explicit ASM coherence-rule guards added to ariaflow.
+    Scope: state.py (CR-4), scheduler.py (CR-3 crash handler)
+    Trace targets: ASM CR-3, ASM CR-4
+    """
+
+    def test_cr4_close_session_refuses_with_active_jobs(self) -> None:
+        # ASM CR-4: a session may not transition to closed while jobs are
+        # in the active or waiting tier. close_state_session must raise.
+        from aria_queue.core import (
+            close_state_session,
+            ensure_state_session,
+            save_queue,
+        )
+        ensure_state_session()
+        save_queue([
+            {"id": "j1", "url": "https://example.com/a.bin", "status": "active"},
+        ])
+        with self.assertRaises(RuntimeError) as ctx:
+            close_state_session("test")
+        self.assertIn("CR-4", str(ctx.exception))
+
+    def test_cr4_rollover_pauses_active_jobs_before_close(self) -> None:
+        # ASM CR-4: start_new_state_session must pause active/waiting items
+        # in queue.json before invoking close, so the rollover transition
+        # is admissible.
+        from aria_queue.core import (
+            ensure_state_session,
+            load_queue,
+            save_queue,
+            start_new_state_session,
+        )
+        ensure_state_session()
+        save_queue([
+            {"id": "j1", "url": "https://example.com/a.bin", "status": "active"},
+            {"id": "j2", "url": "https://example.com/b.bin", "status": "waiting"},
+            {"id": "j3", "url": "https://example.com/c.bin", "status": "queued"},
+        ])
+        start_new_state_session("test_rollover")
+        items = {it["id"]: it["status"] for it in load_queue()}
+        self.assertEqual(items["j1"], "paused")
+        self.assertEqual(items["j2"], "paused")
+        self.assertEqual(items["j3"], "queued")  # untouched
+
+    def test_cr3_scheduler_crash_pauses_aria2(self) -> None:
+        # ASM CR-3: when run leaves the running state via the crash handler,
+        # the source-of-truth (aria2) must stop transferring before
+        # running=False is written to ariaflow's mirror.
+        import threading
+        import time as _time
+        from aria_queue import scheduler
+
+        crash = RuntimeError("simulated process_queue crash")
+        with (
+            patch("aria_queue.core.process_queue", side_effect=crash),
+            patch("aria_queue.core.aria2_pause_all") as pause_all,
+            patch("aria_queue.core.ensure_state_session", return_value={"running": False}),
+            patch("aria_queue.core.save_state"),
+            patch("aria_queue.core.load_state", return_value={}),
+            patch("aria_queue.core.storage_locked"),
+        ):
+            scheduler.start_background_process(port=6800)
+            # Background thread is daemon=True; give it a moment to crash.
+            for _ in range(50):
+                if pause_all.called:
+                    break
+                _time.sleep(0.02)
+        pause_all.assert_called_once()
+
+    def test_cr3_crash_handler_swallows_pause_failure(self) -> None:
+        # ASM CR-3 best-effort: if aria2 itself is the cause of the crash,
+        # aria2_pause_all may fail. The handler must still complete and
+        # write running=False so the mirror reflects the stop.
+        import time as _time
+        from aria_queue import scheduler
+
+        crash = RuntimeError("simulated process_queue crash")
+        with (
+            patch("aria_queue.core.process_queue", side_effect=crash),
+            patch("aria_queue.core.aria2_pause_all", side_effect=ConnectionError("daemon dead")),
+            patch("aria_queue.core.ensure_state_session", return_value={"running": False}),
+            patch("aria_queue.core.save_state") as save_state_mock,
+            patch("aria_queue.core.load_state", return_value={}),
+            patch("aria_queue.core.storage_locked"),
+        ):
+            scheduler.start_background_process(port=6800)
+            for _ in range(50):
+                if save_state_mock.called:
+                    break
+                _time.sleep(0.02)
+        save_state_mock.assert_called()
+        written = save_state_mock.call_args[0][0]
+        self.assertFalse(written["running"])
+        self.assertIn("simulated process_queue crash", written.get("last_error", ""))
+
+
 if __name__ == "__main__":
     unittest.main()
