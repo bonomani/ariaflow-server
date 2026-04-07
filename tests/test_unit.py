@@ -1166,6 +1166,40 @@ class TestOpenapiSchemas(unittest.TestCase):
         for key in declared:
             self.assertIn(key, live, f"declared key {key!r} missing from live")
 
+    def test_bg10_bandwidth_schema_matches_live_response(self) -> None:
+        """BG-10: GET /api/bandwidth top-level keys match the live shape."""
+        from unittest.mock import patch
+        from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+        from aria_queue.bandwidth import bandwidth_status
+        with patch("aria_queue.core.aria2_current_bandwidth", return_value={}):
+            live = bandwidth_status()
+        declared = set(RESPONSE_SCHEMAS["GET /api/bandwidth"].keys()) - {
+            "_schema", "_request_id"
+        }
+        # config / current_limit / last_probe / last_probe_at are always
+        # present; the rest only appear when last_probe is a dict.
+        always_present = {"config", "current_limit", "last_probe", "last_probe_at"}
+        for key in always_present:
+            self.assertIn(key, live, f"declared key {key!r} missing from live")
+            self.assertIn(key, declared, f"live key {key!r} missing from schema")
+
+    def test_bg10_torrents_peers_sessions_top_level_shape(self) -> None:
+        """BG-10: GET /api/torrents, /api/peers, /api/sessions, /api/sessions/stats top-level keys match."""
+        from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+        # Each endpoint's top-level non-meta key set is small enough to assert
+        # by inspection — the responses are wrappers, not nested structures.
+        cases = {
+            "GET /api/torrents": {"torrents", "count"},
+            "GET /api/peers": {"peers"},
+            "GET /api/sessions": {"sessions"},
+        }
+        for key, expected in cases.items():
+            declared = set(RESPONSE_SCHEMAS[key].keys()) - {"_schema", "_request_id"}
+            self.assertEqual(
+                declared, expected,
+                f"{key} declared keys {declared} != expected {expected}",
+            )
+
 
 class TestBg10LogItemSchema(IsolatedTestCase):
     def test_bg10_log_item_schema_matches_live_entry(self) -> None:

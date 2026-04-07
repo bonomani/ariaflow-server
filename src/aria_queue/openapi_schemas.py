@@ -18,36 +18,10 @@ _META: dict[str, dict] = {
 }
 
 # UCC envelope shape produced by install.ucc_envelope(). Reused across the
-# /api/lifecycle per-target entries to avoid copy/paste drift.
-_UCC_ENVELOPE: dict = {
-    "type": "object",
-    "properties": {
-        "meta": {
-            "type": "object",
-            "properties": {
-                "contract": {"type": "string"},
-                "version": {"type": "string"},
-                "target": {"type": "string"},
-            },
-        },
-        "result": {
-            "type": "object",
-            "properties": {
-                "observation": {"type": "string"},
-                "outcome": {"type": "string"},
-                "reason": {"type": "string"},
-                "target": {"type": "string"},
-                "completion": {"type": "string", "nullable": True},
-                "message": {"type": "string", "nullable": True},
-                "commands": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "nullable": True,
-                },
-            },
-        },
-    },
-}
+# /api/lifecycle per-target entries via the named UccEnvelope component
+# defined in src/aria_queue/openapi.yaml. Using a $ref keeps the generated
+# spec compact and avoids copy/paste drift.
+_UCC_ENVELOPE: dict = {"$ref": "#/components/schemas/UccEnvelope"}
 
 
 RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
@@ -123,7 +97,24 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
     "GET /api/bandwidth": {
         "config": {"type": "object"},
         "current_limit": {"type": "object", "nullable": True},
-        "last_probe": {"type": "object", "nullable": True},
+        "last_probe": {
+            "type": "object",
+            "nullable": True,
+            "properties": {
+                "source": {"type": "string"},
+                "reason": {"type": "string", "nullable": True},
+                "interface_name": {"type": "string", "nullable": True},
+                "downlink_mbps": {"type": "number", "nullable": True},
+                "uplink_mbps": {"type": "number", "nullable": True},
+                "down_cap_mbps": {"type": "number", "nullable": True},
+                "up_cap_mbps": {"type": "number", "nullable": True},
+                "cap_mbps": {"type": "number", "nullable": True},
+                "cap_bytes_per_sec": {"type": "integer", "nullable": True},
+                "responsiveness_rpm": {"type": "number", "nullable": True},
+                "command": {"type": "string", "nullable": True},
+                "partial": {"type": "boolean", "nullable": True},
+            },
+        },
         "last_probe_at": {"type": "string", "nullable": True},
         "interface": {"type": "string", "nullable": True},
         "downlink_mbps": {"type": "number", "nullable": True},
@@ -132,6 +123,22 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "up_cap_mbps": {"type": "number", "nullable": True},
         "cap_bytes_per_sec": {"type": "integer", "nullable": True},
         "responsiveness_rpm": {"type": "number", "nullable": True},
+        **_META,
+    },
+    # bandwidth probe is the only POST currently in RESPONSE_SCHEMAS — the
+    # generator already supports any METHOD prefix, this just fills it in.
+    "POST /api/bandwidth/probe": {
+        "ok": {"type": "boolean"},
+        "probe": {"type": "object"},
+        "config": {"type": "object"},
+        "interface": {"type": "string", "nullable": True},
+        "downlink_mbps": {"type": "number", "nullable": True},
+        "uplink_mbps": {"type": "number", "nullable": True},
+        "down_cap_mbps": {"type": "number", "nullable": True},
+        "up_cap_mbps": {"type": "number", "nullable": True},
+        "cap_bytes_per_sec": {"type": "integer", "nullable": True},
+        "responsiveness_rpm": {"type": "number", "nullable": True},
+        "source": {"type": "string", "nullable": True},
         **_META,
     },
 
@@ -166,7 +173,21 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
 
     # ── torrents ──────────────────────────────────────────────────────────
     "GET /api/torrents": {
-        "torrents": {"type": "array", "items": {"type": "object"}},
+        "torrents": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "infohash": {"type": "string"},
+                    "name": {"type": "string"},
+                    "url": {"type": "string", "nullable": True},
+                    "seed_gid": {"type": "string", "nullable": True},
+                    "torrent_url": {"type": "string"},
+                    "started_at": {"type": "string", "nullable": True},
+                    "item_id": {"type": "string", "nullable": True},
+                },
+            },
+        },
         "count": {"type": "integer"},
         **_META,
     },
@@ -178,7 +199,22 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
 
     # ── peers ─────────────────────────────────────────────────────────────
     "GET /api/peers": {
-        "peers": {"type": "array", "items": {"type": "object"}},
+        "peers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "instance": {"type": "string"},
+                    "host": {"type": "string"},
+                    "port": {"type": "integer"},
+                    "path": {"type": "string"},
+                    "tls": {"type": "boolean"},
+                    "base_url": {"type": "string"},
+                    "last_seen": {"type": "number"},
+                    "status": {"type": "string"},
+                },
+            },
+        },
         **_META,
     },
 
@@ -274,18 +310,33 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
 
     # ── sessions ──────────────────────────────────────────────────────────
     "GET /api/sessions": {
-        "sessions": {"type": "array", "items": {"type": "object"}},
+        "sessions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                    "started_at": {"type": "string", "nullable": True},
+                    "closed_at": {"type": "string", "nullable": True},
+                    "closed_reason": {"type": "string", "nullable": True},
+                    "items_total": {"type": "integer", "nullable": True},
+                },
+            },
+        },
         **_META,
     },
     "GET /api/sessions/stats": {
         "session_id": {"type": "string", "nullable": True},
+        "started_at": {"type": "string", "nullable": True},
         "items_total": {"type": "integer", "nullable": True},
+        "items_active": {"type": "integer", "nullable": True},
+        "items_archived": {"type": "integer", "nullable": True},
         "items_done": {"type": "integer", "nullable": True},
         "items_error": {"type": "integer", "nullable": True},
-        "bytes_downloaded": {"type": "integer", "nullable": True},
-        "bytes_uploaded": {"type": "integer", "nullable": True},
-        "started_at": {"type": "string", "nullable": True},
-        "closed_at": {"type": "string", "nullable": True},
+        "items_queued": {"type": "integer", "nullable": True},
+        "items_downloading": {"type": "integer", "nullable": True},
+        "items_paused": {"type": "integer", "nullable": True},
+        "bytes_completed": {"type": "integer", "nullable": True},
         **_META,
     },
 }

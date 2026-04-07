@@ -56,4 +56,4 @@ Current status:
 | BG-7 | SSE push for action_log entries (drop `/api/log` polling) | Done (`append_action_log` publishes `action_logged` event) |
 | BG-8 | Merge `/api/health` into `/api/status` (drop `_heroTimer` polling) | Done (`/api/status` carries a `health` object) |
 | BG-9 | Scheduler backoff when aria2 unreachable | Done (exponential 2s→60s in `process_queue`) |
-| BG-10 | Under-specified response schemas in openapi.yaml for `/api/declaration`, `/api/lifecycle`, `/api/log` | Open (low priority, see PLAN.md) |
+| BG-10 | Under-specified response schemas in openapi.yaml (9 endpoints) | Done (typed nested schemas + reusable UccEnvelope component + 5 TIC pinning tests) |

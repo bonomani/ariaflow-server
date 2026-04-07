@@ -185,9 +185,13 @@ def _emit_scalar(lines: list, key: str, value: object, indent: str) -> None:
 def _emit_schema_node(lines: list, node: dict, indent: str) -> None:
     """Emit one OpenAPI schema fragment of arbitrary nesting depth.
 
-    Recognized keys: type, nullable, description, enum, properties, items.
-    Anything else is emitted as a scalar at this level (best-effort).
+    Recognized keys: $ref, type, nullable, description, enum, properties, items.
+    A node containing $ref is emitted as a single `$ref: "..."` line and any
+    sibling keys are dropped (per OpenAPI 3.0 — siblings of $ref are ignored).
     """
+    if "$ref" in node:
+        lines.append(f'{indent}$ref: "{node["$ref"]}"')
+        return
     # Scalar fields first, sorted for stable output.
     for key in sorted(node.keys()):
         if key in ("properties", "items"):

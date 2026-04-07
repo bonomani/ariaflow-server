@@ -43,6 +43,8 @@ tags:
 
 
 
+
+
 paths:
   /api:
     get:
@@ -233,6 +235,42 @@ paths:
                   last_probe:
                     nullable: true
                     type: object
+                    properties:
+                      cap_bytes_per_sec:
+                        nullable: true
+                        type: integer
+                      cap_mbps:
+                        nullable: true
+                        type: number
+                      command:
+                        nullable: true
+                        type: string
+                      down_cap_mbps:
+                        nullable: true
+                        type: number
+                      downlink_mbps:
+                        nullable: true
+                        type: number
+                      interface_name:
+                        nullable: true
+                        type: string
+                      partial:
+                        nullable: true
+                        type: boolean
+                      reason:
+                        nullable: true
+                        type: string
+                      responsiveness_rpm:
+                        nullable: true
+                        type: number
+                      source:
+                        type: string
+                      up_cap_mbps:
+                        nullable: true
+                        type: number
+                      uplink_mbps:
+                        nullable: true
+                        type: number
                   last_probe_at:
                     nullable: true
                     type: string
@@ -261,6 +299,41 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  _request_id:
+                    type: string
+                  _schema:
+                    type: string
+                  cap_bytes_per_sec:
+                    nullable: true
+                    type: integer
+                  config:
+                    type: object
+                  down_cap_mbps:
+                    nullable: true
+                    type: number
+                  downlink_mbps:
+                    nullable: true
+                    type: number
+                  interface:
+                    nullable: true
+                    type: string
+                  ok:
+                    type: boolean
+                  probe:
+                    type: object
+                  responsiveness_rpm:
+                    nullable: true
+                    type: number
+                  source:
+                    nullable: true
+                    type: string
+                  up_cap_mbps:
+                    nullable: true
+                    type: number
+                  uplink_mbps:
+                    nullable: true
+                    type: number
         "400":
           description: Bad request
   /api/declaration:
@@ -693,141 +766,13 @@ paths:
                   _schema:
                     type: string
                   aria2:
-                    type: object
-                    properties:
-                      meta:
-                        type: object
-                        properties:
-                          contract:
-                            type: string
-                          target:
-                            type: string
-                          version:
-                            type: string
-                      result:
-                        type: object
-                        properties:
-                          commands:
-                            nullable: true
-                            type: array
-                            items:
-                              type: string
-                          completion:
-                            nullable: true
-                            type: string
-                          message:
-                            nullable: true
-                            type: string
-                          observation:
-                            type: string
-                          outcome:
-                            type: string
-                          reason:
-                            type: string
-                          target:
-                            type: string
+                    $ref: "#/components/schemas/UccEnvelope"
                   aria2-launchd:
-                    type: object
-                    properties:
-                      meta:
-                        type: object
-                        properties:
-                          contract:
-                            type: string
-                          target:
-                            type: string
-                          version:
-                            type: string
-                      result:
-                        type: object
-                        properties:
-                          commands:
-                            nullable: true
-                            type: array
-                            items:
-                              type: string
-                          completion:
-                            nullable: true
-                            type: string
-                          message:
-                            nullable: true
-                            type: string
-                          observation:
-                            type: string
-                          outcome:
-                            type: string
-                          reason:
-                            type: string
-                          target:
-                            type: string
+                    $ref: "#/components/schemas/UccEnvelope"
                   ariaflow:
-                    type: object
-                    properties:
-                      meta:
-                        type: object
-                        properties:
-                          contract:
-                            type: string
-                          target:
-                            type: string
-                          version:
-                            type: string
-                      result:
-                        type: object
-                        properties:
-                          commands:
-                            nullable: true
-                            type: array
-                            items:
-                              type: string
-                          completion:
-                            nullable: true
-                            type: string
-                          message:
-                            nullable: true
-                            type: string
-                          observation:
-                            type: string
-                          outcome:
-                            type: string
-                          reason:
-                            type: string
-                          target:
-                            type: string
+                    $ref: "#/components/schemas/UccEnvelope"
                   networkquality:
-                    type: object
-                    properties:
-                      meta:
-                        type: object
-                        properties:
-                          contract:
-                            type: string
-                          target:
-                            type: string
-                          version:
-                            type: string
-                      result:
-                        type: object
-                        properties:
-                          commands:
-                            nullable: true
-                            type: array
-                            items:
-                              type: string
-                          completion:
-                            nullable: true
-                            type: string
-                          message:
-                            nullable: true
-                            type: string
-                          observation:
-                            type: string
-                          outcome:
-                            type: string
-                          reason:
-                            type: string
-                          target:
-                            type: string
+                    $ref: "#/components/schemas/UccEnvelope"
                   session_closed_at:
                     nullable: true
                     type: string
@@ -948,6 +893,23 @@ paths:
                     type: array
                     items:
                       type: object
+                      properties:
+                        base_url:
+                          type: string
+                        host:
+                          type: string
+                        instance:
+                          type: string
+                        last_seen:
+                          type: number
+                        path:
+                          type: string
+                        port:
+                          type: integer
+                        status:
+                          type: string
+                        tls:
+                          type: boolean
   /api/scheduler:
     get:
       tags: [Scheduler]
@@ -1073,6 +1035,21 @@ paths:
                     type: array
                     items:
                       type: object
+                      properties:
+                        closed_at:
+                          nullable: true
+                          type: string
+                        closed_reason:
+                          nullable: true
+                          type: string
+                        items_total:
+                          nullable: true
+                          type: integer
+                        session_id:
+                          type: string
+                        started_at:
+                          nullable: true
+                          type: string
   /api/sessions/new:
     post:
       tags: [Sessions]
@@ -1107,19 +1084,28 @@ paths:
                     type: string
                   _schema:
                     type: string
-                  bytes_downloaded:
+                  bytes_completed:
                     nullable: true
                     type: integer
-                  bytes_uploaded:
+                  items_active:
                     nullable: true
                     type: integer
-                  closed_at:
+                  items_archived:
                     nullable: true
-                    type: string
+                    type: integer
                   items_done:
                     nullable: true
                     type: integer
+                  items_downloading:
+                    nullable: true
+                    type: integer
                   items_error:
+                    nullable: true
+                    type: integer
+                  items_paused:
+                    nullable: true
+                    type: integer
+                  items_queued:
                     nullable: true
                     type: integer
                   items_total:
@@ -1232,6 +1218,25 @@ paths:
                     type: array
                     items:
                       type: object
+                      properties:
+                        infohash:
+                          type: string
+                        item_id:
+                          nullable: true
+                          type: string
+                        name:
+                          type: string
+                        seed_gid:
+                          nullable: true
+                          type: string
+                        started_at:
+                          nullable: true
+                          type: string
+                        torrent_url:
+                          type: string
+                        url:
+                          nullable: true
+                          type: string
   /api/torrents/{infohash}.torrent:
     get:
       tags: [Torrents]
@@ -1415,6 +1420,42 @@ components:
           items:
             type: object
 
+    UccEnvelope:
+      type: object
+      description: UCC envelope returned by install.ucc_envelope() — used by every per-target entry in /api/lifecycle.
+      properties:
+        meta:
+          type: object
+          properties:
+            contract:
+              type: string
+            version:
+              type: string
+            target:
+              type: string
+        result:
+          type: object
+          properties:
+            observation:
+              type: string
+            outcome:
+              type: string
+            reason:
+              type: string
+            target:
+              type: string
+            completion:
+              type: string
+              nullable: true
+            message:
+              type: string
+              nullable: true
+            commands:
+              type: array
+              nullable: true
+              items:
+                type: string
+
     Error:
       type: object
       properties:
@@ -1450,6 +1491,8 @@ components:
                 type: boolean
               item:
                 $ref: "#/components/schemas/QueueItem"
+
+
 
 
 

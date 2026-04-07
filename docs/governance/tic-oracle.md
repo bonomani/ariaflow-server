@@ -5,7 +5,7 @@ TIC ref: tic@7cfba80
 Generated: 2026-04-05
 Test runner: `python -m unittest discover -s tests -v`
 
-## Test Inventory — All 485 Tests (477 in collection-mode form; 8 are parametrized)
+## Test Inventory — All 490 Tests (482 in collection-mode form; 8 are parametrized)
 
 ---
 
@@ -635,12 +635,22 @@ Validates the allowed_actions state table for each item status.
 | 257z | `test_uptime_seconds_is_monotonic` | uptime_seconds increases between successive calls | t2 > t1 across a sleep | UCC: observability (metrics) |
 | 257aa | `test_sse_clients_is_int` | sse_clients metric is an integer count | isinstance(sse_clients, int) | UCC: observability (metrics) |
 
-### `tests/test_unit.py` — TestOpenapiSchemas (2 tests)
+### `tests/test_unit.py` — TestOpenapiSchemas (6 tests)
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
 | 257ab | `test_schemas_cover_all_json_get_endpoints` | Every JSON-returning GET route has a RESPONSE_SCHEMAS entry | missing == [] | UCC: API contract (OpenAPI completeness) |
 | 257ac | `test_every_schema_has_meta_fields` | Every schema declares the `_schema` and `_request_id` envelope fields | both keys present in every schema | UCC: API contract (envelope) |
+| 257ad | `test_bg10_declaration_schema_matches_live_response` | BG-10: GET /api/declaration declared top-level + uic sub-keys exist in load_declaration() | every declared key found in live | UCC: API contract (BG-10 schema pin) |
+| 257ae | `test_bg10_lifecycle_schema_matches_live_response` | BG-10: GET /api/lifecycle declared top-level keys exist in _lifecycle_payload() | every declared key found in live | UCC: API contract (BG-10 schema pin) |
+| 257af | `test_bg10_bandwidth_schema_matches_live_response` | BG-10: GET /api/bandwidth always-present keys (config, current_limit, last_probe, last_probe_at) exist in bandwidth_status() | every always-present key found in live | UCC: API contract (BG-10 schema pin) |
+| 257ag | `test_bg10_torrents_peers_sessions_top_level_shape` | BG-10: GET /api/torrents, /api/peers, /api/sessions schemas declare exactly the expected top-level wrapper keys | declared == expected for each | UCC: API contract (BG-10 schema pin) |
+
+### `tests/test_unit.py` — TestBg10LogItemSchema (1 test)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257ah | `test_bg10_log_item_schema_matches_live_entry` | BG-10: GET /api/log items[] required (non-nullable) keys are emitted by record_action | every required key present in live entry | UCC: API contract (BG-10 schema pin) |
 
 ---
 
