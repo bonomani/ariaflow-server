@@ -169,13 +169,9 @@ Core scheduler, state machine, and UCC contract tests.
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
-| 103 | `test_run_start` | Start run via API | code 200, ok, action == "start" | ASM: Run axis |
-| 104 | `test_run_stop` | Stop run via API | code 200, action == "stop" | ASM: Run axis |
 | 105 | `test_run_invalid_endpoint_returns_404` | Invalid scheduler endpoint returns 404 | code 404 | UCC: error semantics |
-| 106 | `test_run_start_empty_body_ok` | Start run with empty body succeeds | code 200 | ASM: Run axis |
 | 107 | `test_global_pause_resume` | Global pause then resume | code 200, paused/resumed keys present | ASM: Run axis |
 | 108 | `test_preflight` | Preflight returns gate results | code 200, status == "pass", gates present | UIC: gate evaluation |
-| 109 | `test_preflight_blocked_start` | Preflight fail blocks run start with 409 | code 409, error == "preflight_blocked" | UIC: gate enforcement |
 
 ### `tests/test_api.py` — TestDeclaration (4 tests)
 
@@ -498,7 +494,6 @@ Storage path resolution for all persistent files.
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
-| 233 | `test_scheduler_always_running` | start_background_process is importable and scheduler auto-starts | function importable from aria_queue.core | ASM: Run axis |
 
 ### `tests/test_unit.py` — TestBandwidthConfig (1 test)
 
@@ -644,8 +639,6 @@ Validates the allowed_actions state table for each item status.
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
-| 285 | `test_run_start_sets_running` | Run start accepted, running key in state | state.running present | ASM: Run axis |
-| 286 | `test_run_stop_clears_running` | Run stop clears running flag | state.running == False | ASM: Run axis |
 
 ### `tests/test_cross_check.py` — TestFileSelectReflectedInStatus (1 test)
 
@@ -664,7 +657,6 @@ Validates the allowed_actions state table for each item status.
 | 292 | `test_retry_logged` | Retry action recorded in log | "retry" in actions | UCC: audit trail |
 | 293 | `test_session_logged` | Session action recorded in log | "session" in actions | UCC: audit trail |
 | 294 | `test_probe_logged` | Probe action recorded in log | "probe" in actions | UCC: audit trail |
-| 295 | `test_run_logged` | Run action recorded in log | "run" in actions | UCC: audit trail |
 
 ### `tests/test_cross_check.py` — TestLogEntryDetails (4 tests)
 
@@ -707,7 +699,6 @@ Validates the allowed_actions state table for each item status.
 | 313 | `test_bandwidth_config_and_probe` | Configure bandwidth prefs, run probe, verify caps | down_free_percent == 30, down_cap <= 70 | UCC: bandwidth observation + UIC config |
 | 314 | `test_torrent_file_pick_workflow` | Add torrent, list files, select subset, verify downloading | 3 files listed, selected [1], status downloading | UCC: file selection workflow |
 | 315 | `test_options_management` | Reject unsafe, apply safe options, verify logged | 400 on unsafe, 200 on safe, change_options logged | UIC: safe option policy |
-| 316 | `test_preflight_blocks_start` | Auto-preflight fails, blocks run with 409 | code 409, error == "preflight_blocked", not running | UIC: gate enforcement |
 | 317 | `test_duplicate_urls` | Add same URL twice returns same id, only 1 in queue | first_id == second_id, 1 matching item | UIC: dedup policy |
 | 318 | `test_etag_caching_workflow` | ETag caching: 304 on same state, new ETag after mutation | 304 on repeat, etag2 != etag1 | UCC: caching |
 | 319 | `test_schema_version_detection` | Schema version in body, header, and ariaflow section | all == "2" | UCC: API contract |
@@ -735,7 +726,6 @@ Validates the allowed_actions state table for each item status.
 | 334 | `test_regression_probe_state_persisted` | Probe state persisted via save_state after probe | save_state called, last_bandwidth_probe in state | UCC: observation |
 | 335 | `test_regression_per_item_pause_releases_lock_before_rpc` | RPC call made outside storage lock (no lock contention) | depth == 0 during rpc call | UCC: concurrency |
 | 336 | `test_regression_state_revision_increments` | save_state increments _rev on every write | rev1 > rev0, rev2 > rev1 | UCC: revision |
-| 337 | `test_regression_paused_cleared_on_queue_complete` | Paused flag cleared when queue completes | state.paused == False, state.running == False | ASM: Run axis |
 | 338 | `test_regression_ensure_daemon_raises_on_failed_start` | ensure_aria_daemon raises on failed start | RuntimeError raised, "aria2c failed to start" | ASM: Daemon axis |
 | 339 | `test_regression_retry_clears_recovery_fields` | Retry clears recovered, recovered_at, recovery_session_id | none of those fields in result item | ASM: recovery |
 | 340 | `test_regression_mirror_urls_deduplicated` | Mirror URLs deduplicated before RPC call | len(uris) == 2, no duplicates | UCC: execution |
@@ -860,7 +850,6 @@ All tests verify correct RPC method name, parameter passing, and return value ex
 | 426 | `test_api_aria2_options_rejects_unsafe` | Unsafe aria2 option rejected via real HTTP | code 400, error == "rejected_options" | UIC: policy enforcement |
 | 427 | `test_api_openapi_and_docs` | OpenAPI YAML + Swagger UI + CORS via real HTTP | all served correctly | UCC: API contract |
 | 428 | `test_api_tests_endpoint` | /api/tests returns test results (mocked subprocess) | ok, total == 1, passed == 1 | UCC: API contract |
-| 429 | `test_run_start_honors_request_auto_preflight_override` | Request-level auto_preflight_on_run overrides declaration default | code 409, preflight_blocked, start_background_process not called | UIC: gate enforcement |
 
 ---
 
