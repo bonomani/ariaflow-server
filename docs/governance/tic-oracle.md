@@ -5,7 +5,7 @@ TIC ref: tic@7cfba80
 Generated: 2026-04-05
 Test runner: `python -m unittest discover -s tests -v`
 
-## Test Inventory — All 485 Tests
+## Test Inventory — All 485 Tests (477 in collection-mode form; 8 are parametrized)
 
 ---
 
@@ -255,7 +255,7 @@ Core scheduler, state machine, and UCC contract tests.
 | 150 | `test_get_api_tests` | GET /api/tests runs tests and returns results | code 200, ok, total == 1 | UCC: API contract |
 | 151 | `test_get_api_events` | GET /api/events connects SSE with connected event | text/event-stream, event: connected | UCC: API contract (SSE) |
 
-### `tests/test_api.py` — TestPostEndpoints (22 tests)
+### `tests/test_api.py` — TestPostEndpoints (24 tests)
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
@@ -263,6 +263,8 @@ Core scheduler, state machine, and UCC contract tests.
 | 153 | `test_post_api_add_invalid` | POST /api/downloads/add with empty items returns 400 | code 400 | UCC: error semantics |
 | 154 | `test_run_start_returns_404` | POST /api/scheduler/start returns 404 (removed) | code == 404 | ASM: Run axis |
 | 155 | `test_run_stop_returns_404` | POST /api/scheduler/stop returns 404 (removed) | code == 404 | ASM: Run axis |
+| 155a | `test_post_api_scheduler_start_returns_404` | POST /api/scheduler/start returns 404 (TestPostEndpoints duplicate of #154 covering the integration HTTP path) | code == 404 | ASM: Run axis |
+| 155b | `test_post_api_scheduler_stop_returns_404` | POST /api/scheduler/stop returns 404 (TestPostEndpoints duplicate of #155 covering the integration HTTP path) | code == 404 | ASM: Run axis |
 | 156 | `test_post_api_scheduler_invalid_path` | POST /api/scheduler/boom returns 404 | code 404 | UCC: error semantics |
 | 157 | `test_post_api_preflight` | POST /api/scheduler/preflight returns pass | code 200, status == "pass" | UIC: gate evaluation |
 | 158 | `test_post_api_ucc` | POST /api/scheduler/ucc returns structured result | code 200, meta + result present | UCC: contract shape |
@@ -469,14 +471,19 @@ Storage path resolution for all persistent files.
 |---|---|---|---|---|
 | 226 | `test_context_manager_noop` | advertise_http_service context manager is no-op when no backend | no exception raised | BISS: boundary classification |
 
-### `tests/test_unit.py` — TestBonjourCommandConstruction (4 tests)
+### `tests/test_unit.py` — TestBonjourCommandConstruction (9 tests)
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
-| 227 | `test_dns_sd_cmd_structure` | dns-sd command has correct service name, type, port, TXT records | cmd[2] == "ariaflow-api", cmd[3] == "_ariaflow._tcp", TXT records present | BISS: boundary classification |
-| 228 | `test_avahi_cmd_structure` | avahi command has correct service name, type, port, TXT records | cmd[1] == "ariaflow-api", cmd[2] == "_ariaflow._tcp", TXT records present | BISS: boundary classification |
-| 229 | `test_dns_sd_and_avahi_same_service_type` | dns-sd and avahi use identical service type | both == "_ariaflow._tcp" | BISS: boundary classification |
-| 230 | `test_dns_sd_and_avahi_same_txt_records` | dns-sd and avahi produce identical TXT records | dns_txt == avahi_txt | BISS: boundary classification |
+| 227 | `test_dns_sd_cmd_structure` | dns-sd command has correct service name, type, port, TXT records | cmd[2] == "ariaflow-api", cmd[3] == "_ariaflow._tcp", TXT records present | BISS: Bonjour/mDNS boundary |
+| 228 | `test_avahi_cmd_structure` | avahi command has correct service name, type, port, TXT records | cmd[1] == "ariaflow-api", cmd[2] == "_ariaflow._tcp", TXT records present | BISS: Bonjour/mDNS boundary |
+| 229 | `test_dns_sd_and_avahi_same_service_type` | dns-sd and avahi use identical service type | both == "_ariaflow._tcp" | BISS: Bonjour/mDNS boundary |
+| 230 | `test_dns_sd_and_avahi_same_txt_records` | dns-sd and avahi produce identical TXT records | dns_txt == avahi_txt | BISS: Bonjour/mDNS boundary |
+| 230a | `test_instance_name_is_short_hostname` | _instance_name returns the short hostname | _instance_name() == _short_hostname() | BISS: Bonjour/mDNS boundary |
+| 230b | `test_instance_name_truncates_at_63_bytes` | Instance name capped at 63 bytes per DNS-SD spec | len(name.encode("utf-8")) <= 63 | BISS: Bonjour/mDNS boundary |
+| 230c | `test_short_hostname_strips_domain` | _short_hostname strips the .local domain suffix | "bcs-mac.local" -> "bcs-mac" | BISS: Bonjour/mDNS boundary |
+| 230d | `test_txt_keys_max_9_chars` | All TXT record keys are <=9 characters (Apple best practice) | every key in TXT record has len <= 9 | BISS: Bonjour/mDNS boundary |
+| 230e | `test_service_type_max_15_chars` | Service type name is <=15 characters | len("ariaflow") <= 15 | BISS: Bonjour/mDNS boundary |
 
 ### `tests/test_unit.py` — TestAria2SetDownloadBandwidth (1 test)
 
@@ -565,6 +572,75 @@ Validates the allowed_actions state table for each item status.
 | 255 | `test_managed_option_rejected` | Managed option rejected with "managed_options" error | ok == False, error == "managed_options" | UIC: policy enforcement |
 | 256 | `test_safe_option_accepted` | Safe option accepted and applied | ok == True | UIC: policy enforcement |
 | 257 | `test_unsafe_option_rejected_by_default` | Unsafe option (dir) rejected with "rejected_options" error | ok == False, error == "rejected_options" | UIC: policy enforcement |
+
+### `tests/test_unit.py` — TestSchedulerAlwaysRunning (1 test)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257a | `test_start_background_process_is_importable` | start_background_process can be imported and is callable | callable(start_background_process) | ASM: Run axis (auto-start) |
+
+### `tests/test_unit.py` — TestSeedExpiration (2 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257b | `test_seed_expires_by_time` | A seed older than `distribute_max_seed_hours` is expired and removed from aria2 | item.distribute_status == "expired", aria2_remove called once | UIC: distribution policy (seed expiration) |
+| 257c | `test_seed_not_expired_when_recent` | A seed younger than the limit stays seeding | item.distribute_status == "seeding", aria2_remove not called | UIC: distribution policy (seed expiration) |
+
+### `tests/test_unit.py` — TestBonjourRecordAction (2 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257d | `test_http_service_skipped_logs_action` | When no mDNS backend is detected, advertise_http_service logs a skipped bonjour_register action | action_log contains bonjour_register with outcome=skipped, reason=no_mdns_backend | UCC: audit trail (Bonjour) |
+| 257e | `test_http_service_registered_logs_action` | When dns-sd backend is present, advertise_http_service logs both bonjour_register (changed) and bonjour_deregister | action_log contains bonjour_register changed and bonjour_deregister entries | UCC: audit trail (Bonjour) |
+
+### `tests/test_unit.py` — TestOutputPathValidation (5 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257f | `test_rejects_absolute_path` | _validate_output_path rejects absolute paths (path traversal guard) | result is not None for "/etc/passwd" | UIC: input boundary (path validation) |
+| 257g | `test_rejects_dot_dot` | _validate_output_path rejects parent-directory escapes | result is not None for "../outside" | UIC: input boundary (path validation) |
+| 257h | `test_rejects_hidden_directory` | _validate_output_path rejects hidden directories starting with `.` | result is not None for ".hidden/file.txt" | UIC: input boundary (path validation) |
+| 257i | `test_accepts_simple_relative` | Plain relative paths under the download dir are accepted | result is None for "downloads/file.bin" | UIC: input boundary (path validation) |
+| 257j | `test_accepts_empty` | Empty output path is accepted (uses default download dir) | result is None for "" | UIC: input boundary (path validation) |
+
+### `tests/test_unit.py` — TestDiskSpaceCheck (3 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257k | `test_disk_ok_when_below_threshold` | check_disk_space allows downloads when usage is below the configured percent | ok == True, percent == 50.0 | UIC: preflight gate (disk capacity) |
+| 257l | `test_disk_blocked_when_above_threshold` | check_disk_space blocks when usage exceeds the configured percent | ok == False, percent == 95.0 | UIC: preflight gate (disk capacity) |
+| 257m | `test_disk_check_disabled_when_zero` | Setting max_disk_usage_percent=0 disables the gate (no shutil.disk_usage call) | ok == True, disk_usage not called | UIC: preflight gate (disk capacity) |
+
+### `tests/test_unit.py` — TestDiscoveryParsers (10 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257n | `test_parse_dns_sd_browse_add` | dns-sd browse "Add" line is parsed into instance + add event | instance == "bc's Mac mini AriaFlow", is_add == True | BISS: peer polling boundary |
+| 257o | `test_parse_dns_sd_browse_remove` | dns-sd browse "Rmv" line is parsed into a remove event | instance correct, is_add == False | BISS: peer polling boundary |
+| 257p | `test_parse_dns_sd_browse_ignores_header` | dns-sd browse banner line is ignored (returns None) | result is None | BISS: peer polling boundary |
+| 257q | `test_parse_avahi_browse_resolved` | avahi-browse resolved line is parsed into host/port/base_url | host, port, base_url, tls correctly populated | BISS: peer polling boundary |
+| 257r | `test_parse_avahi_browse_removed` | avahi-browse removed line is flagged as removed | info["removed"] == True | BISS: peer polling boundary |
+| 257s | `test_matches_filter_empty_accepts_all` | Empty content filter matches every torrent | _matches_filter returns True | UIC: peer content filter |
+| 257t | `test_matches_filter_glob` | Glob pattern filter accepts matching name and rejects non-matching | "*.mkv" matches "movie.mkv", rejects "movie.avi" | UIC: peer content filter |
+| 257u | `test_matches_allowlist_empty_accepts_all` | Empty peer allowlist matches every peer instance | _matches_allowlist returns True | UIC: peer allowlist |
+| 257v | `test_matches_allowlist_filters` | Comma-separated allowlist accepts listed peers and rejects others | accepts "bc's Mac", rejects "eve's PC" | UIC: peer allowlist |
+| 257w | `test_list_peers_empty` | list_peers always returns a list (possibly empty) | isinstance(list_peers(), list) | BISS: peer polling boundary |
+
+### `tests/test_unit.py` — TestWebappMetrics (4 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257x | `test_get_metrics_has_all_fields` | get_metrics returns all expected observability fields | requests_total, bytes_sent_total, bytes_received_total, errors_total, uptime_seconds, started_at, sse_clients all present | UCC: observability (metrics) |
+| 257y | `test_uptime_seconds_is_positive` | uptime_seconds is a non-negative number | uptime_seconds >= 0 | UCC: observability (metrics) |
+| 257z | `test_uptime_seconds_is_monotonic` | uptime_seconds increases between successive calls | t2 > t1 across a sleep | UCC: observability (metrics) |
+| 257aa | `test_sse_clients_is_int` | sse_clients metric is an integer count | isinstance(sse_clients, int) | UCC: observability (metrics) |
+
+### `tests/test_unit.py` — TestOpenapiSchemas (2 tests)
+
+| # | Test | Intent | Oracle | Trace Target |
+|---|---|---|---|---|
+| 257ab | `test_schemas_cover_all_json_get_endpoints` | Every JSON-returning GET route has a RESPONSE_SCHEMAS entry | missing == [] | UCC: API contract (OpenAPI completeness) |
+| 257ac | `test_every_schema_has_meta_fields` | Every schema declares the `_schema` and `_request_id` envelope fields | both keys present in every schema | UCC: API contract (envelope) |
 
 ---
 
@@ -726,6 +802,7 @@ Validates the allowed_actions state table for each item status.
 | 334 | `test_regression_probe_state_persisted` | Probe state persisted via save_state after probe | save_state called, last_bandwidth_probe in state | UCC: observation |
 | 335 | `test_regression_per_item_pause_releases_lock_before_rpc` | RPC call made outside storage lock (no lock contention) | depth == 0 during rpc call | UCC: concurrency |
 | 336 | `test_regression_state_revision_increments` | save_state increments _rev on every write | rev1 > rev0, rev2 > rev1 | UCC: revision |
+| 337 | `test_regression_paused_persists_while_running` | Paused flag is not cleared during a process_queue cycle while running | state.paused remains True after queue is processed | ASM: Run axis (paused vs running) |
 | 338 | `test_regression_ensure_daemon_raises_on_failed_start` | ensure_aria_daemon raises on failed start | RuntimeError raised, "aria2c failed to start" | ASM: Daemon axis |
 | 339 | `test_regression_retry_clears_recovery_fields` | Retry clears recovered, recovered_at, recovery_session_id | none of those fields in result item | ASM: recovery |
 | 340 | `test_regression_mirror_urls_deduplicated` | Mirror URLs deduplicated before RPC call | len(uris) == 2, no duplicates | UCC: execution |

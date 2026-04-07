@@ -28,9 +28,9 @@ from pathlib import Path
 _PROJECT = Path(__file__).resolve().parents[1]
 _TIC_ORACLE = _PROJECT / "docs" / "governance" / "tic-oracle.md"
 
-# Set to False once every test in the suite has an oracle entry; the
-# script will then fail check-drift on any new uncovered test.
-ALWAYS_PASS = True
+# Set to False now that every test in the suite has an oracle entry;
+# the script fails check-drift on any new uncovered test.
+ALWAYS_PASS = False
 
 
 def _collect_tests() -> set[str]:

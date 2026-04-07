@@ -1,44 +1,6 @@
 # Plan
 
-## Open items
-
-Source: `scripts/check_tic_coverage.py` output (2026-04-08).
-Goal: bring TIC oracle coverage to 100%, then flip the checker to enforcing so any new uncovered test fails `make verify` immediately.
-
-### [P2] Register the 78 unregistered tests in tic-oracle.md
-
-**What:** 78 tests run but have no oracle entry. The oracle promises every test has explicit `Intent / Oracle / Trace Target` columns; today 78 of them have nothing.
-
-**Where:** `docs/governance/tic-oracle.md` — append rows for every missing test. Group by source file / test class so the table stays scannable. The 78 missing names live in `python scripts/check_tic_coverage.py` output.
-
-**Why:** Closes the last gap before the oracle can be treated as authoritative. Required before P3.
-
-**Scope:** Big — 78 hand-curated rows. Naive registration is cheap but low-value; the rows need real `Intent` and `Trace Target` content to be useful. Two execution strategies:
-- (a) **Bulk shallow registration** — one commit, one row per test, generic intent like "runs without error". Closes the count gap but adds little semantic value. ~30 minutes.
-- (b) **Per-class deep registration** — group the 78 by test class, write meaningful Intent/Oracle/Trace for each. Multiple commits, one per class. Higher value, ~2-3 hours.
-
-**Decision needed before starting:** pick (a) or (b), or a hybrid (deep for high-value classes, shallow for the rest).
-
-**Depends on:** P1 — start from a clean stale list so each commit's diff is interpretable.
-
-### [P3] Flip `check_tic_coverage.py` to enforcing
-
-**What:** Once P1 and P2 land, change `ALWAYS_PASS = True` to `ALWAYS_PASS = False` in `scripts/check_tic_coverage.py`. The script then exits 1 on any drift, and `make verify` fails until the oracle is updated.
-
-**Where:** `scripts/check_tic_coverage.py:36`.
-
-**Why:** The whole point of the checker is to catch drift the moment it happens. Until P3, drift is reported but accumulates silently.
-
-**Scope:** 1 line.
-
-**Verify:** `make verify` still passes (preconditions: P1 and P2 done — `0 missing, 0 stale`).
-
-**Depends on:** P1 + P2.
-
----
-
-Deferred (informational only):
-- `check_declaration_drift.py` reports 23 prefs in code missing from the user declaration file. Tracked separately by the existing `|| true` warn-only setup; out of scope for the TIC oracle work.
+No open items.
 
 ---
 
