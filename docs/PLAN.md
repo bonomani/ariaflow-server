@@ -1,6 +1,69 @@
 # Plan
 
-No open items.
+## Open items
+
+Source: `scripts/check_tic_coverage.py` output (2026-04-08).
+Goal: bring TIC oracle coverage to 100%, then flip the checker to enforcing so any new uncovered test fails `make verify` immediately.
+
+### [P1] Clean 11 stale oracle entries
+
+**What:** `docs/governance/tic-oracle.md` has 11 entries that reference tests no longer in the suite (renamed or removed). Each is a pure documentation artifact — find the row, delete or remap it.
+
+**The 11 stale names:**
+- `test_preflight_blocked_start`
+- `test_preflight_blocks_start`
+- `test_regression_paused_cleared_on_queue_complete`
+- `test_run_logged`
+- `test_run_start`
+- `test_run_start_empty_body_ok`
+- `test_run_start_honors_request_auto_preflight_override`
+- `test_run_start_sets_running`
+- `test_run_stop`
+- `test_run_stop_clears_running`
+- `test_scheduler_always_running`
+
+**Where:** `docs/governance/tic-oracle.md` — grep for each name, decide per row whether to (a) delete the entry (test removed), or (b) point it at the renamed test if `git log -S '<old_name>'` finds a rename.
+
+**Why:** Stale entries break the oracle's promise that every listed test exists in the suite. They also hide real coverage gaps inside `check_tic_coverage.py` output.
+
+**Scope:** ~11 line deletions / line edits, 1 file. After this, `check_tic_coverage.py` reports 0 stale, N missing.
+
+**Verify:** `python scripts/check_tic_coverage.py` shows `0 stale`. `make verify` clean.
+
+### [P2] Register the 78 unregistered tests in tic-oracle.md
+
+**What:** 78 tests run but have no oracle entry. The oracle promises every test has explicit `Intent / Oracle / Trace Target` columns; today 78 of them have nothing.
+
+**Where:** `docs/governance/tic-oracle.md` — append rows for every missing test. Group by source file / test class so the table stays scannable. The 78 missing names live in `python scripts/check_tic_coverage.py` output.
+
+**Why:** Closes the last gap before the oracle can be treated as authoritative. Required before P3.
+
+**Scope:** Big — 78 hand-curated rows. Naive registration is cheap but low-value; the rows need real `Intent` and `Trace Target` content to be useful. Two execution strategies:
+- (a) **Bulk shallow registration** — one commit, one row per test, generic intent like "runs without error". Closes the count gap but adds little semantic value. ~30 minutes.
+- (b) **Per-class deep registration** — group the 78 by test class, write meaningful Intent/Oracle/Trace for each. Multiple commits, one per class. Higher value, ~2-3 hours.
+
+**Decision needed before starting:** pick (a) or (b), or a hybrid (deep for high-value classes, shallow for the rest).
+
+**Depends on:** P1 — start from a clean stale list so each commit's diff is interpretable.
+
+### [P3] Flip `check_tic_coverage.py` to enforcing
+
+**What:** Once P1 and P2 land, change `ALWAYS_PASS = True` to `ALWAYS_PASS = False` in `scripts/check_tic_coverage.py`. The script then exits 1 on any drift, and `make verify` fails until the oracle is updated.
+
+**Where:** `scripts/check_tic_coverage.py:36`.
+
+**Why:** The whole point of the checker is to catch drift the moment it happens. Until P3, drift is reported but accumulates silently.
+
+**Scope:** 1 line.
+
+**Verify:** `make verify` still passes (preconditions: P1 and P2 done — `0 missing, 0 stale`).
+
+**Depends on:** P1 + P2.
+
+---
+
+Deferred (informational only):
+- `check_declaration_drift.py` reports 23 prefs in code missing from the user declaration file. Tracked separately by the existing `|| true` warn-only setup; out of scope for the TIC oracle work.
 
 ---
 
