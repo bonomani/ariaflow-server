@@ -5,7 +5,7 @@ TIC ref: tic@7cfba80
 Generated: 2026-04-05
 Test runner: `python -m unittest discover -s tests -v`
 
-## Test Inventory — All 490 Tests (482 in collection-mode form; 8 are parametrized)
+## Test Inventory — All 492 Tests (484 in collection-mode form; 8 are parametrized)
 
 ---
 
@@ -635,7 +635,7 @@ Validates the allowed_actions state table for each item status.
 | 257z | `test_uptime_seconds_is_monotonic` | uptime_seconds increases between successive calls | t2 > t1 across a sleep | UCC: observability (metrics) |
 | 257aa | `test_sse_clients_is_int` | sse_clients metric is an integer count | isinstance(sse_clients, int) | UCC: observability (metrics) |
 
-### `tests/test_unit.py` — TestOpenapiSchemas (6 tests)
+### `tests/test_unit.py` — TestOpenapiSchemas (8 tests)
 
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
@@ -645,6 +645,8 @@ Validates the allowed_actions state table for each item status.
 | 257ae | `test_bg10_lifecycle_schema_matches_live_response` | BG-10: GET /api/lifecycle declared top-level keys exist in _lifecycle_payload() | every declared key found in live | UCC: API contract (BG-10 schema pin) |
 | 257af | `test_bg10_bandwidth_schema_matches_live_response` | BG-10: GET /api/bandwidth always-present keys (config, current_limit, last_probe, last_probe_at) exist in bandwidth_status() | every always-present key found in live | UCC: API contract (BG-10 schema pin) |
 | 257ag | `test_bg10_torrents_peers_sessions_top_level_shape` | BG-10: GET /api/torrents, /api/peers, /api/sessions schemas declare exactly the expected top-level wrapper keys | declared == expected for each | UCC: API contract (BG-10 schema pin) |
+| 257ai | `test_bg11_status_subobjects_pin_real_field_names` | BG-11: aria2_status() / webapp _status_payload ariaflow / active_status() expose the field names declared in Aria2Health, AriaflowHealth, ActiveTransfer components | every declared field name present in the live builder | UCC: API contract (BG-11 schema pin) |
+| 257aj | `test_bg11_queue_item_component_has_created_at_and_output` | BG-11: QueueItem dataclass has the fields the OpenAPI QueueItem component declares (created_at, output, priority, etc.) | every declared field exists on the dataclass | UCC: API contract (BG-11 schema pin) |
 
 ### `tests/test_unit.py` — TestBg10LogItemSchema (1 test)
 

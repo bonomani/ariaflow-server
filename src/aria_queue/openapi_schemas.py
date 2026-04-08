@@ -144,21 +144,31 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
 
     # ── downloads / status ────────────────────────────────────────────────
     "GET /api/status": {
-        "items": {"type": "array", "items": {"type": "object"}},
+        "items": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/QueueItem"},
+        },
         "state": {"type": "object"},
         "summary": {"type": "object"},
-        "aria2": {"type": "object"},
+        "aria2": {"$ref": "#/components/schemas/Aria2Health"},
         "bandwidth": {"type": "object", "nullable": True},
         "_rev": {"type": "integer"},
-        "ariaflow": {"type": "object"},
-        "active": {"type": "object", "nullable": True},
-        "actives": {"type": "array", "items": {"type": "object"}, "nullable": True},
+        "ariaflow": {"$ref": "#/components/schemas/AriaflowHealth"},
+        "active": {"$ref": "#/components/schemas/ActiveTransfer"},
+        "actives": {
+            "type": "array",
+            "nullable": True,
+            "items": {"type": "object"},
+        },
         "filtered": {"type": "boolean", "nullable": True},
         "health": {"type": "object"},
         **_META,
     },
     "GET /api/downloads/archive": {
-        "items": {"type": "array", "items": {"type": "object"}},
+        "items": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/QueueItem"},
+        },
         **_META,
     },
     "GET /api/downloads/{id}/files": {

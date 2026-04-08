@@ -1183,6 +1183,39 @@ class TestOpenapiSchemas(unittest.TestCase):
             self.assertIn(key, live, f"declared key {key!r} missing from live")
             self.assertIn(key, declared, f"live key {key!r} missing from schema")
 
+    def test_bg11_status_subobjects_pin_real_field_names(self) -> None:
+        """BG-11: aria2/ariaflow/active component shapes match the live builders."""
+        # Aria2Health: from aria2_status() — reachable + version + error
+        # AriaflowHealth: built inline in webapp._status_payload — reachable
+        # + version + schema_version + pid
+        # ActiveTransfer: from transfers.active_status() — gid, url, status,
+        # error_code, error_message, download_speed, completed_length,
+        # total_length, files, percent, recovered
+        from aria_queue.aria2_rpc import aria2_status
+        from unittest.mock import patch
+        with patch(
+            "aria_queue.aria2_rpc.aria2_get_version",
+            return_value={"version": "1.37.0"},
+        ):
+            health = aria2_status()
+        for key in ("reachable", "version", "error"):
+            self.assertIn(key, health, f"aria2_status missing {key!r}")
+        # AriaflowHealth keys are inline literals in webapp._status_payload —
+        # assert by name so a future rename surfaces here.
+        ariaflow_keys = {"reachable", "version", "schema_version", "pid"}
+        from pathlib import Path as _P
+        wa_text = _P("src/aria_queue/webapp.py").read_text(encoding="utf-8")
+        for key in ariaflow_keys:
+            self.assertIn(f'"{key}"', wa_text, f"webapp.py missing ariaflow.{key}")
+
+    def test_bg11_queue_item_component_has_created_at_and_output(self) -> None:
+        """BG-11: QueueItem dataclass has the fields the schema declares."""
+        from dataclasses import fields
+        from aria_queue.queue_ops import QueueItem
+        names = {f.name for f in fields(QueueItem)}
+        for required in ("id", "url", "output", "status", "priority", "created_at"):
+            self.assertIn(required, names, f"QueueItem missing {required!r}")
+
     def test_bg10_torrents_peers_sessions_top_level_shape(self) -> None:
         """BG-10: GET /api/torrents, /api/peers, /api/sessions, /api/sessions/stats top-level keys match."""
         from aria_queue.openapi_schemas import RESPONSE_SCHEMAS

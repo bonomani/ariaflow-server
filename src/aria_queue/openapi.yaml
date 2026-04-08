@@ -4,7 +4,7 @@ info:
   description: |
     Headless download engine API. Manages queue state, sessions, runs,
     and policy on top of aria2.
-  version: 0.1.144
+  version: 0.1.145
   license:
     name: MIT
 
@@ -33,6 +33,7 @@ tags:
     description: Session history and statistics
   - name: Lifecycle
     description: Install, uninstall, status
+
 
 
 
@@ -483,7 +484,7 @@ paths:
                   items:
                     type: array
                     items:
-                      type: object
+                      $ref: "#/components/schemas/QueueItem"
   /api/downloads/cleanup:
     post:
       tags: [Queue]
@@ -1136,17 +1137,16 @@ paths:
                   _schema:
                     type: string
                   active:
-                    nullable: true
-                    type: object
+                    $ref: "#/components/schemas/ActiveTransfer"
                   actives:
                     nullable: true
                     type: array
                     items:
                       type: object
                   aria2:
-                    type: object
+                    $ref: "#/components/schemas/Aria2Health"
                   ariaflow:
-                    type: object
+                    $ref: "#/components/schemas/AriaflowHealth"
                   bandwidth:
                     nullable: true
                     type: object
@@ -1158,7 +1158,7 @@ paths:
                   items:
                     type: array
                     items:
-                      type: object
+                      $ref: "#/components/schemas/QueueItem"
                   state:
                     type: object
                   summary:
@@ -1313,9 +1313,20 @@ components:
           description: UUID
         url:
           type: string
+        output:
+          type: string
+          nullable: true
+          description: Optional output path for the download
         status:
           type: string
           enum: [pending, queued, downloading, paused, complete, done, error, failed, removed, stopped, skipped]
+        priority:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+          description: ISO timestamp when the item was added to the queue
         gid:
           type: string
           nullable: true
@@ -1341,6 +1352,70 @@ components:
           nullable: true
         totalLength:
           type: string
+          nullable: true
+
+    Aria2Health:
+      type: object
+      description: Output of aria2_status() — daemon reachability probe.
+      properties:
+        reachable:
+          type: boolean
+        version:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    AriaflowHealth:
+      type: object
+      description: ariaflow process info embedded in /api/status.
+      properties:
+        reachable:
+          type: boolean
+        version:
+          type: string
+        schema_version:
+          type: string
+        pid:
+          type: integer
+
+    ActiveTransfer:
+      type: object
+      description: Output of active_status() — currently selected active download (or null when idle).
+      properties:
+        gid:
+          type: string
+        url:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        error_code:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        download_speed:
+          type: string
+          nullable: true
+        completed_length:
+          type: string
+          nullable: true
+        total_length:
+          type: string
+          nullable: true
+        files:
+          type: array
+          nullable: true
+          items:
+            type: object
+        percent:
+          type: number
+        recovered:
+          type: boolean
           nullable: true
 
     EngineState:
@@ -1491,6 +1566,7 @@ components:
                 type: boolean
               item:
                 $ref: "#/components/schemas/QueueItem"
+
 
 
 

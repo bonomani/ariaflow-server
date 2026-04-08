@@ -54,4 +54,4 @@ limitations:
   - BISS classification covers 18 boundaries and 10 interaction classes
   - ASM state model defines 4 axes and 5 coherence rules (CR-1..CR-5)
   - UIC has 2 preflight gates and 27 preferences
-  - TIC oracle covers all 490 tests with trace targets across ASM/UIC/UCC/BISS
+  - TIC oracle covers all 492 tests with trace targets across ASM/UIC/UCC/BISS
