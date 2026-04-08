@@ -17,6 +17,7 @@ from .bandwidth import _coerce_float
 def _core() -> Any:
     """Lazy import to allow patching through aria_queue.core."""
     from . import core
+
     return core
 
 
@@ -44,7 +45,9 @@ def _queue_item_for_active_info(
     gid = str(info.get("gid") or "")
     url = _active_item_url(info)
     session_id = core.load_state().get("session_id")
-    candidates = [item for item in items if item.get("status") not in {"complete", "error"}]
+    candidates = [
+        item for item in items if item.get("status") not in {"complete", "error"}
+    ]
     if gid:
         for item in items:
             if item.get("gid") == gid:

@@ -65,7 +65,9 @@ class QueueSchedulerTests(unittest.TestCase):
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
             patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
-            patch("aria_queue.core.aria2_add_download", return_value="gid-1") as aria2_add_download,
+            patch(
+                "aria_queue.core.aria2_add_download", return_value="gid-1"
+            ) as aria2_add_download,
             patch("aria_queue.core.time.sleep", side_effect=RuntimeError("stop loop")),
         ):
             with self.assertRaisesRegex(RuntimeError, "stop loop"):

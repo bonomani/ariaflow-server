@@ -139,7 +139,10 @@ class TestRegressions(IsolatedTestCase):
                 "aria_queue.core.aria2_tell_status",
                 side_effect=RuntimeError("connection refused"),
             ),
-            patch("aria_queue.core.time.sleep", side_effect=[None] * 10 + [StopIteration("stop")]),
+            patch(
+                "aria_queue.core.time.sleep",
+                side_effect=[None] * 10 + [StopIteration("stop")],
+            ),
         ):
             try:
                 process_queue()

@@ -3,6 +3,7 @@
 All public functions remain importable from aria_queue.core.
 New code should import from the specific submodule.
 """
+
 from __future__ import annotations
 
 import subprocess  # noqa: F401 — tests patch aria_queue.core.subprocess

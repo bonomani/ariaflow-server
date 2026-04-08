@@ -3,6 +3,7 @@
 Single source of truth for response field types per endpoint.
 Used by scripts/gen_openapi.py to emit explicit properties in openapi.yaml.
 """
+
 from __future__ import annotations
 
 # Schema format: "{METHOD} {path}" -> dict of {field_name: {type: str, nullable?: bool, description?: str}}
@@ -80,7 +81,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
     },
     # /api/docs and /api/openapi.yaml return non-JSON (HTML/YAML) and are not
     # listed here. /api/events is a text/event-stream (SSE) and not JSON either.
-
     # ── scheduler ─────────────────────────────────────────────────────────
     "GET /api/scheduler": {
         "status": {"type": "string"},
@@ -92,7 +92,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "_rev": {"type": "integer"},
         **_META,
     },
-
     # ── bandwidth ─────────────────────────────────────────────────────────
     "GET /api/bandwidth": {
         "config": {"type": "object"},
@@ -141,7 +140,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "source": {"type": "string", "nullable": True},
         **_META,
     },
-
     # ── downloads / status ────────────────────────────────────────────────
     "GET /api/status": {
         "items": {
@@ -180,7 +178,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "message": {"type": "string", "nullable": True},
         **_META,
     },
-
     # ── torrents ──────────────────────────────────────────────────────────
     "GET /api/torrents": {
         "torrents": {
@@ -206,7 +203,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "message": {"type": "string", "nullable": True},
         **_META,
     },
-
     # ── peers ─────────────────────────────────────────────────────────────
     "GET /api/peers": {
         "peers": {
@@ -227,7 +223,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         },
         **_META,
     },
-
     # ── declaration (UIC) ─────────────────────────────────────────────────
     # Top-level shape: meta / uic / targets — load_declaration() returns the
     # raw DEFAULT_DECLARATION dict from contracts.py with no flattening.
@@ -280,7 +275,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         },
         **_META,
     },
-
     # ── aria2 ─────────────────────────────────────────────────────────────
     "GET /api/aria2/get_global_option": {
         # aria2 returns an arbitrary key/value map of option strings
@@ -300,7 +294,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "unsafe_enabled": {"type": "boolean"},
         **_META,
     },
-
     # ── lifecycle ─────────────────────────────────────────────────────────
     # Each per-target entry is a UCC envelope (meta + result) produced by
     # ucc_record() in install.py. Session fields are merged in by
@@ -317,7 +310,6 @@ RESPONSE_SCHEMAS: dict[str, dict[str, dict]] = {
         "session_closed_reason": {"type": "string", "nullable": True},
         **_META,
     },
-
     # ── sessions ──────────────────────────────────────────────────────────
     "GET /api/sessions": {
         "sessions": {

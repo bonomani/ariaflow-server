@@ -190,7 +190,8 @@ class WebSmokeTests(unittest.TestCase):
             )
             with (
                 patch(
-                    "aria_queue.webapp.aria2_current_bandwidth", return_value={"limit": "0"}
+                    "aria_queue.webapp.aria2_current_bandwidth",
+                    return_value={"limit": "0"},
                 ),
                 patch(
                     "aria_queue.webapp.aria2_status",
@@ -248,7 +249,9 @@ class WebSmokeTests(unittest.TestCase):
                 self.assertEqual(added["added"][0]["status"], "queued")
 
                 # Pause it
-                paused = request_json(f"{base}/api/downloads/{item_id}/pause", method="POST")
+                paused = request_json(
+                    f"{base}/api/downloads/{item_id}/pause", method="POST"
+                )
                 self.assertTrue(paused["ok"])
                 self.assertEqual(paused["item"]["status"], "paused")
 
@@ -299,14 +302,19 @@ class WebSmokeTests(unittest.TestCase):
 
                 # Not found
                 try:
-                    request_json(f"{base}/api/downloads/00000000-0000-0000-0000-000000000000/pause", method="POST")
+                    request_json(
+                        f"{base}/api/downloads/00000000-0000-0000-0000-000000000000/pause",
+                        method="POST",
+                    )
                     self.fail("expected 404")
                 except urllib.error.HTTPError as exc:
                     self.assertEqual(exc.code, 404)
 
                 # Invalid action
                 try:
-                    request_json(f"{base}/api/downloads/{item_id}/explode", method="POST")
+                    request_json(
+                        f"{base}/api/downloads/{item_id}/explode", method="POST"
+                    )
                     self.fail("expected 400")
                 except urllib.error.HTTPError as exc:
                     self.assertEqual(exc.code, 400)

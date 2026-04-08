@@ -20,6 +20,7 @@ Covers:
 - Option tiers discovery
 - 3-tier option safety
 """
+
 from __future__ import annotations
 
 import json
@@ -45,42 +46,51 @@ _MODULE = "aria_queue.core"
 class TestStoragePaths(IsolatedTestCase):
     def test_config_dir_returns_path(self) -> None:
         from aria_queue.core import config_dir
+
         result = config_dir()
         self.assertIsInstance(result, Path)
         self.assertEqual(str(result), self._tmp.name)
 
     def test_queue_path(self) -> None:
         from aria_queue.core import config_dir, queue_path
+
         self.assertEqual(queue_path(), config_dir() / "queue.json")
 
     def test_state_path(self) -> None:
         from aria_queue.core import config_dir, state_path
+
         self.assertEqual(state_path(), config_dir() / "state.json")
 
     def test_log_path(self) -> None:
         from aria_queue.core import config_dir, log_path
+
         self.assertEqual(log_path(), config_dir() / "aria2.log")
 
     def test_action_log_path(self) -> None:
         from aria_queue.core import config_dir, action_log_path
+
         self.assertEqual(action_log_path(), config_dir() / "actions.jsonl")
 
     def test_archive_path(self) -> None:
         from aria_queue.core import config_dir, archive_path
+
         self.assertEqual(archive_path(), config_dir() / "archive.json")
 
     def test_sessions_log_path(self) -> None:
         from aria_queue.core import config_dir, sessions_log_path
+
         self.assertEqual(sessions_log_path(), config_dir() / "sessions.jsonl")
 
     def test_storage_lock_path(self) -> None:
         from aria_queue.core import config_dir, storage_lock_path
+
         self.assertEqual(storage_lock_path(), config_dir() / ".storage.lock")
 
 
 class TestEnsureStorage(IsolatedTestCase):
     def test_creates_directory(self) -> None:
         from aria_queue.core import ensure_storage, config_dir
+
         subdir = Path(self._tmp.name) / "sub" / "dir"
         os.environ["ARIA_QUEUE_DIR"] = str(subdir)
         ensure_storage()
@@ -90,17 +100,20 @@ class TestEnsureStorage(IsolatedTestCase):
 class TestReadJson(IsolatedTestCase):
     def test_normal_read(self) -> None:
         from aria_queue.core import read_json
+
         p = Path(self._tmp.name) / "data.json"
         p.write_text(json.dumps({"a": 1}), encoding="utf-8")
         self.assertEqual(read_json(p, {}), {"a": 1})
 
     def test_missing_file_returns_default(self) -> None:
         from aria_queue.core import read_json
+
         p = Path(self._tmp.name) / "nope.json"
         self.assertEqual(read_json(p, []), [])
 
     def test_corrupted_file_creates_backup(self) -> None:
         from aria_queue.core import read_json
+
         p = Path(self._tmp.name) / "bad.json"
         p.write_text("{{{not json", encoding="utf-8")
         result = read_json(p, "default")
@@ -112,6 +125,7 @@ class TestReadJson(IsolatedTestCase):
 class TestWriteJson(IsolatedTestCase):
     def test_write_then_read(self) -> None:
         from aria_queue.core import read_json, write_json
+
         p = Path(self._tmp.name) / "rw.json"
         write_json(p, {"x": 42})
         self.assertEqual(read_json(p, None), {"x": 42})
@@ -123,6 +137,7 @@ class TestWriteJson(IsolatedTestCase):
 class TestEnsureStateSession(IsolatedTestCase):
     def test_creates_session_id(self) -> None:
         from aria_queue.core import ensure_state_session
+
         state = ensure_state_session()
         self.assertIsNotNone(state.get("session_id"))
         self.assertIsNotNone(state.get("session_started_at"))
@@ -131,6 +146,7 @@ class TestEnsureStateSession(IsolatedTestCase):
 class TestTouchStateSession(IsolatedTestCase):
     def test_updates_last_seen(self) -> None:
         from aria_queue.core import ensure_state_session, touch_state_session
+
         ensure_state_session()
         state = touch_state_session()
         self.assertIsNotNone(state.get("session_last_seen_at"))
@@ -139,6 +155,7 @@ class TestTouchStateSession(IsolatedTestCase):
 class TestCloseStateSession(IsolatedTestCase):
     def test_sets_closed_fields(self) -> None:
         from aria_queue.core import ensure_state_session, close_state_session
+
         ensure_state_session()
         state = close_state_session("test_reason")
         self.assertIsNotNone(state.get("session_closed_at"))
@@ -148,6 +165,7 @@ class TestCloseStateSession(IsolatedTestCase):
 class TestLoadSessionHistory(IsolatedTestCase):
     def test_returns_list(self) -> None:
         from aria_queue.core import load_session_history
+
         result = load_session_history()
         self.assertIsInstance(result, list)
 
@@ -155,18 +173,27 @@ class TestLoadSessionHistory(IsolatedTestCase):
 class TestSessionStats(IsolatedTestCase):
     def test_returns_dict_with_keys(self) -> None:
         from aria_queue.core import ensure_state_session, session_stats
+
         ensure_state_session()
         result = session_stats()
         self.assertIsInstance(result, dict)
-        for key in ("session_id", "items_total", "items_done", "items_error",
-                     "items_queued", "items_downloading", "items_paused",
-                     "bytes_completed"):
+        for key in (
+            "session_id",
+            "items_total",
+            "items_done",
+            "items_error",
+            "items_queued",
+            "items_downloading",
+            "items_paused",
+            "bytes_completed",
+        ):
             self.assertIn(key, result)
 
 
 class TestAppendActionLog(IsolatedTestCase):
     def test_appends_entry(self) -> None:
         from aria_queue.core import append_action_log, action_log_path
+
         append_action_log({"action": "test", "target": "unit"})
         lines = action_log_path().read_text(encoding="utf-8").strip().splitlines()
         self.assertGreaterEqual(len(lines), 1)
@@ -177,12 +204,14 @@ class TestAppendActionLog(IsolatedTestCase):
 class TestLoadArchive(IsolatedTestCase):
     def test_returns_list(self) -> None:
         from aria_queue.core import load_archive
+
         self.assertIsInstance(load_archive(), list)
 
 
 class TestSaveArchive(IsolatedTestCase):
     def test_roundtrip(self) -> None:
         from aria_queue.core import save_archive, load_archive
+
         items = [{"id": "a", "status": "complete"}]
         save_archive(items)
         self.assertEqual(load_archive(), items)
@@ -191,6 +220,7 @@ class TestSaveArchive(IsolatedTestCase):
 class TestArchiveItem(IsolatedTestCase):
     def test_adds_to_archive(self) -> None:
         from aria_queue.core import archive_item, load_archive
+
         archive_item({"id": "x", "status": "complete"})
         archived = load_archive()
         self.assertEqual(len(archived), 1)
@@ -201,9 +231,13 @@ class TestArchiveItem(IsolatedTestCase):
 class TestAutoCleanupQueue(IsolatedTestCase):
     def test_removes_old_done(self) -> None:
         from aria_queue.core import (
-            auto_cleanup_queue, save_queue, load_queue, load_archive,
+            auto_cleanup_queue,
+            save_queue,
+            load_queue,
+            load_archive,
             ensure_storage,
         )
+
         ensure_storage()
         old_time = "2020-01-01T00:00:00+00:00"
         items = [
@@ -221,6 +255,7 @@ class TestAutoCleanupQueue(IsolatedTestCase):
 class TestLogTransferPoll(IsolatedTestCase):
     def test_appends_to_action_log(self) -> None:
         from aria_queue.core import log_transfer_poll, action_log_path
+
         log_transfer_poll(
             gid="abc",
             item={"id": "1", "url": "http://x"},
@@ -237,23 +272,28 @@ class TestLogTransferPoll(IsolatedTestCase):
 class TestDetectDownloadMode(unittest.TestCase):
     def test_http(self) -> None:
         from aria_queue.core import detect_download_mode
+
         self.assertEqual(detect_download_mode("http://example.com/file.zip"), "http")
 
     def test_magnet(self) -> None:
         from aria_queue.core import detect_download_mode
+
         self.assertEqual(detect_download_mode("magnet:?xt=urn:btih:abc"), "magnet")
 
     def test_torrent(self) -> None:
         from aria_queue.core import detect_download_mode
+
         self.assertEqual(detect_download_mode("http://x/file.torrent"), "torrent")
 
     def test_metalink(self) -> None:
         from aria_queue.core import detect_download_mode
+
         self.assertEqual(detect_download_mode("http://x/file.metalink"), "metalink")
         self.assertEqual(detect_download_mode("http://x/file.meta4"), "metalink")
 
     def test_mirror(self) -> None:
         from aria_queue.core import detect_download_mode
+
         self.assertEqual(
             detect_download_mode("http://a/f", mirrors=["http://a/f", "http://b/f"]),
             "mirror",
@@ -263,6 +303,7 @@ class TestDetectDownloadMode(unittest.TestCase):
 class TestFindQueueItemByGid(IsolatedTestCase):
     def test_finds_item(self) -> None:
         from aria_queue.core import find_queue_item_by_gid, save_queue
+
         save_queue([{"id": "1", "gid": "g1", "status": "active"}])
         result = find_queue_item_by_gid("g1")
         self.assertIsNotNone(result)
@@ -270,6 +311,7 @@ class TestFindQueueItemByGid(IsolatedTestCase):
 
     def test_returns_none_for_missing(self) -> None:
         from aria_queue.core import find_queue_item_by_gid, save_queue
+
         save_queue([])
         self.assertIsNone(find_queue_item_by_gid("nope"))
 
@@ -277,6 +319,7 @@ class TestFindQueueItemByGid(IsolatedTestCase):
 class TestSummarizeQueue(unittest.TestCase):
     def test_counts_by_status(self) -> None:
         from aria_queue.core import summarize_queue
+
         items = [
             {"status": "queued"},
             {"status": "queued"},
@@ -296,6 +339,7 @@ class TestSummarizeQueue(unittest.TestCase):
 class TestDeclarationPath(IsolatedTestCase):
     def test_returns_path(self) -> None:
         from aria_queue.contracts import declaration_path
+
         result = declaration_path()
         self.assertIsInstance(result, Path)
         self.assertTrue(str(result).endswith("declaration.json"))
@@ -304,6 +348,7 @@ class TestDeclarationPath(IsolatedTestCase):
 class TestEnsureDeclaration(IsolatedTestCase):
     def test_creates_default(self) -> None:
         from aria_queue.contracts import ensure_declaration, declaration_path
+
         result = ensure_declaration()
         self.assertIsInstance(result, dict)
         self.assertIn("meta", result)
@@ -316,6 +361,7 @@ class TestEnsureDeclaration(IsolatedTestCase):
 class TestCurrentAriaflowVersion(unittest.TestCase):
     def test_returns_string(self) -> None:
         from aria_queue.install import current_ariaflow_version
+
         v = current_ariaflow_version()
         self.assertIsInstance(v, str)
         self.assertTrue(len(v) > 0)
@@ -324,8 +370,11 @@ class TestCurrentAriaflowVersion(unittest.TestCase):
 class TestUccEnvelope(unittest.TestCase):
     def test_returns_dict_with_keys(self) -> None:
         from aria_queue.install import ucc_envelope
+
         result = ucc_envelope(
-            target="queue", observed=True, outcome="ok",
+            target="queue",
+            observed=True,
+            outcome="ok",
         )
         self.assertIn("meta", result)
         self.assertIn("result", result)
@@ -336,6 +385,7 @@ class TestUccEnvelope(unittest.TestCase):
 class TestUccRecord(unittest.TestCase):
     def test_returns_dict(self) -> None:
         from aria_queue.install import ucc_record
+
         result = ucc_record(target="t", observed=False, outcome="fail")
         self.assertIn("meta", result)
         self.assertEqual(result["result"]["observation"], "failed")
@@ -347,6 +397,7 @@ class TestUccRecord(unittest.TestCase):
 class TestBonjourAvailable(unittest.TestCase):
     def test_returns_bool(self) -> None:
         from aria_queue.bonjour import bonjour_available
+
         self.assertIsInstance(bonjour_available(), bool)
 
 
@@ -354,6 +405,7 @@ class TestAdvertiseHttpService(unittest.TestCase):
     @patch("aria_queue.bonjour._detect_backend", return_value=None)
     def test_context_manager_noop(self, _mock: MagicMock) -> None:
         from aria_queue.bonjour import advertise_http_service
+
         with advertise_http_service(port=8080):
             pass  # should not crash
 
@@ -362,6 +414,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
     @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
     def test_dns_sd_cmd_structure(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd
+
         cmd = build_dns_sd_cmd(port=8000, path="/api")
         self.assertEqual(cmd[2], "myhost")
         self.assertEqual(cmd[3], "_ariaflow._tcp")
@@ -374,6 +427,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
     @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
     def test_avahi_cmd_structure(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_avahi_cmd
+
         cmd = build_avahi_cmd(port=8000, path="/api")
         self.assertEqual(cmd[1], "myhost")
         self.assertEqual(cmd[2], "_ariaflow._tcp")
@@ -385,6 +439,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
     @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
     def test_dns_sd_and_avahi_same_service_type(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
+
         kwargs = dict(port=8000, path="/api")
         dns_cmd = build_dns_sd_cmd(**kwargs)
         avahi_cmd = build_avahi_cmd(**kwargs)
@@ -394,6 +449,7 @@ class TestBonjourCommandConstruction(unittest.TestCase):
     @patch("aria_queue.bonjour._short_hostname", return_value="myhost")
     def test_dns_sd_and_avahi_same_txt_records(self, _h: MagicMock) -> None:
         from aria_queue.bonjour import build_dns_sd_cmd, build_avahi_cmd
+
         kwargs = dict(port=8000, path="/api")
         dns_txt = set(s for s in build_dns_sd_cmd(**kwargs) if "=" in s)
         avahi_txt = set(s for s in build_avahi_cmd(**kwargs) if "=" in s)
@@ -401,22 +457,26 @@ class TestBonjourCommandConstruction(unittest.TestCase):
 
     def test_instance_name_is_short_hostname(self) -> None:
         from aria_queue.bonjour import _instance_name, _short_hostname
+
         self.assertEqual(_instance_name(), _short_hostname())
 
     def test_instance_name_truncates_at_63_bytes(self) -> None:
         from aria_queue.bonjour import _instance_name
+
         with patch("aria_queue.bonjour._short_hostname", return_value="a" * 80):
             name = _instance_name()
             self.assertLessEqual(len(name.encode("utf-8")), 63)
 
     def test_short_hostname_strips_domain(self) -> None:
         from aria_queue.bonjour import _short_hostname
+
         with patch("aria_queue.bonjour.platform.node", return_value="bcs-mac.local"):
             self.assertEqual(_short_hostname(), "bcs-mac")
 
     def test_txt_keys_max_9_chars(self) -> None:
         """All TXT record keys must be ≤9 characters (Apple best practice)."""
         from aria_queue.bonjour import build_dns_sd_cmd
+
         with patch("aria_queue.bonjour._short_hostname", return_value="host"):
             cmd = build_dns_sd_cmd(port=8000, path="/api")
         for arg in cmd:
@@ -427,11 +487,14 @@ class TestBonjourCommandConstruction(unittest.TestCase):
     def test_service_type_max_15_chars(self) -> None:
         """Service type must be ≤15 characters (excluding underscore prefix)."""
         from aria_queue.bonjour import build_dns_sd_cmd
+
         with patch("aria_queue.bonjour._short_hostname", return_value="host"):
             cmd = build_dns_sd_cmd(port=8000, path="/api")
         svc_type = cmd[3]  # _ariaflow._tcp
         name_part = svc_type.split(".")[0].lstrip("_")  # ariaflow
-        self.assertLessEqual(len(name_part), 15, f"Service type '{name_part}' exceeds 15 chars")
+        self.assertLessEqual(
+            len(name_part), 15, f"Service type '{name_part}' exceeds 15 chars"
+        )
 
 
 # ── aria2_rpc.py ────────────────────────────────────────────────────
@@ -441,6 +504,7 @@ class TestAria2SetDownloadBandwidth(unittest.TestCase):
     @patch("aria_queue.aria2_rpc.aria2_change_option")
     def test_calls_change_option(self, mock_co: MagicMock) -> None:
         from aria_queue.aria2_rpc import aria2_set_max_download_limit
+
         aria2_set_max_download_limit("gid1", 1000, port=6800)
         mock_co.assert_called_once()
         args, kwargs = mock_co.call_args
@@ -454,6 +518,7 @@ class TestPauseActiveTransfer(IsolatedTestCase):
     @patch("aria_queue.core.aria2_tell_active", return_value=[])
     def test_no_active_returns_not_paused(self, _mock: MagicMock) -> None:
         from aria_queue.core import pause_active_transfer, ensure_storage
+
         ensure_storage()
         result = pause_active_transfer()
         self.assertFalse(result["paused"])
@@ -466,6 +531,7 @@ class TestPauseActiveTransfer(IsolatedTestCase):
 class TestSchedulerAlwaysRunning(IsolatedTestCase):
     def test_start_background_process_is_importable(self) -> None:
         from aria_queue.core import start_background_process
+
         self.assertTrue(callable(start_background_process))
 
 
@@ -496,12 +562,15 @@ class TestBandwidthStatus(IsolatedTestCase):
 
 
 class TestManualProbe(IsolatedTestCase):
-    @patch("aria_queue.core.probe_bandwidth", return_value={
-        "source": "default",
-        "reason": "probe_unavailable",
-        "cap_mbps": 2,
-        "cap_bytes_per_sec": 250000,
-    })
+    @patch(
+        "aria_queue.core.probe_bandwidth",
+        return_value={
+            "source": "default",
+            "reason": "probe_unavailable",
+            "cap_mbps": 2,
+            "cap_bytes_per_sec": 250000,
+        },
+    )
     @patch("aria_queue.core.aria2_set_max_overall_download_limit")
     def test_returns_probe_result(self, _set: MagicMock, _probe: MagicMock) -> None:
         from aria_queue.core import manual_probe, ensure_storage
@@ -567,7 +636,12 @@ class TestAllowedActions(unittest.TestCase):
 
 class TestAutoRetry(IsolatedTestCase):
     def _setup_error_item(self) -> None:
-        from aria_queue.core import add_queue_item, save_queue, load_queue, ensure_storage
+        from aria_queue.core import (
+            add_queue_item,
+            save_queue,
+            load_queue,
+            ensure_storage,
+        )
 
         ensure_storage()
         add_queue_item("https://example.com/retry-test.bin")
@@ -581,7 +655,13 @@ class TestAutoRetry(IsolatedTestCase):
 
     def test_auto_retry_requeues_error_item(self) -> None:
         self._setup_error_item()
-        from aria_queue.core import load_queue, save_queue, load_state, save_state, ensure_storage
+        from aria_queue.core import (
+            load_queue,
+            save_queue,
+            load_state,
+            save_state,
+            ensure_storage,
+        )
 
         ensure_storage()
         state = load_state()
@@ -592,10 +672,15 @@ class TestAutoRetry(IsolatedTestCase):
             patch(f"{_MODULE}.aria2_ensure_daemon"),
             patch(f"{_MODULE}.deduplicate_active_transfers"),
             patch(f"{_MODULE}.reconcile_live_queue"),
-            patch(f"{_MODULE}.probe_bandwidth", return_value={
-                "source": "default", "reason": "probe_unavailable",
-                "cap_mbps": 2, "cap_bytes_per_sec": 250000,
-            }),
+            patch(
+                f"{_MODULE}.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
             patch(f"{_MODULE}.aria2_current_bandwidth", return_value={}),
             patch(f"{_MODULE}.aria2_set_max_overall_download_limit"),
             patch(f"{_MODULE}.aria2_tell_active", return_value=[]),
@@ -614,7 +699,14 @@ class TestAutoRetry(IsolatedTestCase):
 
     def test_auto_retry_skips_rpc_unreachable(self) -> None:
         self._setup_error_item()
-        from aria_queue.core import load_queue, save_queue, load_state, save_state, ensure_storage, add_queue_item
+        from aria_queue.core import (
+            load_queue,
+            save_queue,
+            load_state,
+            save_state,
+            ensure_storage,
+            add_queue_item,
+        )
 
         ensure_storage()
         add_queue_item("https://example.com/keep-alive.bin")  # keep loop alive
@@ -631,10 +723,15 @@ class TestAutoRetry(IsolatedTestCase):
             patch(f"{_MODULE}.aria2_ensure_daemon"),
             patch(f"{_MODULE}.deduplicate_active_transfers"),
             patch(f"{_MODULE}.reconcile_live_queue"),
-            patch(f"{_MODULE}.probe_bandwidth", return_value={
-                "source": "default", "reason": "probe_unavailable",
-                "cap_mbps": 2, "cap_bytes_per_sec": 250000,
-            }),
+            patch(
+                f"{_MODULE}.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
             patch(f"{_MODULE}.aria2_current_bandwidth", return_value={}),
             patch(f"{_MODULE}.aria2_set_max_overall_download_limit"),
             patch(f"{_MODULE}.aria2_tell_active", return_value=[]),
@@ -651,7 +748,12 @@ class TestAutoRetry(IsolatedTestCase):
 
     def test_auto_retry_respects_max_retries(self) -> None:
         self._setup_error_item()
-        from aria_queue.core import load_queue, save_queue, ensure_storage, add_queue_item
+        from aria_queue.core import (
+            load_queue,
+            save_queue,
+            ensure_storage,
+            add_queue_item,
+        )
 
         ensure_storage()
         add_queue_item("https://example.com/keep-alive.bin")  # keep loop alive
@@ -671,10 +773,15 @@ class TestAutoRetry(IsolatedTestCase):
             patch(f"{_MODULE}.aria2_ensure_daemon"),
             patch(f"{_MODULE}.deduplicate_active_transfers"),
             patch(f"{_MODULE}.reconcile_live_queue"),
-            patch(f"{_MODULE}.probe_bandwidth", return_value={
-                "source": "default", "reason": "probe_unavailable",
-                "cap_mbps": 2, "cap_bytes_per_sec": 250000,
-            }),
+            patch(
+                f"{_MODULE}.probe_bandwidth",
+                return_value={
+                    "source": "default",
+                    "reason": "probe_unavailable",
+                    "cap_mbps": 2,
+                    "cap_bytes_per_sec": 250000,
+                },
+            ),
             patch(f"{_MODULE}.aria2_current_bandwidth", return_value={}),
             patch(f"{_MODULE}.aria2_set_max_overall_download_limit"),
             patch(f"{_MODULE}.aria2_tell_active", return_value=[]),
@@ -818,23 +925,34 @@ class TestSeedExpiration(IsolatedTestCase):
     @patch("aria_queue.core.reconcile_live_queue")
     @patch("aria_queue.core._apply_bandwidth_probe", return_value=({}, 100.0, 12500000))
     def test_seed_expires_by_time(
-        self, _probe: MagicMock, _reconcile: MagicMock, _dedup: MagicMock,
-        _global: MagicMock, _daemon: MagicMock, _waiting: MagicMock,
-        _active: MagicMock, mock_remove: MagicMock, _add: MagicMock,
+        self,
+        _probe: MagicMock,
+        _reconcile: MagicMock,
+        _dedup: MagicMock,
+        _global: MagicMock,
+        _daemon: MagicMock,
+        _waiting: MagicMock,
+        _active: MagicMock,
+        mock_remove: MagicMock,
+        _add: MagicMock,
     ) -> None:
         import datetime
         from aria_queue.core import (
-            ensure_storage, save_queue, save_state, load_queue,
-            ensure_state_session, process_queue,
+            ensure_storage,
+            save_queue,
+            save_state,
+            load_queue,
+            ensure_state_session,
+            process_queue,
         )
+
         ensure_storage()
         state = ensure_state_session()
         state["running"] = True
         save_state(state)
         # Seed started 100 hours ago
         old_time = (
-            datetime.datetime.now(datetime.timezone.utc)
-            - datetime.timedelta(hours=100)
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=100)
         ).strftime("%Y-%m-%dT%H:%M:%S+0000")
         item = self._make_seeding_item(old_time)
         save_queue([item])
@@ -842,6 +960,7 @@ class TestSeedExpiration(IsolatedTestCase):
         # Set max_seed_hours=72 via declaration
         from aria_queue.contracts import ensure_declaration, declaration_path
         import json
+
         decl = ensure_declaration()
         for pref in decl.get("uic", {}).get("preferences", []):
             if pref["name"] == "distribute_max_seed_hours":
@@ -866,29 +985,41 @@ class TestSeedExpiration(IsolatedTestCase):
     @patch("aria_queue.core.reconcile_live_queue")
     @patch("aria_queue.core._apply_bandwidth_probe", return_value=({}, 100.0, 12500000))
     def test_seed_not_expired_when_recent(
-        self, _probe: MagicMock, _reconcile: MagicMock, _dedup: MagicMock,
-        _global: MagicMock, _daemon: MagicMock, _waiting: MagicMock,
-        _active: MagicMock, mock_remove: MagicMock, _add: MagicMock,
+        self,
+        _probe: MagicMock,
+        _reconcile: MagicMock,
+        _dedup: MagicMock,
+        _global: MagicMock,
+        _daemon: MagicMock,
+        _waiting: MagicMock,
+        _active: MagicMock,
+        mock_remove: MagicMock,
+        _add: MagicMock,
     ) -> None:
         import datetime
         from aria_queue.core import (
-            ensure_storage, save_queue, save_state, load_queue,
-            ensure_state_session, process_queue,
+            ensure_storage,
+            save_queue,
+            save_state,
+            load_queue,
+            ensure_state_session,
+            process_queue,
         )
+
         ensure_storage()
         state = ensure_state_session()
         state["running"] = True
         save_state(state)
         # Seed started 1 hour ago
         recent_time = (
-            datetime.datetime.now(datetime.timezone.utc)
-            - datetime.timedelta(hours=1)
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
         ).strftime("%Y-%m-%dT%H:%M:%S+0000")
         item = self._make_seeding_item(recent_time)
         save_queue([item])
 
         from aria_queue.contracts import ensure_declaration, declaration_path
         import json
+
         decl = ensure_declaration()
         for pref in decl.get("uic", {}).get("preferences", []):
             if pref["name"] == "distribute_max_seed_hours":
@@ -912,6 +1043,7 @@ class TestBonjourRecordAction(IsolatedTestCase):
     def test_http_service_skipped_logs_action(self, _mock: MagicMock) -> None:
         from aria_queue.bonjour import advertise_http_service
         from aria_queue.core import ensure_storage, load_action_log
+
         ensure_storage()
         with advertise_http_service(port=8080):
             pass
@@ -925,10 +1057,14 @@ class TestBonjourRecordAction(IsolatedTestCase):
     @patch("aria_queue.bonjour._detect_backend", return_value="dns-sd")
     @patch("aria_queue.bonjour._dns_sd_path", return_value="/usr/bin/dns-sd")
     def test_http_service_registered_logs_action(
-        self, _path: MagicMock, _backend: MagicMock, mock_popen: MagicMock,
+        self,
+        _path: MagicMock,
+        _backend: MagicMock,
+        mock_popen: MagicMock,
     ) -> None:
         from aria_queue.bonjour import advertise_http_service
         from aria_queue.core import ensure_storage, load_action_log
+
         ensure_storage()
         proc = MagicMock()
         proc.poll.return_value = None  # process still running
@@ -936,7 +1072,11 @@ class TestBonjourRecordAction(IsolatedTestCase):
         with advertise_http_service(port=8080):
             pass
         entries = load_action_log()
-        register = [e for e in entries if e.get("action") == "bonjour_register" and e.get("outcome") == "changed"]
+        register = [
+            e
+            for e in entries
+            if e.get("action") == "bonjour_register" and e.get("outcome") == "changed"
+        ]
         deregister = [e for e in entries if e.get("action") == "bonjour_deregister"]
         self.assertTrue(len(register) >= 1)
         self.assertTrue(len(deregister) >= 1)
@@ -948,22 +1088,27 @@ class TestBonjourRecordAction(IsolatedTestCase):
 class TestOutputPathValidation(unittest.TestCase):
     def test_rejects_absolute_path(self) -> None:
         from aria_queue.routes.downloads import _validate_output_path
+
         self.assertIsNotNone(_validate_output_path("/etc/passwd"))
 
     def test_rejects_dot_dot(self) -> None:
         from aria_queue.routes.downloads import _validate_output_path
+
         self.assertIsNotNone(_validate_output_path("../outside"))
 
     def test_rejects_hidden_directory(self) -> None:
         from aria_queue.routes.downloads import _validate_output_path
+
         self.assertIsNotNone(_validate_output_path(".hidden/file.txt"))
 
     def test_accepts_simple_relative(self) -> None:
         from aria_queue.routes.downloads import _validate_output_path
+
         self.assertIsNone(_validate_output_path("downloads/file.bin"))
 
     def test_accepts_empty(self) -> None:
         from aria_queue.routes.downloads import _validate_output_path
+
         self.assertIsNone(_validate_output_path(""))
 
 
@@ -973,10 +1118,14 @@ class TestOutputPathValidation(unittest.TestCase):
 class TestDiskSpaceCheck(unittest.TestCase):
     @patch("aria_queue.scheduler.shutil.disk_usage")
     @patch("aria_queue.contracts.pref_value")
-    def test_disk_ok_when_below_threshold(self, mock_pv: MagicMock, mock_usage: MagicMock) -> None:
+    def test_disk_ok_when_below_threshold(
+        self, mock_pv: MagicMock, mock_usage: MagicMock
+    ) -> None:
         from aria_queue.scheduler import check_disk_space
+
         mock_pv.side_effect = lambda name, default=None: {
-            "max_disk_usage_percent": 90, "download_dir": ""
+            "max_disk_usage_percent": 90,
+            "download_dir": "",
         }.get(name, default)
         mock_usage.return_value = MagicMock(total=100_000_000, used=50_000_000)
         ok, percent = check_disk_space()
@@ -985,10 +1134,14 @@ class TestDiskSpaceCheck(unittest.TestCase):
 
     @patch("aria_queue.scheduler.shutil.disk_usage")
     @patch("aria_queue.contracts.pref_value")
-    def test_disk_blocked_when_above_threshold(self, mock_pv: MagicMock, mock_usage: MagicMock) -> None:
+    def test_disk_blocked_when_above_threshold(
+        self, mock_pv: MagicMock, mock_usage: MagicMock
+    ) -> None:
         from aria_queue.scheduler import check_disk_space
+
         mock_pv.side_effect = lambda name, default=None: {
-            "max_disk_usage_percent": 90, "download_dir": ""
+            "max_disk_usage_percent": 90,
+            "download_dir": "",
         }.get(name, default)
         mock_usage.return_value = MagicMock(total=100_000_000, used=95_000_000)
         ok, percent = check_disk_space()
@@ -997,10 +1150,14 @@ class TestDiskSpaceCheck(unittest.TestCase):
 
     @patch("aria_queue.scheduler.shutil.disk_usage")
     @patch("aria_queue.contracts.pref_value")
-    def test_disk_check_disabled_when_zero(self, mock_pv: MagicMock, mock_usage: MagicMock) -> None:
+    def test_disk_check_disabled_when_zero(
+        self, mock_pv: MagicMock, mock_usage: MagicMock
+    ) -> None:
         from aria_queue.scheduler import check_disk_space
+
         mock_pv.side_effect = lambda name, default=None: {
-            "max_disk_usage_percent": 0, "download_dir": ""
+            "max_disk_usage_percent": 0,
+            "download_dir": "",
         }.get(name, default)
         ok, percent = check_disk_space()
         self.assertTrue(ok)
@@ -1014,6 +1171,7 @@ class TestDiskSpaceCheck(unittest.TestCase):
 class TestDiscoveryParsers(unittest.TestCase):
     def test_parse_dns_sd_browse_add(self) -> None:
         from aria_queue.discovery import _parse_dns_sd_browse_line
+
         line = "12:00:00.000  Add        3  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow"
         result = _parse_dns_sd_browse_line(line)
         self.assertIsNotNone(result)
@@ -1023,6 +1181,7 @@ class TestDiscoveryParsers(unittest.TestCase):
 
     def test_parse_dns_sd_browse_remove(self) -> None:
         from aria_queue.discovery import _parse_dns_sd_browse_line
+
         line = "12:00:01.000  Rmv        0  4  local.  _ariaflow._tcp.  bc's Mac mini AriaFlow"
         result = _parse_dns_sd_browse_line(line)
         self.assertIsNotNone(result)
@@ -1032,10 +1191,12 @@ class TestDiscoveryParsers(unittest.TestCase):
 
     def test_parse_dns_sd_browse_ignores_header(self) -> None:
         from aria_queue.discovery import _parse_dns_sd_browse_line
+
         self.assertIsNone(_parse_dns_sd_browse_line("Browsing for _ariaflow._tcp"))
 
     def test_parse_avahi_browse_resolved(self) -> None:
         from aria_queue.discovery import _parse_avahi_browse_line
+
         line = '=;eth0;IPv4;bc AriaFlow;_ariaflow._tcp;local;bc-mini.local;192.168.1.10;8080;"path=/api" "tls=0"'
         result = _parse_avahi_browse_line(line)
         self.assertIsNotNone(result)
@@ -1048,6 +1209,7 @@ class TestDiscoveryParsers(unittest.TestCase):
 
     def test_parse_avahi_browse_removed(self) -> None:
         from aria_queue.discovery import _parse_avahi_browse_line
+
         line = "-;eth0;IPv4;bc AriaFlow;_ariaflow._tcp;local"
         result = _parse_avahi_browse_line(line)
         self.assertIsNotNone(result)
@@ -1057,24 +1219,33 @@ class TestDiscoveryParsers(unittest.TestCase):
 
     def test_matches_filter_empty_accepts_all(self) -> None:
         from aria_queue.discovery import _matches_filter
+
         self.assertTrue(_matches_filter({"name": "anything"}, ""))
 
     def test_matches_filter_glob(self) -> None:
         from aria_queue.discovery import _matches_filter
+
         self.assertTrue(_matches_filter({"name": "movie.mkv"}, "*.mkv"))
         self.assertFalse(_matches_filter({"name": "movie.avi"}, "*.mkv"))
 
     def test_matches_allowlist_empty_accepts_all(self) -> None:
         from aria_queue.discovery import _matches_allowlist
+
         self.assertTrue(_matches_allowlist({"instance": "any"}, ""))
 
     def test_matches_allowlist_filters(self) -> None:
         from aria_queue.discovery import _matches_allowlist
-        self.assertTrue(_matches_allowlist({"instance": "bc's Mac"}, "bc's Mac, alice's PC"))
-        self.assertFalse(_matches_allowlist({"instance": "eve's PC"}, "bc's Mac, alice's PC"))
+
+        self.assertTrue(
+            _matches_allowlist({"instance": "bc's Mac"}, "bc's Mac, alice's PC")
+        )
+        self.assertFalse(
+            _matches_allowlist({"instance": "eve's PC"}, "bc's Mac, alice's PC")
+        )
 
     def test_list_peers_empty(self) -> None:
         from aria_queue.discovery import list_peers
+
         # Should return a list (may or may not be empty depending on state)
         self.assertIsInstance(list_peers(), list)
 
@@ -1085,17 +1256,27 @@ class TestDiscoveryParsers(unittest.TestCase):
 class TestWebappMetrics(unittest.TestCase):
     def test_get_metrics_has_all_fields(self) -> None:
         from aria_queue.webapp import get_metrics
+
         m = get_metrics()
-        for field in ("requests_total", "bytes_sent_total", "bytes_received_total",
-                      "errors_total", "uptime_seconds", "started_at", "sse_clients"):
+        for field in (
+            "requests_total",
+            "bytes_sent_total",
+            "bytes_received_total",
+            "errors_total",
+            "uptime_seconds",
+            "started_at",
+            "sse_clients",
+        ):
             self.assertIn(field, m)
 
     def test_uptime_seconds_is_positive(self) -> None:
         from aria_queue.webapp import get_metrics
+
         self.assertGreaterEqual(get_metrics()["uptime_seconds"], 0)
 
     def test_uptime_seconds_is_monotonic(self) -> None:
         from aria_queue.webapp import get_metrics
+
         t1 = get_metrics()["uptime_seconds"]
         time.sleep(0.01)
         t2 = get_metrics()["uptime_seconds"]
@@ -1103,6 +1284,7 @@ class TestWebappMetrics(unittest.TestCase):
 
     def test_sse_clients_is_int(self) -> None:
         from aria_queue.webapp import get_metrics
+
         self.assertIsInstance(get_metrics()["sse_clients"], int)
 
 
@@ -1113,9 +1295,11 @@ class TestOpenapiSchemas(unittest.TestCase):
     def test_schemas_cover_all_json_get_endpoints(self) -> None:
         """Every GET endpoint returning JSON must have a RESPONSE_SCHEMAS entry."""
         from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+
         # Non-JSON endpoints (HTML, YAML, SSE) are excluded
         excluded = {"/api/docs", "/api/openapi.yaml", "/api/events"}
         import aria_queue.webapp as wa
+
         # Read the dispatch table from source
         text = Path(wa.__file__).read_text()
         match = re.search(r"_GET_ROUTES\s*=\s*\{(.*?)\n\s*\}", text, re.DOTALL)
@@ -1133,6 +1317,7 @@ class TestOpenapiSchemas(unittest.TestCase):
     def test_every_schema_has_meta_fields(self) -> None:
         """Every schema must include _schema and _request_id (added by _send_json)."""
         from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+
         for key, props in RESPONSE_SCHEMAS.items():
             self.assertIn("_schema", props, f"{key} missing _schema")
             self.assertIn("_request_id", props, f"{key} missing _request_id")
@@ -1141,17 +1326,17 @@ class TestOpenapiSchemas(unittest.TestCase):
         """BG-10: GET /api/declaration declared keys match the live shape."""
         from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
         from aria_queue.contracts import load_declaration
+
         live = load_declaration()
         declared = set(RESPONSE_SCHEMAS["GET /api/declaration"].keys()) - {
-            "_schema", "_request_id"
+            "_schema",
+            "_request_id",
         }
         # Every declared top-level key must exist in the live response.
         for key in declared:
             self.assertIn(key, live, f"declared key {key!r} missing from live")
         # And the documented uic sub-keys must exist too.
-        uic_props = (
-            RESPONSE_SCHEMAS["GET /api/declaration"]["uic"]["properties"]
-        )
+        uic_props = RESPONSE_SCHEMAS["GET /api/declaration"]["uic"]["properties"]
         for sub in uic_props:
             self.assertIn(sub, live.get("uic", {}), f"uic.{sub} missing from live")
 
@@ -1159,9 +1344,11 @@ class TestOpenapiSchemas(unittest.TestCase):
         """BG-10: GET /api/lifecycle declared keys match the live shape."""
         from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
         from aria_queue.routes.lifecycle import _lifecycle_payload
+
         live = _lifecycle_payload()
         declared = set(RESPONSE_SCHEMAS["GET /api/lifecycle"].keys()) - {
-            "_schema", "_request_id"
+            "_schema",
+            "_request_id",
         }
         for key in declared:
             self.assertIn(key, live, f"declared key {key!r} missing from live")
@@ -1171,10 +1358,12 @@ class TestOpenapiSchemas(unittest.TestCase):
         from unittest.mock import patch
         from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
         from aria_queue.bandwidth import bandwidth_status
+
         with patch("aria_queue.core.aria2_current_bandwidth", return_value={}):
             live = bandwidth_status()
         declared = set(RESPONSE_SCHEMAS["GET /api/bandwidth"].keys()) - {
-            "_schema", "_request_id"
+            "_schema",
+            "_request_id",
         }
         # config / current_limit / last_probe / last_probe_at are always
         # present; the rest only appear when last_probe is a dict.
@@ -1193,6 +1382,7 @@ class TestOpenapiSchemas(unittest.TestCase):
         # total_length, files, percent, recovered
         from aria_queue.aria2_rpc import aria2_status
         from unittest.mock import patch
+
         with patch(
             "aria_queue.aria2_rpc.aria2_get_version",
             return_value={"version": "1.37.0"},
@@ -1204,6 +1394,7 @@ class TestOpenapiSchemas(unittest.TestCase):
         # assert by name so a future rename surfaces here.
         ariaflow_keys = {"reachable", "version", "schema_version", "pid"}
         from pathlib import Path as _P
+
         wa_text = _P("src/aria_queue/webapp.py").read_text(encoding="utf-8")
         for key in ariaflow_keys:
             self.assertIn(f'"{key}"', wa_text, f"webapp.py missing ariaflow.{key}")
@@ -1212,6 +1403,7 @@ class TestOpenapiSchemas(unittest.TestCase):
         """BG-11: QueueItem dataclass has the fields the schema declares."""
         from dataclasses import fields
         from aria_queue.queue_ops import QueueItem
+
         names = {f.name for f in fields(QueueItem)}
         for required in ("id", "url", "output", "status", "priority", "created_at"):
             self.assertIn(required, names, f"QueueItem missing {required!r}")
@@ -1219,6 +1411,7 @@ class TestOpenapiSchemas(unittest.TestCase):
     def test_bg10_torrents_peers_sessions_top_level_shape(self) -> None:
         """BG-10: GET /api/torrents, /api/peers, /api/sessions, /api/sessions/stats top-level keys match."""
         from aria_queue.openapi_schemas import RESPONSE_SCHEMAS
+
         # Each endpoint's top-level non-meta key set is small enough to assert
         # by inspection — the responses are wrappers, not nested structures.
         cases = {
@@ -1229,7 +1422,8 @@ class TestOpenapiSchemas(unittest.TestCase):
         for key, expected in cases.items():
             declared = set(RESPONSE_SCHEMAS[key].keys()) - {"_schema", "_request_id"}
             self.assertEqual(
-                declared, expected,
+                declared,
+                expected,
                 f"{key} declared keys {declared} != expected {expected}",
             )
 
@@ -1243,6 +1437,7 @@ class TestBg10LogItemSchema(IsolatedTestCase):
             load_action_log,
             record_action,
         )
+
         ensure_storage()
         record_action(
             action="bg10_probe",
@@ -1253,15 +1448,11 @@ class TestBg10LogItemSchema(IsolatedTestCase):
         items = load_action_log(limit=5)
         self.assertTrue(items, "expected at least one log entry")
         entry = items[-1]
-        item_props = (
-            RESPONSE_SCHEMAS["GET /api/log"]["items"]["items"]["properties"]
-        )
+        item_props = RESPONSE_SCHEMAS["GET /api/log"]["items"]["items"]["properties"]
         # Required (non-nullable) keys must be present in the live entry.
         for name, definition in item_props.items():
             if not definition.get("nullable", False):
-                self.assertIn(
-                    name, entry, f"required log item key {name!r} missing"
-                )
+                self.assertIn(name, entry, f"required log item key {name!r} missing")
 
 
 if __name__ == "__main__":

@@ -46,6 +46,7 @@ _metrics: dict[str, int] = {
 _start_monotonic = time.monotonic()
 _started_at = time.strftime("%Y-%m-%dT%H:%M:%S%z")
 
+
 def get_metrics() -> dict[str, object]:
     with _metrics_lock:
         snapshot: dict[str, object] = dict(_metrics)
@@ -134,6 +135,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             state = load_state()
             items = load_queue()
             from .queue_ops import allowed_actions
+
             for item in items:
                 item["allowed_actions"] = allowed_actions(item.get("status", ""))
             sse_data = {
@@ -189,6 +191,7 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             payload["actives"] = actives
         # BG-8: include health fields so frontend can drop /api/health polling
         from .scheduler import check_disk_space
+
         disk_ok, disk_percent = check_disk_space()
         payload["health"] = {
             "disk_usage_percent": disk_percent,
@@ -259,12 +262,19 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             return
         if path in {"/bandwidth", "/lifecycle", "/options", "/log"}:
             self._send_json(
-                routes._error_payload("ui_not_served", "ariaflow is API-only; use ariaflow-web for the dashboard"),
+                routes._error_payload(
+                    "ui_not_served",
+                    "ariaflow is API-only; use ariaflow-web for the dashboard",
+                ),
                 status=400,
             )
             return
         # Parameterized route: /api/downloads/{id}/files
-        if path.startswith("/api/downloads/") and path.endswith("/files") and path.count("/") == 4:
+        if (
+            path.startswith("/api/downloads/")
+            and path.endswith("/files")
+            and path.count("/") == 4
+        ):
             routes.get_item_files(self, parsed)
             return
         # Parameterized route: /api/torrents/{infohash}.torrent
@@ -276,7 +286,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if handler:
             handler(self, parsed)
         else:
-            self._send_json(routes._error_payload("not_found", "resource not found"), status=404)
+            self._send_json(
+                routes._error_payload("not_found", "resource not found"), status=404
+            )
 
     def do_POST(self) -> None:  # noqa: N802
         with _metrics_lock:
@@ -290,7 +302,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             payload = json.loads(raw or "{}")
         except json.JSONDecodeError:
             self._send_json(
-                routes._error_payload("invalid_json", "request body must be valid JSON"),
+                routes._error_payload(
+                    "invalid_json", "request body must be valid JSON"
+                ),
                 status=400,
             )
             return
@@ -309,7 +323,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             parts = path.split("/")
             target = parts[3]
             action = parts[4]
-            routes.post_lifecycle_action(self, {"target": target, "action": action}, path)
+            routes.post_lifecycle_action(
+                self, {"target": target, "action": action}, path
+            )
             return
 
         # Parameterized route: /api/torrents/{infohash}/stop
@@ -328,7 +344,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
         if handler:
             handler(self, payload, path)
         else:
-            self._send_json(routes._error_payload("not_found", "resource not found"), status=404)
+            self._send_json(
+                routes._error_payload("not_found", "resource not found"), status=404
+            )
 
     def do_PATCH(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
@@ -338,7 +356,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             payload = json.loads(raw or "{}")
         except json.JSONDecodeError:
             self._send_json(
-                routes._error_payload("invalid_json", "request body must be valid JSON"),
+                routes._error_payload(
+                    "invalid_json", "request body must be valid JSON"
+                ),
                 status=400,
             )
             return
@@ -347,7 +367,9 @@ class AriaFlowHandler(BaseHTTPRequestHandler):
             routes.patch_declaration_preferences(self, payload)
             return
 
-        self._send_json(routes._error_payload("not_found", "resource not found"), status=404)
+        self._send_json(
+            routes._error_payload("not_found", "resource not found"), status=404
+        )
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A003
         return

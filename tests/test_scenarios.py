@@ -481,11 +481,15 @@ class TestScenarioDuplicateHandling(ScenarioBase):
         url = f"https://example.com/dedup-{time.time()}.bin"
 
         # Add once
-        _, first, _ = _req(f"{base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, first, _ = _req(
+            f"{base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         first_id = first["added"][0]["id"]
 
         # Add same URL again
-        _, second, _ = _req(f"{base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, second, _ = _req(
+            f"{base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         second_id = second["added"][0]["id"]
 
         # Same item returned

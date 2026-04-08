@@ -18,6 +18,7 @@ from .storage import (
 def _core() -> Any:
     """Lazy import to allow patching through aria_queue.core."""
     from . import core
+
     return core
 
 
@@ -60,6 +61,7 @@ _ALLOWED_ACTIONS: dict[str, list[str]] = {
 
 def allowed_actions(status: str) -> list[str]:
     return list(_ALLOWED_ACTIONS.get(status, []))
+
 
 # Download modes:
 #   http       — HTTP/HTTPS/FTP (aria2.addUri)
@@ -139,7 +141,6 @@ def summarize_queue(items: list[dict[str, Any]]) -> dict[str, int]:
 def save_queue(items: list[dict[str, Any]]) -> None:
     with storage_locked():
         write_json(queue_path(), {"items": items})
-
 
 
 def _aria2_position_for_priority(priority: int, port: int = 6800) -> int:
@@ -496,7 +497,9 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             probe = state.get("last_bandwidth_probe") or {}
             cap = int(probe.get("cap_bytes_per_sec", 0))
             try:
-                new_gid = core.aria2_add_download(item, cap_bytes_per_sec=cap, port=port)
+                new_gid = core.aria2_add_download(
+                    item, cap_bytes_per_sec=cap, port=port
+                )
             except Exception:
                 new_gid = None
             if new_gid:
@@ -666,8 +669,6 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
     return {"ok": True, "item": dict(item)}
 
 
-
-
 def post_action(item: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {
         "success": True,
@@ -679,6 +680,7 @@ def post_action(item: dict[str, Any]) -> dict[str, Any]:
     # Distribution: create private torrent and seed
     core = _core()
     from .contracts import pref_value as _pv
+
     should_distribute = item.get("distribute") or bool(
         _pv("distribute_completed_downloads", False)
     )
@@ -698,12 +700,15 @@ def post_action(item: dict[str, Any]) -> dict[str, Any]:
             if not download_dir:
                 download_dir = "."
 
-            file_name = item.get("output") or item.get("url", "").split("/")[-1].split("?")[0]
+            file_name = (
+                item.get("output") or item.get("url", "").split("/")[-1].split("?")[0]
+            )
             file_path = Path(download_dir) / file_name
 
             if file_path.is_file():
                 torrent_info = create_private_torrent(
-                    file_path, tracker_url,
+                    file_path,
+                    tracker_url,
                     comment=f"ariaflow distribute: {item.get('url', '')}",
                 )
                 seed_ratio = str(_pv("distribute_seed_ratio", 0) or 0)

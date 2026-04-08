@@ -95,19 +95,29 @@ def advertise_http_service(*, port: int, path: str = "/api") -> Iterator[None]:
     detail = {"port": port, "path": path, "backend": backend}
     if backend is None:
         record_action(
-            action="bonjour_register", target="system",
-            outcome="skipped", reason="no_mdns_backend", detail=detail,
+            action="bonjour_register",
+            target="system",
+            outcome="skipped",
+            reason="no_mdns_backend",
+            detail=detail,
         )
         yield
         return
     kwargs = dict(port=port, path=path)
-    cmd = build_avahi_cmd(**kwargs) if backend == "avahi" else build_dns_sd_cmd(**kwargs)
+    cmd = (
+        build_avahi_cmd(**kwargs) if backend == "avahi" else build_dns_sd_cmd(**kwargs)
+    )
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
     except (FileNotFoundError, PermissionError) as exc:
         record_action(
-            action="bonjour_register", target="system",
-            outcome="failed", reason="binary_not_found", detail={**detail, "error": str(exc)},
+            action="bonjour_register",
+            target="system",
+            outcome="failed",
+            reason="binary_not_found",
+            detail={**detail, "error": str(exc)},
         )
         yield
         return
@@ -115,14 +125,20 @@ def advertise_http_service(*, port: int, path: str = "/api") -> Iterator[None]:
     time.sleep(0.2)
     if proc.poll() is not None:
         record_action(
-            action="bonjour_register", target="system",
-            outcome="failed", reason="process_exited_early", detail=detail,
+            action="bonjour_register",
+            target="system",
+            outcome="failed",
+            reason="process_exited_early",
+            detail=detail,
         )
         yield
         return
     record_action(
-        action="bonjour_register", target="system",
-        outcome="changed", reason="registered", detail=detail,
+        action="bonjour_register",
+        target="system",
+        outcome="changed",
+        reason="registered",
+        detail=detail,
     )
     try:
         yield
@@ -137,6 +153,9 @@ def advertise_http_service(*, port: int, path: str = "/api") -> Iterator[None]:
         except Exception:
             pass
         record_action(
-            action="bonjour_deregister", target="system",
-            outcome="changed", reason="stopped", detail=detail,
+            action="bonjour_deregister",
+            target="system",
+            outcome="changed",
+            reason="stopped",
+            detail=detail,
         )

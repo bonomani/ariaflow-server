@@ -19,6 +19,7 @@ from .aria2_rpc import (
 def _core() -> Any:
     """Lazy import to allow patching through aria_queue.core."""
     from . import core
+
     return core
 
 
@@ -55,6 +56,7 @@ def _coerce_float(value: object) -> float | None:
 
 def bandwidth_config() -> dict[str, Any]:
     from .contracts import pref_value
+
     core = _core()
     down_free_pct = max(
         0, min(100, int(pref_value("bandwidth_down_free_percent", 20) or 20))
@@ -65,9 +67,7 @@ def bandwidth_config() -> dict[str, Any]:
     up_free_pct = max(
         0, min(100, int(pref_value("bandwidth_up_free_percent", 50) or 50))
     )
-    up_free_abs = max(
-        0.0, float(pref_value("bandwidth_up_free_absolute_mbps", 0) or 0)
-    )
+    up_free_abs = max(0.0, float(pref_value("bandwidth_up_free_absolute_mbps", 0) or 0))
     interval = max(30, int(pref_value("bandwidth_probe_interval_seconds", 180) or 180))
     return {
         "down_free_percent": down_free_pct,
@@ -143,9 +143,7 @@ def manual_probe(port: int = 6800) -> dict[str, Any]:
     state["last_bandwidth_probe_at"] = time.time()
     core.save_state(state)
     cap = probe.get("cap_bytes_per_sec", 0)
-    up_cap_bytes = int(
-        float(probe.get("up_cap_mbps") or 0) * 125_000.0
-    )
+    up_cap_bytes = int(float(probe.get("up_cap_mbps") or 0) * 125_000.0)
     if cap > 0:
         try:
             core.aria2_set_max_overall_download_limit(cap, port=port)
@@ -332,7 +330,9 @@ def _apply_bandwidth_probe(
     now = time.time()
     probe = state.get("last_bandwidth_probe")
     needs_probe = (
-        force or not isinstance(probe, dict) or core._should_probe_bandwidth(state, now=now)
+        force
+        or not isinstance(probe, dict)
+        or core._should_probe_bandwidth(state, now=now)
     )
     if needs_probe:
         probe = core.probe_bandwidth(percent=use_pct, floor_mbps=1)
@@ -370,9 +370,7 @@ def _apply_bandwidth_probe(
             core.aria2_set_max_overall_download_limit(cap_bytes_per_sec, port=port)
         except Exception:
             pass
-        up_cap = int(
-            float((probe or {}).get("up_cap_mbps") or 0) * _BYTES_PER_MEGABIT
-        )
+        up_cap = int(float((probe or {}).get("up_cap_mbps") or 0) * _BYTES_PER_MEGABIT)
         if up_cap > 0:
             try:
                 core.aria2_set_max_overall_upload_limit(up_cap, port=port)

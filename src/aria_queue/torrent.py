@@ -32,10 +32,11 @@ def _bencode(obj: Any) -> bytes:
     if isinstance(obj, list):
         return b"l" + b"".join(_bencode(i) for i in obj) + b"e"
     if isinstance(obj, dict):
-        items = sorted(obj.items(), key=lambda kv: kv[0].encode() if isinstance(kv[0], str) else kv[0])
-        return b"d" + b"".join(
-            _bencode(k) + _bencode(v) for k, v in items
-        ) + b"e"
+        items = sorted(
+            obj.items(),
+            key=lambda kv: kv[0].encode() if isinstance(kv[0], str) else kv[0],
+        )
+        return b"d" + b"".join(_bencode(k) + _bencode(v) for k, v in items) + b"e"
     raise TypeError(f"Cannot bencode {type(obj)}")
 
 
@@ -73,6 +74,7 @@ def create_private_torrent(
         raise ValueError("Cannot create torrent from empty file")
 
     from .contracts import pref_value
+
     configured_dir = str(pref_value("torrent_dir", "") or "")
     if configured_dir:
         torrent_dir = Path(configured_dir)
@@ -88,9 +90,7 @@ def create_private_torrent(
         )
 
     # Fallback: pure Python
-    return _create_with_python(
-        file_path, torrent_path, tracker_url, comment, file_size
-    )
+    return _create_with_python(file_path, torrent_path, tracker_url, comment, file_size)
 
 
 def _create_with_mktorrent(
@@ -103,8 +103,10 @@ def _create_with_mktorrent(
     cmd = [
         _mktorrent_path() or "mktorrent",
         "-p",  # private
-        "-a", tracker_url,
-        "-o", str(torrent_path),
+        "-a",
+        tracker_url,
+        "-o",
+        str(torrent_path),
     ]
     if comment:
         cmd.extend(["-c", comment])
@@ -187,14 +189,14 @@ def _extract_infohash(torrent_bytes: bytes) -> str:
     depth = 0
     i = info_start
     while i < len(torrent_bytes):
-        c = torrent_bytes[i:i+1]
+        c = torrent_bytes[i : i + 1]
         if c == b"d" or c == b"l":
             depth += 1
             i += 1
         elif c == b"e":
             depth -= 1
             if depth == 0:
-                info_bytes = torrent_bytes[info_start:i+1]
+                info_bytes = torrent_bytes[info_start : i + 1]
                 return hashlib.sha1(info_bytes).hexdigest()
             i += 1
         elif c == b"i":

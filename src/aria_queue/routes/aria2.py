@@ -10,6 +10,7 @@ from .helpers import _error_payload
 
 def get_aria2_global_option(h: object, parsed: object) -> None:
     from ..aria2_rpc import aria2_current_global_options
+
     h._send_json(aria2_current_global_options())
 
 
@@ -28,6 +29,7 @@ def get_aria2_option(h: object, parsed: object) -> None:
         return
     try:
         from ..core import aria2_get_option
+
         result = aria2_get_option(gid)
         h._send_json(result)
     except Exception as exc:
@@ -41,11 +43,13 @@ def get_aria2_option_tiers(h: object, parsed: object) -> None:
     from ..aria2_rpc import _MANAGED_ARIA2_OPTIONS, _SAFE_ARIA2_OPTIONS
     from ..contracts import pref_value
 
-    h._send_json({
-        "managed": sorted(_MANAGED_ARIA2_OPTIONS),
-        "safe": sorted(_SAFE_ARIA2_OPTIONS),
-        "unsafe_enabled": bool(pref_value("aria2_unsafe_options", False)),
-    })
+    h._send_json(
+        {
+            "managed": sorted(_MANAGED_ARIA2_OPTIONS),
+            "safe": sorted(_SAFE_ARIA2_OPTIONS),
+            "unsafe_enabled": bool(pref_value("aria2_unsafe_options", False)),
+        }
+    )
 
 
 def post_aria2_change_global_option(h: object, payload: object, path: str) -> None:
@@ -83,6 +87,7 @@ def post_aria2_change_option(h: object, payload: object, path: str) -> None:
         return
     try:
         from ..core import aria2_change_option
+
         aria2_change_option(gid, {str(k): str(v) for k, v in options.items()})
         h._send_json({"ok": True, "gid": gid, "applied": options})
     except Exception:
@@ -108,13 +113,26 @@ def post_aria2_set_limits(h: object, payload: object, path: str) -> None:
         aria2_set_seed_ratio,
         aria2_set_seed_time,
     )
+
     applied = {}
     errors = []
     setters = {
-        "max_overall_download_limit": lambda v: aria2_set_max_overall_download_limit(int(v)),
-        "max_overall_upload_limit": lambda v: aria2_set_max_overall_upload_limit(int(v)),
-        "max_download_limit": lambda v: aria2_set_max_download_limit(str(payload["gid"]), int(v)) if "gid" in payload else None,
-        "max_upload_limit": lambda v: aria2_set_max_upload_limit(str(payload["gid"]), int(v)) if "gid" in payload else None,
+        "max_overall_download_limit": lambda v: aria2_set_max_overall_download_limit(
+            int(v)
+        ),
+        "max_overall_upload_limit": lambda v: aria2_set_max_overall_upload_limit(
+            int(v)
+        ),
+        "max_download_limit": lambda v: (
+            aria2_set_max_download_limit(str(payload["gid"]), int(v))
+            if "gid" in payload
+            else None
+        ),
+        "max_upload_limit": lambda v: (
+            aria2_set_max_upload_limit(str(payload["gid"]), int(v))
+            if "gid" in payload
+            else None
+        ),
         "seed_ratio": lambda v: aria2_set_seed_ratio(float(v)),
         "seed_time": lambda v: aria2_set_seed_time(int(v)),
     }

@@ -12,11 +12,11 @@ from .helpers import _error_payload
 
 # ── Single-use helpers ──
 
+
 def _find_openapi_spec() -> Path | None:
     candidates = [
         Path(__file__).resolve().parent.parent / "openapi.yaml",
-        Path(__file__).resolve().parent.parent.parent.parent
-        / "openapi.yaml",
+        Path(__file__).resolve().parent.parent.parent.parent / "openapi.yaml",
     ]
     for p in candidates:
         if p.exists():
@@ -33,7 +33,10 @@ def _api_discovery() -> dict[str, object]:
         "endpoints": {
             "GET": [
                 {"path": "/api", "description": "API discovery (this endpoint)"},
-                {"path": "/api/health", "description": "Health check, version, disk usage"},
+                {
+                    "path": "/api/health",
+                    "description": "Health check, version, disk usage",
+                },
                 {
                     "path": "/api/scheduler",
                     "description": "Scheduler state (running/paused)",
@@ -62,11 +65,27 @@ def _api_discovery() -> dict[str, object]:
                     "path": "/api/downloads/{id}/files",
                     "description": "List torrent/metalink files",
                 },
-                {"path": "/api/torrents", "description": "List locally seeded torrents"},
-                {"path": "/api/peers", "description": "Discovered ariaflow peers on the network"},
-                {"path": "/api/aria2/get_global_option", "description": "aria2 global options"},
-                {"path": "/api/aria2/get_option", "description": "aria2 per-download options", "params": "?gid=..."},
-                {"path": "/api/aria2/option_tiers", "description": "Three-tier option safety classification"},
+                {
+                    "path": "/api/torrents",
+                    "description": "List locally seeded torrents",
+                },
+                {
+                    "path": "/api/peers",
+                    "description": "Discovered ariaflow peers on the network",
+                },
+                {
+                    "path": "/api/aria2/get_global_option",
+                    "description": "aria2 global options",
+                },
+                {
+                    "path": "/api/aria2/get_option",
+                    "description": "aria2 per-download options",
+                    "params": "?gid=...",
+                },
+                {
+                    "path": "/api/aria2/option_tiers",
+                    "description": "Three-tier option safety classification",
+                },
                 {"path": "/api/docs", "description": "Swagger UI"},
                 {"path": "/api/openapi.yaml", "description": "OpenAPI 3.0 spec"},
                 {"path": "/api/tests", "description": "Run test suite"},
@@ -92,10 +111,19 @@ def _api_discovery() -> dict[str, object]:
             ],
             "POST": [
                 {"path": "/api/downloads/add", "description": "Enqueue URLs"},
-                {"path": "/api/scheduler/preflight", "description": "Run preflight checks"},
+                {
+                    "path": "/api/scheduler/preflight",
+                    "description": "Run preflight checks",
+                },
                 {"path": "/api/scheduler/ucc", "description": "Execute UCC cycle"},
-                {"path": "/api/scheduler/pause", "description": "Pause all active transfers"},
-                {"path": "/api/scheduler/resume", "description": "Resume all paused transfers"},
+                {
+                    "path": "/api/scheduler/pause",
+                    "description": "Pause all active transfers",
+                },
+                {
+                    "path": "/api/scheduler/resume",
+                    "description": "Resume all paused transfers",
+                },
                 {"path": "/api/sessions/new", "description": "Create new session"},
                 {"path": "/api/declaration", "description": "Save UIC declaration"},
                 {
@@ -110,15 +138,30 @@ def _api_discovery() -> dict[str, object]:
                     "path": "/api/aria2/change_global_option",
                     "description": "Change aria2 global options (3-tier safety)",
                 },
-                {"path": "/api/aria2/change_option", "description": "Change aria2 per-download options"},
-                {"path": "/api/aria2/set_limits", "description": "Set aria2 bandwidth limits"},
-                {"path": "/api/downloads/{id}/pause", "description": "Pause a queue item"},
+                {
+                    "path": "/api/aria2/change_option",
+                    "description": "Change aria2 per-download options",
+                },
+                {
+                    "path": "/api/aria2/set_limits",
+                    "description": "Set aria2 bandwidth limits",
+                },
+                {
+                    "path": "/api/downloads/{id}/pause",
+                    "description": "Pause a queue item",
+                },
                 {
                     "path": "/api/downloads/{id}/resume",
                     "description": "Resume a paused item",
                 },
-                {"path": "/api/downloads/{id}/remove", "description": "Remove a queue item"},
-                {"path": "/api/downloads/{id}/retry", "description": "Retry a failed item"},
+                {
+                    "path": "/api/downloads/{id}/remove",
+                    "description": "Remove a queue item",
+                },
+                {
+                    "path": "/api/downloads/{id}/retry",
+                    "description": "Retry a failed item",
+                },
                 {
                     "path": "/api/downloads/{id}/files",
                     "description": "Select torrent/metalink files",
@@ -158,6 +201,7 @@ SwaggerUIBundle({
 
 def _run_tests() -> dict[str, object]:
     from .. import webapp as _wa
+
     project_root = Path(__file__).resolve().parent.parent.parent.parent
     try:
         result = _wa.subprocess.run(
@@ -199,17 +243,21 @@ def _run_tests() -> dict[str, object]:
 
 # ── GET route handlers ──
 
+
 def get_health(h: object, parsed: object) -> None:
     from ..scheduler import check_disk_space
     from ..webapp import get_metrics
+
     disk_ok, disk_percent = check_disk_space()
-    h._send_json({
-        "status": "ok",
-        "version": __version__,
-        "disk_usage_percent": disk_percent,
-        "disk_ok": disk_ok,
-        **get_metrics(),
-    })
+    h._send_json(
+        {
+            "status": "ok",
+            "version": __version__,
+            "disk_usage_percent": disk_percent,
+            "disk_ok": disk_ok,
+            **get_metrics(),
+        }
+    )
 
 
 def get_openapi_yaml(h: object, parsed: object) -> None:
@@ -250,6 +298,7 @@ def get_api(h: object, parsed: object) -> None:
 
 def get_events(h: object, parsed: object) -> None:
     from ..webapp import _sse_subscribe, _sse_unsubscribe, API_SCHEMA_VERSION
+
     h.send_response(200)
     h.send_header("Content-Type", "text/event-stream")
     h.send_header("Cache-Control", "no-cache")
@@ -293,4 +342,5 @@ def get_log(h: object, parsed: object) -> None:
     except ValueError:
         limit = 120
     from ..api import load_action_log
+
     h._send_json({"items": load_action_log(limit=limit)})

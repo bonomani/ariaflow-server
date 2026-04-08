@@ -12,16 +12,21 @@ def get_torrents(h: object, parsed: object) -> None:
     items = load_queue()
     seeds = []
     for item in items:
-        if item.get("distribute_status") == "seeding" and item.get("distribute_infohash"):
-            seeds.append({
-                "infohash": item["distribute_infohash"],
-                "name": item.get("output") or item.get("url", "").split("/")[-1].split("?")[0],
-                "url": item.get("url"),
-                "seed_gid": item.get("distribute_seed_gid"),
-                "torrent_url": f"/api/torrents/{item['distribute_infohash']}.torrent",
-                "started_at": item.get("distribute_started_at"),
-                "item_id": item.get("id"),
-            })
+        if item.get("distribute_status") == "seeding" and item.get(
+            "distribute_infohash"
+        ):
+            seeds.append(
+                {
+                    "infohash": item["distribute_infohash"],
+                    "name": item.get("output")
+                    or item.get("url", "").split("/")[-1].split("?")[0],
+                    "url": item.get("url"),
+                    "seed_gid": item.get("distribute_seed_gid"),
+                    "torrent_url": f"/api/torrents/{item['distribute_infohash']}.torrent",
+                    "started_at": item.get("distribute_started_at"),
+                    "item_id": item.get("id"),
+                }
+            )
     h._send_json({"torrents": seeds, "count": len(seeds)})
 
 
@@ -47,17 +52,23 @@ def get_torrent_file(h: object, parsed: object) -> None:
 def post_torrent_stop(h: object, payload: object, path: str) -> None:
     """Stop seeding a specific torrent by infohash."""
     if not isinstance(payload, dict):
-        h._send_json(_error_payload("invalid_payload", "expected {infohash}"), status=400)
+        h._send_json(
+            _error_payload("invalid_payload", "expected {infohash}"), status=400
+        )
         return
     infohash = str(payload.get("infohash", "")).strip()
     if not infohash:
         h._send_json(_error_payload("invalid_payload", "infohash required"), status=400)
         return
     from ..core import load_queue, save_queue, aria2_remove, record_action
+
     items = load_queue()
     found = False
     for item in items:
-        if item.get("distribute_infohash") == infohash and item.get("distribute_status") == "seeding":
+        if (
+            item.get("distribute_infohash") == infohash
+            and item.get("distribute_status") == "seeding"
+        ):
             seed_gid = item.get("distribute_seed_gid")
             if seed_gid:
                 try:
@@ -68,6 +79,7 @@ def post_torrent_stop(h: object, payload: object, path: str) -> None:
             if torrent_path:
                 try:
                     import os
+
                     os.remove(torrent_path)
                 except Exception:
                     pass
@@ -89,4 +101,6 @@ def post_torrent_stop(h: object, payload: object, path: str) -> None:
         h._invalidate_status_cache()
         h._send_json({"ok": True, "infohash": infohash, "status": "stopped"})
     else:
-        h._send_json(_error_payload("not_found", f"no active seed for {infohash}"), status=404)
+        h._send_json(
+            _error_payload("not_found", f"no active seed for {infohash}"), status=404
+        )

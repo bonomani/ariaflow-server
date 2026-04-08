@@ -13,6 +13,7 @@ from ..api import (
 
 # ── Route handlers ──
 
+
 def get_scheduler(h: object, parsed: object) -> None:
     state = load_state()
     running = bool(state.get("running"))
@@ -50,6 +51,7 @@ def post_resume(h: object, payload: object, path: str) -> None:
 
 def post_preflight(h: object, payload: object, path: str) -> None:
     from .. import webapp as _wa
+
     before = {"state": load_state(), "queue": summarize_queue(load_queue())}
     result = _wa.preflight()
     result["aria2"] = _wa.aria2_status()

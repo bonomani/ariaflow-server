@@ -23,6 +23,7 @@ from .helpers import _error_payload, _validate_item_id, _ALLOWED_URL_SCHEMES
 
 # ── Single-use helpers ──
 
+
 def _validate_url(url: str) -> str | None:
     """Return error message if URL is unsafe, None if OK."""
     if url.startswith("magnet:"):
@@ -165,6 +166,7 @@ def _parse_add_items(
 
 # ── Route handlers ──
 
+
 def get_status(h: object, parsed: object) -> None:
     query = dict(
         part.split("=", 1) if "=" in part else (part, "")
@@ -245,9 +247,7 @@ def post_cleanup(h: object, payload: object, path: str) -> None:
     params = payload if isinstance(payload, dict) else {}
     max_age = int(params.get("max_done_age_days", 7))
     max_count = int(params.get("max_done_count", 100))
-    result = auto_cleanup_queue(
-        max_done_age_days=max_age, max_done_count=max_count
-    )
+    result = auto_cleanup_queue(max_done_age_days=max_age, max_done_count=max_count)
     if result["archived"] > 0:
         h._invalidate_status_cache()
     h._send_json({"ok": True, **result})
@@ -269,9 +269,7 @@ def post_item_files(h: object, payload: object, path: str) -> None:
         indices = [int(i) for i in select]
     except (ValueError, TypeError):
         h._send_json(
-            _error_payload(
-                "invalid_payload", "select must be a list of integers"
-            ),
+            _error_payload("invalid_payload", "select must be a list of integers"),
             status=400,
         )
         return
@@ -308,9 +306,12 @@ def post_item_action(h: object, payload: object, path: str) -> None:
             )
             return
         from ..queue_ops import set_item_priority
+
         result = set_item_priority(item_id, pval)
         if not result.get("ok", True):
-            h._send_json(result, status=404 if result.get("error") == "not_found" else 400)
+            h._send_json(
+                result, status=404 if result.get("error") == "not_found" else 400
+            )
             return
         h._invalidate_status_cache()
         h._send_json(result)

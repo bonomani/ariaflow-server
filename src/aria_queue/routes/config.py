@@ -26,6 +26,7 @@ def patch_declaration_preferences(h: object, payload: object) -> None:
         )
         return
     from ..core import load_declaration, save_declaration, record_action, storage_locked
+
     with storage_locked():
         declaration = load_declaration()
         preferences = declaration.get("uic", {}).get("preferences", [])

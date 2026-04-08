@@ -3,6 +3,7 @@
 Browses ``_ariaflow._tcp`` on the local network, resolves peers,
 polls their ``GET /api/torrents``, and auto-downloads new torrents.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -37,6 +38,7 @@ def list_peers() -> list[dict[str, Any]]:
 
 # ── Browse ─────────────────────────────────────────────────────────
 
+
 def _parse_dns_sd_browse_line(line: str) -> tuple[str, str, bool] | None:
     """Parse a dns-sd -B output line.
 
@@ -55,7 +57,7 @@ def _parse_dns_sd_browse_line(line: str) -> tuple[str, str, bool] | None:
     # Instance name is everything after the service type
     try:
         svc_idx = line.index("_ariaflow._tcp.")
-        instance = line[svc_idx + len("_ariaflow._tcp."):].strip()
+        instance = line[svc_idx + len("_ariaflow._tcp.") :].strip()
     except ValueError:
         return None
     if not instance:
@@ -133,7 +135,9 @@ def _resolve_dns_sd(instance: str) -> dict[str, Any] | None:
     try:
         proc = subprocess.Popen(
             [binary, "-L", instance, "_ariaflow._tcp", "local"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
         # dns-sd -L outputs one line then keeps running; read for 3s
         output_lines: list[str] = []
@@ -191,7 +195,9 @@ def _browse_dns_sd() -> None:
     try:
         _browse_proc = subprocess.Popen(
             [binary, "-B", "_ariaflow._tcp", "local"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
     except (FileNotFoundError, PermissionError):
         return
@@ -212,8 +218,10 @@ def _browse_dns_sd() -> None:
                 with _peers_lock:
                     _peers[instance] = info
                 record_action(
-                    action="peer_discovered", target="system",
-                    outcome="changed", reason="bonjour_browse",
+                    action="peer_discovered",
+                    target="system",
+                    outcome="changed",
+                    reason="bonjour_browse",
                     detail={"instance": instance, "base_url": info.get("base_url")},
                 )
         else:
@@ -221,8 +229,10 @@ def _browse_dns_sd() -> None:
                 removed = _peers.pop(instance, None)
             if removed:
                 record_action(
-                    action="peer_removed", target="system",
-                    outcome="changed", reason="bonjour_browse",
+                    action="peer_removed",
+                    target="system",
+                    outcome="changed",
+                    reason="bonjour_browse",
                     detail={"instance": instance},
                 )
 
@@ -234,7 +244,9 @@ def _browse_avahi() -> None:
     try:
         _browse_proc = subprocess.Popen(
             [binary, "-r", "-p", "_ariaflow._tcp"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
     except (FileNotFoundError, PermissionError):
         return
@@ -254,21 +266,26 @@ def _browse_avahi() -> None:
                 removed = _peers.pop(instance, None)
             if removed:
                 record_action(
-                    action="peer_removed", target="system",
-                    outcome="changed", reason="bonjour_browse",
+                    action="peer_removed",
+                    target="system",
+                    outcome="changed",
+                    reason="bonjour_browse",
                     detail={"instance": instance},
                 )
         elif info.get("base_url"):
             with _peers_lock:
                 _peers[instance] = info
             record_action(
-                action="peer_discovered", target="system",
-                outcome="changed", reason="bonjour_browse",
+                action="peer_discovered",
+                target="system",
+                outcome="changed",
+                reason="bonjour_browse",
                 detail={"instance": instance, "base_url": info["base_url"]},
             )
 
 
 # ── Poll ───────────────────────────────────────────────────────────
+
 
 def _poll_peer_torrents(peer: dict[str, Any]) -> list[dict[str, Any]]:
     """Fetch torrent list from a peer's API."""
@@ -289,6 +306,7 @@ def _poll_peer_torrents(peer: dict[str, Any]) -> list[dict[str, Any]]:
 def _is_known_infohash(infohash: str) -> bool:
     """Check if we already have this torrent in our queue."""
     from .core import load_queue
+
     for item in load_queue():
         if item.get("distribute_infohash") == infohash:
             return True
@@ -316,6 +334,7 @@ def _fetch_torrent(peer: dict[str, Any], torrent: dict[str, Any]) -> bool:
         # Strip path from base_url to get scheme://host:port
         if base:
             from urllib.parse import urlparse
+
             p = urlparse(base)
             torrent_url = f"{p.scheme}://{p.netloc}{torrent_url}"
 
@@ -326,8 +345,10 @@ def _fetch_torrent(peer: dict[str, Any], torrent: dict[str, Any]) -> bool:
         )
         if result.get("ok") or result.get("id"):
             record_action(
-                action="peer_fetch", target="queue_item",
-                outcome="changed", reason="auto_download",
+                action="peer_fetch",
+                target="queue_item",
+                outcome="changed",
+                reason="auto_download",
                 detail={
                     "peer": peer.get("instance"),
                     "infohash": torrent.get("infohash"),
@@ -360,6 +381,7 @@ def _poll_loop() -> None:
     """Periodically poll all known peers for new torrents."""
     while not _stop_event.is_set():
         from .contracts import pref_value
+
         interval = int(pref_value("peer_poll_interval_seconds", 60) or 60)
         max_downloads = int(pref_value("peer_max_auto_downloads", 5) or 5)
         content_filter = str(pref_value("peer_content_filter", "") or "")
@@ -395,14 +417,17 @@ def _poll_loop() -> None:
 
 # ── Lifecycle ──────────────────────────────────────────────────────
 
+
 def start_discovery() -> bool:
     """Start peer discovery threads. Returns True if started."""
     global _poll_thread
     backend = _detect_backend()
     if backend is None:
         record_action(
-            action="discovery_start", target="system",
-            outcome="skipped", reason="no_mdns_backend",
+            action="discovery_start",
+            target="system",
+            outcome="skipped",
+            reason="no_mdns_backend",
         )
         return False
 
@@ -418,8 +443,10 @@ def start_discovery() -> bool:
     _poll_thread.start()
 
     record_action(
-        action="discovery_start", target="system",
-        outcome="changed", reason="started",
+        action="discovery_start",
+        target="system",
+        outcome="changed",
+        reason="started",
         detail={"backend": backend},
     )
     return True
@@ -443,6 +470,8 @@ def stop_discovery() -> None:
     with _peers_lock:
         _peers.clear()
     record_action(
-        action="discovery_stop", target="system",
-        outcome="changed", reason="stopped",
+        action="discovery_stop",
+        target="system",
+        outcome="changed",
+        reason="stopped",
     )

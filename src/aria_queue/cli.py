@@ -142,6 +142,7 @@ def main() -> int:
         # Start peer discovery if enabled
         from .discovery import start_discovery, stop_discovery
         from .contracts import load_declaration
+
         decl = load_declaration()
         discover = False
         for pref in decl.get("uic", {}).get("preferences", []):

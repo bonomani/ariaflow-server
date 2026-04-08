@@ -243,7 +243,9 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch("aria_queue.core.time.time", return_value=120.0),
             patch("aria_queue.core.probe_bandwidth") as probe_bandwidth_mock,
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit") as set_bandwidth_mock,
+            patch(
+                "aria_queue.core.aria2_set_max_overall_download_limit"
+            ) as set_bandwidth_mock,
             patch("aria_queue.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
@@ -268,7 +270,9 @@ class TicAriaFlowTests(IsolatedTestCase):
                 "aria_queue.core.probe_bandwidth", return_value=fresh_probe
             ) as probe_bandwidth_mock,
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit") as set_bandwidth_mock,
+            patch(
+                "aria_queue.core.aria2_set_max_overall_download_limit"
+            ) as set_bandwidth_mock,
             patch("aria_queue.core.record_action") as record_action_mock,
         ):
             probe, cap_mbps, cap_bytes_per_sec = _apply_bandwidth_probe(state=state)
@@ -553,9 +557,13 @@ class TicAriaFlowTests(IsolatedTestCase):
             patch("aria_queue.core.aria2_set_max_overall_download_limit"),
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch(
-                "aria_queue.core.aria2_tell_status", side_effect=RuntimeError("connection refused")
+                "aria_queue.core.aria2_tell_status",
+                side_effect=RuntimeError("connection refused"),
             ),
-            patch("aria_queue.core.time.sleep", side_effect=[None] * 10 + [StopIteration("stop")]),
+            patch(
+                "aria_queue.core.time.sleep",
+                side_effect=[None] * 10 + [StopIteration("stop")],
+            ),
         ):
             with self.assertRaises(StopIteration):
                 process_queue()
@@ -589,11 +597,15 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch("aria_queue.core.aria2_current_bandwidth", return_value={}),
-            patch("aria_queue.core.aria2_set_max_overall_download_limit") as aria2_set_max_overall_download_limit,
+            patch(
+                "aria_queue.core.aria2_set_max_overall_download_limit"
+            ) as aria2_set_max_overall_download_limit,
             patch("aria_queue.core.aria2_tell_active", return_value=[]),
             patch("aria_queue.core.aria2_add_download", return_value="gid-1"),
             patch("aria_queue.core.aria2_tell_status", return_value=complete),
-            patch("aria_queue.core.time.sleep", side_effect=[None, StopIteration("stop")]),
+            patch(
+                "aria_queue.core.time.sleep", side_effect=[None, StopIteration("stop")]
+            ),
         ):
             with self.assertRaises(StopIteration):
                 process_queue()
@@ -1041,10 +1053,13 @@ class TicAsmCoherenceTests(IsolatedTestCase):
             ensure_state_session,
             save_queue,
         )
+
         ensure_state_session()
-        save_queue([
-            {"id": "j1", "url": "https://example.com/a.bin", "status": "active"},
-        ])
+        save_queue(
+            [
+                {"id": "j1", "url": "https://example.com/a.bin", "status": "active"},
+            ]
+        )
         with self.assertRaises(RuntimeError) as ctx:
             close_state_session("test")
         self.assertIn("CR-4", str(ctx.exception))
@@ -1059,12 +1074,15 @@ class TicAsmCoherenceTests(IsolatedTestCase):
             save_queue,
             start_new_state_session,
         )
+
         ensure_state_session()
-        save_queue([
-            {"id": "j1", "url": "https://example.com/a.bin", "status": "active"},
-            {"id": "j2", "url": "https://example.com/b.bin", "status": "waiting"},
-            {"id": "j3", "url": "https://example.com/c.bin", "status": "queued"},
-        ])
+        save_queue(
+            [
+                {"id": "j1", "url": "https://example.com/a.bin", "status": "active"},
+                {"id": "j2", "url": "https://example.com/b.bin", "status": "waiting"},
+                {"id": "j3", "url": "https://example.com/c.bin", "status": "queued"},
+            ]
+        )
         start_new_state_session("test_rollover")
         items = {it["id"]: it["status"] for it in load_queue()}
         self.assertEqual(items["j1"], "paused")
@@ -1083,7 +1101,9 @@ class TicAsmCoherenceTests(IsolatedTestCase):
         with (
             patch("aria_queue.core.process_queue", side_effect=crash),
             patch("aria_queue.core.aria2_pause_all") as pause_all,
-            patch("aria_queue.core.ensure_state_session", return_value={"running": False}),
+            patch(
+                "aria_queue.core.ensure_state_session", return_value={"running": False}
+            ),
             patch("aria_queue.core.save_state"),
             patch("aria_queue.core.load_state", return_value={}),
             patch("aria_queue.core.storage_locked"),
@@ -1106,8 +1126,13 @@ class TicAsmCoherenceTests(IsolatedTestCase):
         crash = RuntimeError("simulated process_queue crash")
         with (
             patch("aria_queue.core.process_queue", side_effect=crash),
-            patch("aria_queue.core.aria2_pause_all", side_effect=ConnectionError("daemon dead")),
-            patch("aria_queue.core.ensure_state_session", return_value={"running": False}),
+            patch(
+                "aria_queue.core.aria2_pause_all",
+                side_effect=ConnectionError("daemon dead"),
+            ),
+            patch(
+                "aria_queue.core.ensure_state_session", return_value={"running": False}
+            ),
             patch("aria_queue.core.save_state") as save_state_mock,
             patch("aria_queue.core.load_state", return_value={}),
             patch("aria_queue.core.storage_locked"),

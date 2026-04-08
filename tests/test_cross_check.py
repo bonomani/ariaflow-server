@@ -42,7 +42,9 @@ CrossCheckBase = APIServerTestCase
 class TestAddReflectedInStatus(CrossCheckBase):
     def test_added_item_appears_in_status(self) -> None:
         url = f"https://example.com/xc-add-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         _, status = _req(f"{self.base}/api/status")
@@ -65,7 +67,9 @@ class TestAddReflectedInStatus(CrossCheckBase):
 
     def test_added_item_creates_session(self) -> None:
         url = f"https://example.com/xc-sess-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         session_id = added["added"][0]["session_id"]
 
         _, status = _req(f"{self.base}/api/status")
@@ -74,7 +78,9 @@ class TestAddReflectedInStatus(CrossCheckBase):
     def test_add_multiple_all_in_status(self) -> None:
         urls = [f"https://example.com/xc-multi-{i}-{time.time()}.bin" for i in range(3)]
         _, added = _req(
-            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": u} for u in urls]}
+            f"{self.base}/api/downloads/add",
+            "POST",
+            {"items": [{"url": u} for u in urls]},
         )
         added_ids = {item["id"] for item in added["added"]}
 
@@ -98,8 +104,12 @@ class TestAddReflectedInStatus(CrossCheckBase):
 
     def test_duplicate_add_same_id_in_status(self) -> None:
         url = f"https://example.com/xc-dup-{time.time()}.bin"
-        _, first = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
-        _, second = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, first = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
+        _, second = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         self.assertEqual(first["added"][0]["id"], second["added"][0]["id"])
 
         _, status = _req(f"{self.base}/api/status")
@@ -115,7 +125,9 @@ class TestAddReflectedInStatus(CrossCheckBase):
 class TestPauseReflectedInStatus(CrossCheckBase):
     def test_paused_item_status_matches(self) -> None:
         url = f"https://example.com/xc-pause-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         _, paused = _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
@@ -127,7 +139,9 @@ class TestPauseReflectedInStatus(CrossCheckBase):
 
     def test_paused_item_summary_counts(self) -> None:
         url = f"https://example.com/xc-pause-cnt-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
 
@@ -136,7 +150,9 @@ class TestPauseReflectedInStatus(CrossCheckBase):
 
     def test_pause_preserves_url_and_id(self) -> None:
         url = f"https://example.com/xc-pause-fields-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
 
@@ -173,7 +189,9 @@ class TestPauseReflectedInStatus(CrossCheckBase):
 class TestResumeReflectedInStatus(CrossCheckBase):
     def test_resumed_item_status_matches(self) -> None:
         url = f"https://example.com/xc-resume-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
 
@@ -186,7 +204,9 @@ class TestResumeReflectedInStatus(CrossCheckBase):
 
     def test_resume_clears_paused_summary(self) -> None:
         url = f"https://example.com/xc-resume-sum-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
 
@@ -201,7 +221,9 @@ class TestResumeReflectedInStatus(CrossCheckBase):
 
     def test_pause_resume_cycle_preserves_url(self) -> None:
         url = f"https://example.com/xc-cycle-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
@@ -223,7 +245,9 @@ class TestResumeReflectedInStatus(CrossCheckBase):
 class TestRemoveReflectedInStatus(CrossCheckBase):
     def test_removed_item_gone_from_status(self) -> None:
         url = f"https://example.com/xc-remove-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         _, removed = _req(f"{self.base}/api/downloads/{item_id}/remove", "POST")
@@ -235,7 +259,9 @@ class TestRemoveReflectedInStatus(CrossCheckBase):
 
     def test_removed_item_reduces_total(self) -> None:
         url = f"https://example.com/xc-rem-cnt-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         _, before = _req(f"{self.base}/api/status")
@@ -255,7 +281,9 @@ class TestRemoveReflectedInStatus(CrossCheckBase):
 class TestRetryReflectedInStatus(CrossCheckBase):
     def test_retried_item_back_to_queued(self) -> None:
         url = f"https://example.com/xc-retry-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         items = load_queue()
@@ -276,7 +304,9 @@ class TestRetryReflectedInStatus(CrossCheckBase):
 
     def test_retry_clears_error_message(self) -> None:
         url = f"https://example.com/xc-retry-msg-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         items = load_queue()
@@ -296,7 +326,9 @@ class TestRetryReflectedInStatus(CrossCheckBase):
 
     def test_retry_preserves_url(self) -> None:
         url = f"https://example.com/xc-retry-url-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         items = load_queue()
@@ -313,7 +345,9 @@ class TestRetryReflectedInStatus(CrossCheckBase):
 
     def test_retry_error_count_decreases(self) -> None:
         url = f"https://example.com/xc-retry-errcount-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         items = load_queue()
@@ -495,7 +529,9 @@ class TestSessionReflectedInStatus(CrossCheckBase):
 class TestFileSelectReflectedInStatus(CrossCheckBase):
     def test_file_select_sets_downloading(self) -> None:
         url = f"https://example.com/xc-torrent-{time.time()}.torrent"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         items = load_queue()
@@ -533,7 +569,9 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
 
     def test_pause_logged(self) -> None:
         url = f"https://example.com/xc-log-pause-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
         _, log = _req(f"{self.base}/api/log?limit=5")
@@ -542,7 +580,9 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
 
     def test_resume_logged(self) -> None:
         url = f"https://example.com/xc-log-resume-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
         _req(f"{self.base}/api/downloads/{item_id}/resume", "POST")
@@ -552,7 +592,9 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
 
     def test_remove_logged(self) -> None:
         url = f"https://example.com/xc-log-remove-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/remove", "POST")
         _, log = _req(f"{self.base}/api/log?limit=5")
@@ -561,7 +603,9 @@ class TestMutationsLoggedInActionLog(CrossCheckBase):
 
     def test_retry_logged(self) -> None:
         url = f"https://example.com/xc-log-retry-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         items = load_queue()
         for item in items:
@@ -627,7 +671,9 @@ class TestLogEntryDetails(CrossCheckBase):
 
     def test_pause_log_contains_item_id(self) -> None:
         url = f"https://example.com/xc-log-pid-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
         _, log = _req(f"{self.base}/api/log?limit=5")
@@ -640,7 +686,9 @@ class TestLogEntryDetails(CrossCheckBase):
 
     def test_remove_log_contains_item_id(self) -> None:
         url = f"https://example.com/xc-log-rid-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/remove", "POST")
         _, log = _req(f"{self.base}/api/log?limit=5")
@@ -674,7 +722,9 @@ class TestMultiStepChains(CrossCheckBase):
 
     def test_add_pause_resume_remove_chain(self) -> None:
         url = f"https://example.com/xc-chain-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         # Each step: verify action response matches status
@@ -698,7 +748,9 @@ class TestMultiStepChains(CrossCheckBase):
 
     def test_error_retry_pause_chain(self) -> None:
         url = f"https://example.com/xc-err-chain-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         # Set to error
@@ -752,7 +804,9 @@ class TestMultiStepChains(CrossCheckBase):
 
     def test_session_change_does_not_affect_existing_items(self) -> None:
         url = f"https://example.com/xc-sess-keep-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
 
         _req(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
@@ -798,7 +852,9 @@ class TestMutationsIncrementRevision(CrossCheckBase):
 
     def test_pause_increments_rev(self) -> None:
         url = f"https://example.com/xc-rev-pause-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         rev_before = self._get_rev()
         _req(f"{self.base}/api/downloads/{item_id}/pause", "POST")
@@ -807,7 +863,9 @@ class TestMutationsIncrementRevision(CrossCheckBase):
 
     def test_remove_increments_rev(self) -> None:
         url = f"https://example.com/xc-rev-rm-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         rev_before = self._get_rev()
         _req(f"{self.base}/api/downloads/{item_id}/remove", "POST")
@@ -816,7 +874,9 @@ class TestMutationsIncrementRevision(CrossCheckBase):
 
     def test_retry_increments_rev(self) -> None:
         url = f"https://example.com/xc-rev-retry-{time.time()}.bin"
-        _, added = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         items = load_queue()
         for item in items:

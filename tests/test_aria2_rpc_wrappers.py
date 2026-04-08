@@ -41,9 +41,7 @@ class TestAria2AddUri(unittest.TestCase):
 
     @patch(_MODULE, _mock_rpc("gid-002"))
     def test_with_options(self) -> None:
-        gid = core.aria2_add_uri(
-            ["http://a.com/f"], options={"dir": "/tmp"}, port=7000
-        )
+        gid = core.aria2_add_uri(["http://a.com/f"], options={"dir": "/tmp"}, port=7000)
         self.assertEqual(gid, "gid-002")
         core.aria_rpc.assert_called_once_with(
             "aria2.addUri",
@@ -315,9 +313,7 @@ class TestAria2GetGlobalOption(unittest.TestCase):
 class TestAria2ChangeGlobalOption(unittest.TestCase):
     @patch(_MODULE, _mock_rpc("OK"))
     def test_change_global_option(self) -> None:
-        result = core.aria2_change_global_option(
-            {"max-concurrent-downloads": "3"}
-        )
+        result = core.aria2_change_global_option({"max-concurrent-downloads": "3"})
         self.assertEqual(result, "OK")
         core.aria_rpc.assert_called_once_with(
             "aria2.changeGlobalOption",
@@ -366,9 +362,7 @@ class TestAria2ChangeUri(unittest.TestCase):
 
     @patch(_MODULE, _mock_rpc([0, 1]))
     def test_change_uri_with_position(self) -> None:
-        result = core.aria2_change_uri(
-            "gid-001", 1, [], ["http://new.com"], position=0
-        )
+        result = core.aria2_change_uri("gid-001", 1, [], ["http://new.com"], position=0)
         self.assertEqual(result, [0, 1])
         args = core.aria_rpc.call_args
         self.assertEqual(args[0][1][4], 0)
@@ -479,7 +473,15 @@ class TestPortOverride(unittest.TestCase):
     @patch(_MODULE, _mock_rpc("OK"))
     def test_pause_custom_port(self) -> None:
         core.aria2_pause("g1", port=7000)
-        self.assertEqual(core.aria_rpc.call_args[1].get("port", core.aria_rpc.call_args[0][2] if len(core.aria_rpc.call_args[0]) > 2 else None), 7000)
+        self.assertEqual(
+            core.aria_rpc.call_args[1].get(
+                "port",
+                core.aria_rpc.call_args[0][2]
+                if len(core.aria_rpc.call_args[0]) > 2
+                else None,
+            ),
+            7000,
+        )
 
     @patch(_MODULE, _mock_rpc("OK"))
     def test_shutdown_custom_port(self) -> None:

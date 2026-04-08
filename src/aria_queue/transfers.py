@@ -46,7 +46,9 @@ def discover_active_transfer(
     state = core.load_state()
     if state.get("active_gid"):
         try:
-            info = core.aria2_tell_status(state["active_gid"], port=port, timeout=timeout)
+            info = core.aria2_tell_status(
+                state["active_gid"], port=port, timeout=timeout
+            )
             queue_item = core.find_queue_item_by_gid(state["active_gid"])
             if queue_item:
                 state["active_url"] = queue_item.get("url") or state.get("active_url")
@@ -160,7 +162,10 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
         outcome="changed",
         reason="user_pause",
         before=before,
-        after={"state": core.load_state(), "active": core.aria2_tell_active(port=port, timeout=5)},
+        after={
+            "state": core.load_state(),
+            "active": core.aria2_tell_active(port=port, timeout=5),
+        },
         detail={"gids": paused, "result": payload},
     )
     return payload
@@ -218,7 +223,10 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         outcome="changed",
         reason="user_resume",
         before=before,
-        after={"state": core.load_state(), "active": core.aria2_tell_active(port=port, timeout=5)},
+        after={
+            "state": core.load_state(),
+            "active": core.aria2_tell_active(port=port, timeout=5),
+        },
         detail={"gids": resumed, "result": payload},
     )
     return payload

@@ -39,7 +39,8 @@ def post_session(h: object, payload: object, path: str) -> None:
     action = str(payload.get("action", "")).strip()
     if action != "new":
         h._send_json(
-            _error_payload("unsupported_action", f"unknown action: {action}"), status=400
+            _error_payload("unsupported_action", f"unknown action: {action}"),
+            status=400,
         )
         return
     before = {"state": load_state(), "queue": summarize_queue(load_queue())}

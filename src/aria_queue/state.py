@@ -20,6 +20,7 @@ from .storage import (
 def _core() -> Any:
     """Lazy import to allow patching through aria_queue.core."""
     from . import core
+
     return core
 
 
@@ -64,6 +65,7 @@ def append_action_log(entry: dict[str, Any]) -> None:
     # it during network I/O)
     try:
         from . import webapp as _wa
+
         _wa._sse_publish("action_logged", payload)
     except Exception:
         pass
@@ -206,8 +208,7 @@ def close_state_session(reason: str = "closed") -> dict[str, Any]:
         # active items before invoking close.
         items = core.load_queue()
         active = [
-            it for it in items
-            if str(it.get("status") or "") in ("active", "waiting")
+            it for it in items if str(it.get("status") or "") in ("active", "waiting")
         ]
         if active:
             raise RuntimeError(
@@ -269,9 +270,7 @@ def _log_session_history(
         "closed_at": state.get("session_closed_at"),
         "closed_reason": state.get("session_closed_reason"),
         "items_total": len(session_items),
-        "items_done": sum(
-            1 for i in session_items if i.get("status") in ("complete",)
-        ),
+        "items_done": sum(1 for i in session_items if i.get("status") in ("complete",)),
         "items_error": sum(
             1 for i in session_items if i.get("status") in ("error", "failed")
         ),
@@ -318,16 +317,12 @@ def session_stats(session_id: str | None = None) -> dict[str, Any]:
         "items_total": len(all_items),
         "items_active": len(session_items),
         "items_archived": len(session_archived),
-        "items_done": sum(
-            1 for i in all_items if i.get("status") in ("complete",)
-        ),
+        "items_done": sum(1 for i in all_items if i.get("status") in ("complete",)),
         "items_error": sum(
             1 for i in all_items if i.get("status") in ("error", "failed")
         ),
         "items_queued": sum(1 for i in all_items if i.get("status") == "queued"),
-        "items_downloading": sum(
-            1 for i in all_items if i.get("status") == "active"
-        ),
+        "items_downloading": sum(1 for i in all_items if i.get("status") == "active"),
         "items_paused": sum(1 for i in all_items if i.get("status") == "paused"),
         "bytes_completed": sum(int(i.get("completed_length") or 0) for i in all_items),
     }

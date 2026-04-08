@@ -247,7 +247,10 @@ class TestPerItemActions(APIServerPerTestCase):
         self.assertEqual(body["error"], "invalid_state")
 
     def test_pause_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/pause", "POST")
+        code, body = _request(
+            f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/pause",
+            "POST",
+        )
         self.assertEqual(code, 404)
         self.assertEqual(body["error"], "not_found")
 
@@ -255,7 +258,9 @@ class TestPerItemActions(APIServerPerTestCase):
 
     def test_resume_paused_item_without_gid(self) -> None:
         _request(f"{self.base}/api/downloads/{self.item_id}/pause", "POST")
-        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/resume", "POST")
+        code, body = _request(
+            f"{self.base}/api/downloads/{self.item_id}/resume", "POST"
+        )
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "queued")
 
@@ -265,19 +270,25 @@ class TestPerItemActions(APIServerPerTestCase):
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc"):
-            code, body = _request(f"{self.base}/api/downloads/{self.item_id}/resume", "POST")
+            code, body = _request(
+                f"{self.base}/api/downloads/{self.item_id}/resume", "POST"
+            )
         self.assertEqual(code, 200)
         self.assertEqual(body["item"]["status"], "active")
 
     def test_resume_queued_item_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/resume", "POST")
+        code, body = _request(
+            f"{self.base}/api/downloads/{self.item_id}/resume", "POST"
+        )
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_state")
 
     # ── Remove ──
 
     def test_remove_queued_item(self) -> None:
-        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
+        code, body = _request(
+            f"{self.base}/api/downloads/{self.item_id}/remove", "POST"
+        )
         self.assertEqual(code, 200)
         self.assertTrue(body["removed"])
         self.assertEqual(len(load_queue()), 0)
@@ -288,17 +299,24 @@ class TestPerItemActions(APIServerPerTestCase):
         items[0]["gid"] = "gid-1"
         save_queue(items)
         with patch("aria_queue.core.aria_rpc") as rpc:
-            code, body = _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
+            code, body = _request(
+                f"{self.base}/api/downloads/{self.item_id}/remove", "POST"
+            )
         self.assertEqual(code, 200)
         rpc.assert_any_call("aria2.remove", ["gid-1"], port=6800, timeout=5)
 
     def test_remove_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/remove", "POST")
+        code, body = _request(
+            f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/remove",
+            "POST",
+        )
         self.assertEqual(code, 404)
 
     def test_double_remove_returns_404(self) -> None:
         _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
-        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/remove", "POST")
+        code, body = _request(
+            f"{self.base}/api/downloads/{self.item_id}/remove", "POST"
+        )
         self.assertEqual(code, 404)
 
     # ── Retry ──
@@ -348,7 +366,9 @@ class TestPerItemActions(APIServerPerTestCase):
     # ── Invalid action ──
 
     def test_invalid_action_returns_400(self) -> None:
-        code, body = _request(f"{self.base}/api/downloads/{self.item_id}/explode", "POST")
+        code, body = _request(
+            f"{self.base}/api/downloads/{self.item_id}/explode", "POST"
+        )
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "invalid_action")
 
@@ -401,7 +421,9 @@ class TestFileSelection(APIServerPerTestCase):
         self.assertEqual(body["gid"], "gid-torrent")
 
     def test_get_files_nonexistent_returns_404(self) -> None:
-        code, body = _request(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/files")
+        code, body = _request(
+            f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/files"
+        )
         self.assertEqual(code, 404)
 
     def test_select_files(self) -> None:
@@ -519,7 +541,9 @@ class TestAria2Options(APIServerPerTestCase):
         self.assertIn(body["error"], ("empty_options", "invalid_payload"))
 
     def test_non_object_payload_rejected(self) -> None:
-        code, body = _request(f"{self.base}/api/aria2/change_global_option", "POST", None)
+        code, body = _request(
+            f"{self.base}/api/aria2/change_global_option", "POST", None
+        )
         self.assertEqual(code, 400)
 
     def test_all_six_safe_options(self) -> None:
@@ -535,13 +559,17 @@ class TestAria2Options(APIServerPerTestCase):
             patch("aria_queue.core.aria_rpc"),
             patch("aria_queue.core.aria2_current_global_options", return_value={}),
         ):
-            code, body = _request(f"{self.base}/api/aria2/change_global_option", "POST", all_safe)
+            code, body = _request(
+                f"{self.base}/api/aria2/change_global_option", "POST", all_safe
+            )
         self.assertEqual(code, 200)
         self.assertEqual(len(body["applied"]), 6)
 
     def test_managed_options_rejected(self) -> None:
         managed = {"max-overall-download-limit": "0"}
-        code, body = _request(f"{self.base}/api/aria2/change_global_option", "POST", managed)
+        code, body = _request(
+            f"{self.base}/api/aria2/change_global_option", "POST", managed
+        )
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "managed_options")
 
@@ -761,7 +789,9 @@ class TestSession(APIServerPerTestCase):
         _, status_before = _request(f"{self.base}/api/status")
         old_session = status_before["state"]["session_id"]
 
-        code, body = _request(f"{self.base}/api/sessions/new", "POST", {"action": "new"})
+        code, body = _request(
+            f"{self.base}/api/sessions/new", "POST", {"action": "new"}
+        )
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         new_session = body["session"]["session_id"]
@@ -1180,7 +1210,9 @@ class TestGetEndpoints(APIServerTestCase):
         self.assertEqual(len(body["files"]), 1)
 
     def test_get_api_item_files_not_found(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/files")
+        code, body, _ = _req(
+            f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/files"
+        )
         self.assertEqual(code, 404)
 
     # 9. GET /api/docs
@@ -1397,7 +1429,9 @@ class TestPostEndpoints(APIServerTestCase):
         self.assertTrue(body["ok"])
 
     def test_post_api_aria2_options_unsafe(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/aria2/change_global_option", "POST", {"dir": "/evil"})
+        code, body, _ = _req(
+            f"{self.base}/api/aria2/change_global_option", "POST", {"dir": "/evil"}
+        )
         self.assertEqual(code, 400)
         self.assertEqual(body["error"], "rejected_options")
 
@@ -1601,7 +1635,10 @@ class TestCrossCutting(APIServerTestCase):
 
     # Item not found
     def test_item_not_found(self) -> None:
-        code, body, _ = _req(f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/pause", "POST")
+        code, body, _ = _req(
+            f"{self.base}/api/downloads/00000000-0000-0000-0000-000000000000/pause",
+            "POST",
+        )
         self.assertEqual(code, 404)
 
     # State consistency: add → status reflects it
@@ -1615,7 +1652,9 @@ class TestCrossCutting(APIServerTestCase):
     # State consistency: remove → status reflects it
     def test_remove_reflected_in_status(self) -> None:
         url = f"https://example.com/remove-check-{time.time()}.bin"
-        _, added, _ = _req(f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]})
+        _, added, _ = _req(
+            f"{self.base}/api/downloads/add", "POST", {"items": [{"url": url}]}
+        )
         item_id = added["added"][0]["id"]
         _req(f"{self.base}/api/downloads/{item_id}/remove", "POST")
         _, status, _ = _req(f"{self.base}/api/status")

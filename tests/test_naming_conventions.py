@@ -67,7 +67,9 @@ class TestModuleNaming(unittest.TestCase):
                     continue
                 if not re.match(r"^[a-z][a-z0-9_]*$", name):
                     violations.append(f"{os.path.join(root, f)}: {name}")
-        self.assertEqual(violations, [], f"Module names not snake_case:\n" + "\n".join(violations))
+        self.assertEqual(
+            violations, [], f"Module names not snake_case:\n" + "\n".join(violations)
+        )
 
 
 class TestStatusValues(unittest.TestCase):
@@ -104,7 +106,9 @@ class TestApiResponseKeys(unittest.TestCase):
                 if isinstance(key, str) and self._CAMEL_CASE.match(key):
                     # Exception: _rev is not camelCase
                     violations.append(f"{path}.{key}" if path else key)
-                violations.extend(self._check_keys(obj[key], f"{path}.{key}" if path else key))
+                violations.extend(
+                    self._check_keys(obj[key], f"{path}.{key}" if path else key)
+                )
         elif isinstance(obj, list):
             for i, item in enumerate(obj):
                 violations.extend(self._check_keys(item, f"{path}[{i}]"))
@@ -120,6 +124,7 @@ class TestApiResponseKeys(unittest.TestCase):
                 from aria_queue.queue_ops import add_queue_item, load_queue
                 from importlib import reload
                 import aria_queue.storage as storage_mod
+
                 reload(storage_mod)
 
                 add_queue_item("https://example.com/test.bin")
@@ -144,6 +149,7 @@ class TestApiResponseKeys(unittest.TestCase):
                 from aria_queue.state import load_state
                 from importlib import reload
                 import aria_queue.storage as storage_mod
+
                 reload(storage_mod)
 
                 state = load_state()
@@ -166,6 +172,7 @@ class TestTestNaming(unittest.TestCase):
         for f in tests_dir.rglob("test_*.py"):
             try:
                 import ast
+
                 tree = ast.parse(f.read_text())
             except Exception:
                 continue
@@ -207,7 +214,9 @@ class TestNoAbbreviations(unittest.TestCase):
                             continue
                         if self._ABBREVIATIONS.search(f"_{node.name}_"):
                             violations.append(f"{f}:{node.lineno}: {node.name}")
-        self.assertEqual(violations, [], f"Abbreviations in public names:\n" + "\n".join(violations))
+        self.assertEqual(
+            violations, [], f"Abbreviations in public names:\n" + "\n".join(violations)
+        )
 
 
 class TestAria2WrapperCount(unittest.TestCase):
@@ -245,7 +254,9 @@ class TestDeclarationPreferenceNames(unittest.TestCase):
             name = pref.get("name", "")
             if not re.match(r"^[a-z][a-z0-9_]*$", name):
                 violations.append(name)
-        self.assertEqual(violations, [], f"Preference names not snake_case: {violations}")
+        self.assertEqual(
+            violations, [], f"Preference names not snake_case: {violations}"
+        )
 
     def test_gate_names_are_snake_case(self) -> None:
         from aria_queue.contracts import DEFAULT_DECLARATION
@@ -273,6 +284,7 @@ class TestActionLogKeys(unittest.TestCase):
                 from aria_queue.state import record_action, load_action_log
                 from importlib import reload
                 import aria_queue.storage as storage_mod
+
                 reload(storage_mod)
 
                 record_action(

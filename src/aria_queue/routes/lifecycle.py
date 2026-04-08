@@ -15,20 +15,24 @@ from .helpers import _error_payload
 
 # ── Single-use helper ──
 
+
 def _lifecycle_payload() -> dict[str, object]:
     lifecycle = status_all()
     state = load_state()
-    lifecycle.update({
-        "session_id": state.get("session_id"),
-        "session_started_at": state.get("session_started_at"),
-        "session_last_seen_at": state.get("session_last_seen_at"),
-        "session_closed_at": state.get("session_closed_at"),
-        "session_closed_reason": state.get("session_closed_reason"),
-    })
+    lifecycle.update(
+        {
+            "session_id": state.get("session_id"),
+            "session_started_at": state.get("session_started_at"),
+            "session_last_seen_at": state.get("session_last_seen_at"),
+            "session_closed_at": state.get("session_closed_at"),
+            "session_closed_reason": state.get("session_closed_reason"),
+        }
+    )
     return lifecycle
 
 
 # ── Route handlers ──
+
 
 def get_lifecycle(h: object, parsed: object) -> None:
     h._send_json(_lifecycle_payload())
@@ -36,8 +40,11 @@ def get_lifecycle(h: object, parsed: object) -> None:
 
 def post_lifecycle_action(h: object, payload: object, path: str) -> None:
     from .. import webapp as _wa
+
     if not _wa.is_macos():
-        h._send_json(_error_payload("macos_only", "this endpoint requires macOS"), status=400)
+        h._send_json(
+            _error_payload("macos_only", "this endpoint requires macOS"), status=400
+        )
         return
     target = str(payload.get("target", "")).strip()
     action = str(payload.get("action", "")).strip()

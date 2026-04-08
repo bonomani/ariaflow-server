@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 
-
 def _core() -> Any:
     """Lazy import to allow patching through aria_queue.core."""
     from . import core
+
     return core
 
 
@@ -22,6 +22,7 @@ def check_disk_space() -> tuple[bool, float]:
     """
     core = _core()
     from .contracts import pref_value
+
     raw = pref_value("max_disk_usage_percent", 90)
     max_percent = int(raw) if raw is not None else 90
     if max_percent == 0:
@@ -72,7 +73,6 @@ def start_background_process(port: int = 6800) -> dict[str, Any]:
     return {"started": True, "reason": "background"}
 
 
-
 def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     # ASM CR-3 (structural): this is the sole entry point that sets
     # run=running and the sole submission path into the active tier,
@@ -88,8 +88,11 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         core.cleanup_queue_state()
     except Exception as exc:
         core.record_action(
-            action="error", target="queue", outcome="failed",
-            reason="cleanup_failed", detail={"error": str(exc)},
+            action="error",
+            target="queue",
+            outcome="failed",
+            reason="cleanup_failed",
+            detail={"error": str(exc)},
         )
     # ASM CR-2: daemon=available must hold before run=running is set.
     core.aria2_ensure_daemon(port=port)
@@ -97,15 +100,21 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         core.deduplicate_active_transfers(port=port)
     except Exception as exc:
         core.record_action(
-            action="error", target="queue", outcome="failed",
-            reason="deduplicate_failed", detail={"error": str(exc)},
+            action="error",
+            target="queue",
+            outcome="failed",
+            reason="deduplicate_failed",
+            detail={"error": str(exc)},
         )
     try:
         core.reconcile_live_queue(port=port, timeout=5, adopt_missing=True)
     except Exception as exc:
         core.record_action(
-            action="error", target="queue", outcome="failed",
-            reason="reconcile_failed", detail={"error": str(exc)},
+            action="error",
+            target="queue",
+            outcome="failed",
+            reason="reconcile_failed",
+            detail={"error": str(exc)},
         )
     with core.storage_locked():
         state = core.load_state()
@@ -124,8 +133,11 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             core.aria2_set_max_download_limit(gid, cap_bytes_per_sec, port=port)
         except Exception as exc:
             core.record_action(
-                action="error", target="queue_item", outcome="failed",
-                reason="set_download_limit_failed", detail={"gid": gid, "error": str(exc)},
+                action="error",
+                target="queue_item",
+                outcome="failed",
+                reason="set_download_limit_failed",
+                detail={"gid": gid, "error": str(exc)},
             )
 
     # ASM CR-5: at most max_simultaneous_downloads jobs in the active tier.
@@ -134,15 +146,22 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
     limit = core.max_simultaneous_downloads()
     if limit > 0:
         try:
-            core.aria2_change_global_option({"max-concurrent-downloads": str(limit)}, port=port)
+            core.aria2_change_global_option(
+                {"max-concurrent-downloads": str(limit)}, port=port
+            )
         except Exception as exc:
             core.record_action(
-                action="error", target="queue", outcome="failed",
-                reason="set_concurrency_failed", detail={"error": str(exc)},
+                action="error",
+                target="queue",
+                outcome="failed",
+                reason="set_concurrency_failed",
+                detail={"error": str(exc)},
             )
 
     def _finalize_primary_state(
-        items_snapshot: list[dict[str, Any]], active_infos: list[dict[str, Any]], poll_ok: bool = True
+        items_snapshot: list[dict[str, Any]],
+        active_infos: list[dict[str, Any]],
+        poll_ok: bool = True,
     ) -> None:
         current = core.load_state()
         current["running"] = bool(current.get("running"))
@@ -218,20 +237,24 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
         gids = [gid for _, gid in pollable]
         try:
             calls = [
-                {"methodName": "aria2.tellStatus", "params": [gid]}
-                for gid in gids
+                {"methodName": "aria2.tellStatus", "params": [gid]} for gid in gids
             ]
             batch_results = core.aria2_multicall(calls, port=port, timeout=10)
             for gid, result in zip(gids, batch_results):
                 if isinstance(result, list) and result:
                     results_map[gid] = result[0]
                 else:
-                    results_map[gid] = RuntimeError(f"unexpected multicall result: {result}")
+                    results_map[gid] = RuntimeError(
+                        f"unexpected multicall result: {result}"
+                    )
         except Exception as exc:
             # Fallback: sequential calls if multicall fails
             core.record_action(
-                action="error", target="queue", outcome="failed",
-                reason="multicall_failed", detail={"error": str(exc), "fallback": "sequential"},
+                action="error",
+                target="queue",
+                outcome="failed",
+                reason="multicall_failed",
+                detail={"error": str(exc), "fallback": "sequential"},
             )
             for _, gid in pollable:
                 try:
@@ -377,6 +400,7 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
 
         # Auto-retry: re-queue error items that haven't exhausted retries
         from .contracts import pref_value
+
         max_retries = int(pref_value("max_retries", 3) or 3)
         backoff = int(pref_value("retry_backoff_seconds", 30) or 30)
         now_ts = time.time()
@@ -396,7 +420,14 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 before_item = dict(item)
                 item["retry_count"] = retry_count + 1
                 item["status"] = "queued"
-                for key in ("gid", "error_code", "error_message", "error_at", "live_status", "rpc_failures"):
+                for key in (
+                    "gid",
+                    "error_code",
+                    "error_message",
+                    "error_at",
+                    "live_status",
+                    "rpc_failures",
+                ):
                     item.pop(key, None)
                 item["next_retry_at"] = now_ts + backoff * (retry_count + 1)
                 core.record_action(
@@ -428,9 +459,13 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 started = item.get("distribute_started_at", "")
                 if started:
                     try:
-                        start_dt = datetime.datetime.strptime(started[:19], "%Y-%m-%dT%H:%M:%S")
+                        start_dt = datetime.datetime.strptime(
+                            started[:19], "%Y-%m-%dT%H:%M:%S"
+                        )
                         start_dt = start_dt.replace(tzinfo=datetime.timezone.utc)
-                        age_hours = (datetime.datetime.now(datetime.timezone.utc) - start_dt).total_seconds() / 3600
+                        age_hours = (
+                            datetime.datetime.now(datetime.timezone.utc) - start_dt
+                        ).total_seconds() / 3600
                         if age_hours > max_seed_hours:
                             should_expire = True
                     except (ValueError, TypeError):
@@ -447,7 +482,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                         core.aria2_remove(seed_gid, port=port)
                     except Exception as exc:
                         core.record_action(
-                            action="error", target="queue_item", outcome="failed",
+                            action="error",
+                            target="queue_item",
+                            outcome="failed",
                             reason="seed_remove_failed",
                             detail={"gid": seed_gid, "error": str(exc)},
                         )
@@ -455,10 +492,13 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                 if torrent_path:
                     try:
                         import os
+
                         os.remove(torrent_path)
                     except Exception as exc:
                         core.record_action(
-                            action="error", target="queue_item", outcome="failed",
+                            action="error",
+                            target="queue_item",
+                            outcome="failed",
                             reason="torrent_file_remove_failed",
                             detail={"path": torrent_path, "error": str(exc)},
                         )
@@ -470,8 +510,14 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     outcome="changed",
                     reason="seed_expiration",
                     before={},
-                    after={"item_id": item.get("id"), "infohash": item.get("distribute_infohash")},
-                    detail={"item_id": item.get("id"), "infohash": item.get("distribute_infohash")},
+                    after={
+                        "item_id": item.get("id"),
+                        "infohash": item.get("distribute_infohash"),
+                    },
+                    detail={
+                        "item_id": item.get("id"),
+                        "infohash": item.get("distribute_infohash"),
+                    },
                 )
 
         current_running_infos = list(running_infos)
@@ -479,7 +525,9 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
             disk_ok, disk_percent = check_disk_space()
             if not disk_ok:
                 core.record_action(
-                    action="error", target="queue", outcome="blocked",
+                    action="error",
+                    target="queue",
+                    outcome="blocked",
                     reason="disk_full",
                     detail={"disk_usage_percent": disk_percent},
                 )
@@ -494,10 +542,14 @@ def process_queue(port: int = 6800) -> list[dict[str, Any]]:
                     continue
                 before_item = dict(item)
                 try:
-                    gid = core.aria2_add_download(item, cap_bytes_per_sec=cap_bytes_per_sec, port=port)
+                    gid = core.aria2_add_download(
+                        item, cap_bytes_per_sec=cap_bytes_per_sec, port=port
+                    )
                 except Exception as exc:
                     core.record_action(
-                        action="error", target="queue_item", outcome="failed",
+                        action="error",
+                        target="queue_item",
+                        outcome="failed",
                         reason="add_download_failed",
                         detail={"item_id": item.get("id"), "error": str(exc)},
                     )
