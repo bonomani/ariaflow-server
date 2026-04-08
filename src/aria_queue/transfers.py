@@ -12,6 +12,18 @@ def _core() -> Any:
     return core
 
 
+def _rpc_failure_message(action: str, exc: BaseException) -> str:
+    text = str(exc).strip()
+    if text:
+        return text
+    name = exc.__class__.__name__.lower()
+    if "timeout" in name:
+        return f"aria2 {action} RPC timed out"
+    if "connection" in name:
+        return f"aria2 {action} RPC connection failed"
+    return f"aria2 {action} RPC failed"
+
+
 def dedup_active_transfer_action() -> str:
     from .contracts import load_declaration
 
@@ -143,7 +155,7 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
             core.aria2_pause(gid, port=port, timeout=5)
             paused.append(gid)
         except Exception as exc:
-            errors.append(str(exc))
+            errors.append(_rpc_failure_message("pause", exc))
             continue
     with storage_locked():
         state = core.load_state()
@@ -207,7 +219,7 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
             core.aria2_unpause(gid, port=port, timeout=5)
             resumed.append(gid)
         except Exception as exc:
-            errors.append(str(exc))
+            errors.append(_rpc_failure_message("resume", exc))
             continue
     with storage_locked():
         state = core.load_state()
