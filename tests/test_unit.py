@@ -523,6 +523,58 @@ class TestPauseActiveTransfer(IsolatedTestCase):
         self.assertFalse(result["paused"])
         self.assertEqual(result["reason"], "no_active_transfer")
 
+    @patch("aria_queue.core.aria2_pause", side_effect=RuntimeError("rpc timeout"))
+    @patch("aria_queue.core.aria2_tell_active", return_value=[])
+    def test_pause_failure_reports_reason(
+        self, _tell_active: MagicMock, _pause: MagicMock
+    ) -> None:
+        from aria_queue.core import (
+            add_queue_item,
+            ensure_storage,
+            load_queue,
+            pause_active_transfer,
+            save_queue,
+        )
+
+        ensure_storage()
+        add_queue_item("https://example.com/file.bin")
+        items = load_queue()
+        items[0]["status"] = "active"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+
+        result = pause_active_transfer()
+        self.assertFalse(result["paused"])
+        self.assertEqual(result["reason"], "pause_failed")
+        self.assertIn("rpc timeout", result["message"])
+
+
+class TestResumeActiveTransfer(IsolatedTestCase):
+    @patch("aria_queue.core.aria2_unpause", side_effect=RuntimeError("rpc timeout"))
+    @patch("aria_queue.core.aria2_tell_active", return_value=[])
+    def test_resume_failure_reports_reason(
+        self, _tell_active: MagicMock, _unpause: MagicMock
+    ) -> None:
+        from aria_queue.core import (
+            add_queue_item,
+            ensure_storage,
+            load_queue,
+            resume_active_transfer,
+            save_queue,
+        )
+
+        ensure_storage()
+        add_queue_item("https://example.com/file.bin")
+        items = load_queue()
+        items[0]["status"] = "paused"
+        items[0]["gid"] = "gid-1"
+        save_queue(items)
+
+        result = resume_active_transfer()
+        self.assertFalse(result["resumed"])
+        self.assertEqual(result["reason"], "resume_failed")
+        self.assertIn("rpc timeout", result["message"])
+
 
 # ── scheduler.py ────────────────────────────────────────────────────
 

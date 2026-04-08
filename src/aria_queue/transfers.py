@@ -134,13 +134,16 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
         return {"paused": False, "reason": "no_active_transfer"}
     before = {"state": state, "active": active_jobs}
     paused: list[str] = []
-    for gid in gids or queue_gids or [str(state.get("active_gid") or "")]:
+    errors: list[str] = []
+    targets = gids or queue_gids or [str(state.get("active_gid") or "")]
+    for gid in targets:
         if not gid:
             continue
         try:
             core.aria2_pause(gid, port=port, timeout=5)
             paused.append(gid)
-        except Exception:
+        except Exception as exc:
+            errors.append(str(exc))
             continue
     with storage_locked():
         state = core.load_state()
@@ -156,6 +159,10 @@ def pause_active_transfer(port: int = 6800) -> dict[str, Any]:
         core.save_state(state)
         core.save_queue(items)
     payload = {"paused": bool(paused), "gids": paused, "result": {"paused": paused}}
+    if not paused:
+        payload["reason"] = "pause_failed"
+        if errors:
+            payload["message"] = errors[0]
     core.record_action(
         action="pause",
         target="active_transfer",
@@ -187,6 +194,7 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         return {"resumed": False, "reason": "no_active_transfer"}
     before = {"state": state, "active": active_jobs}
     resumed: list[str] = []
+    errors: list[str] = []
     resume_targets = (
         gids
         or [str(item.get("gid") or "") for item in queued_items if item.get("gid")]
@@ -198,7 +206,8 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         try:
             core.aria2_unpause(gid, port=port, timeout=5)
             resumed.append(gid)
-        except Exception:
+        except Exception as exc:
+            errors.append(str(exc))
             continue
     with storage_locked():
         state = core.load_state()
@@ -217,6 +226,10 @@ def resume_active_transfer(port: int = 6800) -> dict[str, Any]:
         "gids": resumed,
         "result": {"resumed": resumed},
     }
+    if not resumed:
+        payload["reason"] = "resume_failed"
+        if errors:
+            payload["message"] = errors[0]
     core.record_action(
         action="resume",
         target="active_transfer",
