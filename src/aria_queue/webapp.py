@@ -78,7 +78,7 @@ def _presented_status_name(status: str | None) -> str:
     return value or "queued"
 
 
-def _overlay_aria2_transfer_fields(
+def _aria2_overlay_transfer_fields(
     item: dict[str, object], info: dict[str, object]
 ) -> None:
     aria2_to_item = {
@@ -154,7 +154,7 @@ def _present_status_items(
             item["status_source"] = "aria2"
             item["error_code"] = info.get("errorCode")
             item["error_message"] = info.get("errorMessage")
-            _overlay_aria2_transfer_fields(item, info)
+            _aria2_overlay_transfer_fields(item, info)
         presented.append(item)
     return presented
 
