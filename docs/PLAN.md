@@ -2,26 +2,33 @@
 
 ## Open items
 
-### [P3] BG-11: Residual under-specified fields after BG-10
+### [P3] BG-11: Aspirational fields the frontend wants that don't exist in backend code
 
-**What:** Frontend filed BG-11 in `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` after the BG-10 sweep. Their `tests/test_openapi_alignment.py` still surfaces 14 field-level gaps across 5 endpoints — mostly fields the BG-10 sweep missed because they live in shapes BG-10 didn't touch.
+**What:** BG-11 listed 14 missing fields. The 8 fields that actually exist in code are now declared in openapi.yaml and pinned by TIC tests. The remaining 6 are **aspirational** — the frontend wants them but the backend code doesn't return them. They are feature requests, not documentation drift.
 
-**Affected endpoints (per the frontend file):**
-| Endpoint | Missing in openapi.yaml |
-|---|---|
-| `GET /api/status` | `created_at`, `enabled`, `output`, `percent`, `pid`, `reachable` |
-| `GET /api/declaration` | `policy`, `ucc` (top-level buckets) |
-| `GET /api/sessions` | `ended_at` |
-| `GET /api/peers` | `ip` |
-| `GET /api/downloads/archive` | `created_at`, `ended_at`, `next_cursor`, `output` |
+**Real fields shipped (not in this item — already done):**
+- `/api/status items[].created_at`, `output`, `priority` — added to QueueItem component
+- `/api/status ariaflow.{reachable,version,schema_version,pid}` — new AriaflowHealth component
+- `/api/status aria2.{reachable,version,error}` — new Aria2Health component
+- `/api/status active.{gid,url,status,percent,…}` — new ActiveTransfer component
+- `/api/downloads/archive items[]` — now `$ref`s QueueItem
 
-**Where:** `src/aria_queue/openapi_schemas.py` for each endpoint. Some fields require checking the actual code path that builds them (e.g. `/api/peers ip` — the `_resolve_dns_sd` builder uses `host`, not `ip`; the frontend may be expecting a key that doesn't exist).
+**Aspirational fields requiring backend code changes (this plan item):**
+- `/api/declaration: policy`, `ucc` (top-level buckets) — `DEFAULT_DECLARATION` only has `meta`, `uic`, `targets`. Adding empty buckets is a 2-line `contracts.py` change but it should be a deliberate design decision, not a doc fix.
+- `/api/sessions items[].ended_at` — `_log_session_history` writes `closed_at`. Either rename `closed_at`→`ended_at` or have the frontend rename its expectation.
+- `/api/peers items[].ip` — `_resolve_dns_sd` writes `host`. Same rename question.
+- `/api/status enabled` — does not appear anywhere in `src/aria_queue/`. Probably from `aria2_status()`; the frontend may want a derived `enabled` flag combining `reachable` + something else. Needs frontend conversation.
+- `/api/downloads/archive: ended_at`, `next_cursor` — the archive endpoint uses limit-based slicing, not cursor pagination. Adding `next_cursor` is a real feature.
 
-**Why:** Closes the last drift between the OpenAPI spec and the runtime shape. Once 0, the frontend can tighten `test_openapi_alignment.py` from `warnings.warn` to a hard assertion.
+**Where:** Each fix touches a different file (`contracts.py`, `state.py`, `discovery.py`, `routes/downloads.py`). They are unrelated changes that should not be bundled.
 
-**Scope:** Smaller than BG-10 — each endpoint is 1-6 fields. Verify each missing field actually exists in the code path before adding it (some may be frontend-side aspirations rather than real omissions).
+**Decision needed:** For each of the 6 fields, decide one of:
+- **Rename in backend** to match the frontend's expectation (cheap, breaking for any other consumer)
+- **Rename frontend expectation** in `../ariaflow-web/docs/schemas/*.json` (frontend agent's responsibility)
+- **Implement the feature** (e.g. real cursor pagination)
+- **Decline** with a note in `BACKEND_GAPS_REQUESTED_BY_FRONTEND.md`'s explicit non-requests table
 
-**Verify:** Same pattern as BG-10 — add a live-shape pinning test for each fixed endpoint, then `make verify` clean.
+This is not a single commit — it's 6 small decisions. Frontend agent should weigh in.
 
 ### [P3] Pre-existing lint and format debt blocking a strict `make ci`
 
