@@ -59,7 +59,6 @@ def _api_discovery() -> dict[str, object]:
                     "path": "/api/declaration",
                     "description": "UIC declaration (gates, preferences)",
                 },
-                {"path": "/api/options", "description": "Alias for /api/declaration"},
                 {"path": "/api/lifecycle", "description": "Install/service status"},
                 {
                     "path": "/api/downloads/{id}/files",

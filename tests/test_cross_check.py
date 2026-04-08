@@ -406,7 +406,7 @@ class TestDeclarationRoundtrip(CrossCheckBase):
         self.assertEqual(bw["config"]["down_free_percent"], 40)
         self.assertAlmostEqual(bw["config"]["down_use_percent"], 0.6)
 
-    def test_options_alias_matches_declaration(self) -> None:
+    def test_declaration_reads_are_consistent(self) -> None:
         _, decl = _req(f"{self.base}/api/declaration")
         _, opts = _req(f"{self.base}/api/declaration")
         decl.pop("_request_id", None)

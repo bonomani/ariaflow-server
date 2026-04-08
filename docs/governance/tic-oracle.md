@@ -178,7 +178,7 @@ Core scheduler, state machine, and UCC contract tests.
 | # | Test | Intent | Oracle | Trace Target |
 |---|---|---|---|---|
 | 110 | `test_get_declaration` | Get declaration returns UCC-shaped response | code 200, meta.contract == "UCC" | UIC: declaration CRUD |
-| 111 | `test_get_options_is_alias` | /api/declaration is alias for /api/declaration | declaration == options (minus request_id) | UIC: declaration CRUD |
+| 111 | `test_get_declaration_is_stable` | Repeated GET /api/declaration responses are equivalent apart from request id | declaration == second read (minus request_id) | UIC: declaration CRUD |
 | 112 | `test_save_declaration` | Save declaration returns saved confirmation | code 200, saved == True | UIC: declaration CRUD |
 | 113 | `test_save_declaration_roundtrip` | Save+reload preserves custom preference | test_pref in reloaded preference names | UIC: declaration persistence |
 
@@ -245,7 +245,7 @@ Core scheduler, state machine, and UCC contract tests.
 | 140 | `test_get_api_log_default` | GET /api/log returns items list | code 200, items is list | UCC: audit trail |
 | 141 | `test_get_api_log_with_limit` | GET /api/log?limit=5 respects limit | code 200, len(items) <= 5 | UCC: audit trail |
 | 142 | `test_get_api_declaration` | GET /api/declaration returns UCC-shaped declaration | code 200, meta.contract == "UCC", uic.gates/preferences | UIC: declaration CRUD |
-| 143 | `test_get_api_options` | GET /api/declaration returns uic section | code 200, uic present | UIC: declaration CRUD |
+| 143 | `test_get_api_declaration_fields` | GET /api/declaration returns uic section | code 200, uic present | UIC: declaration CRUD |
 | 144 | `test_get_api_lifecycle` | GET /api/lifecycle returns component statuses | code 200, ariaflow.meta.contract == "UCC" | UCC: lifecycle |
 | 145 | `test_get_api_item_files_no_gid` | GET /api/downloads/{id}/files without gid returns 400 | code 400, error == "no_gid" | UCC: error semantics |
 | 146 | `test_get_api_item_files_with_gid` | GET /api/downloads/{id}/files with gid returns file list | code 200, len(files) == 1 | UCC: file selection |
@@ -706,7 +706,7 @@ Validates the allowed_actions state table for each item status.
 |---|---|---|---|---|
 | 277 | `test_saved_declaration_readable` | Save then reload preserves all preferences | saved_names == reloaded_names | UIC: declaration persistence |
 | 278 | `test_bandwidth_config_reflects_declaration_change` | Bandwidth config reflects declaration preference change | down_free_percent == 40, down_use_percent == 0.6 | UIC: declaration→config |
-| 279 | `test_options_alias_matches_declaration` | /api/declaration matches /api/declaration | decl == opts | UIC: declaration CRUD |
+| 279 | `test_declaration_reads_are_consistent` | Repeated /api/declaration reads match apart from request id | decl == opts | UIC: declaration CRUD |
 | 280 | `test_declaration_gate_change_reflected` | Custom gate persisted in declaration | "xc_test_gate" in gate_names | UIC: declaration persistence |
 | 281 | `test_declaration_preference_value_change_reflected` | Preference value change persisted | max_simultaneous_downloads.value == 5 | UIC: declaration persistence |
 | 282 | `test_all_bandwidth_prefs_in_declaration_and_config` | All bandwidth prefs in declaration, all config keys in bandwidth | expected subset of names, expected_config subset of keys | UIC: declaration persistence |

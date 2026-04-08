@@ -740,7 +740,7 @@ class TestDeclaration(APIServerPerTestCase):
         self.assertIn("uic", body)
         self.assertEqual(body["meta"]["contract"], "UCC")
 
-    def test_get_options_is_alias(self) -> None:
+    def test_get_declaration_is_stable(self) -> None:
         _, decl = _request(f"{self.base}/api/declaration")
         _, opts = _request(f"{self.base}/api/declaration")
         decl.pop("_request_id", None)
@@ -1165,8 +1165,8 @@ class TestGetEndpoints(APIServerTestCase):
         self.assertIn("gates", body["uic"])
         self.assertIn("preferences", body["uic"])
 
-    # 6. GET /api/declaration (alias)
-    def test_get_api_options(self) -> None:
+    # 6. GET /api/declaration fields
+    def test_get_api_declaration_fields(self) -> None:
         code, body, _ = _req(f"{self.base}/api/declaration")
         self.assertEqual(code, 200)
         self.assertIn("uic", body)

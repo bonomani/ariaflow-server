@@ -4,7 +4,7 @@ Headless queue driver for `aria2c`.
 
 **Targets:** Linux, WSL, macOS  
 **Python:** >= 3.10, zero dependencies  
-**Version:** 0.1.67
+**Version:** 0.1.148
 
 **Features:**
 
