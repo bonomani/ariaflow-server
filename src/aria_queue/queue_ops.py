@@ -480,6 +480,7 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             if not rpc_ok:
                 item["gid"] = None
             item.pop("live_status", None)
+        item.pop("paused_at", None)
         item["resumed_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         core.save_queue(items)
         core.record_action(
@@ -505,12 +506,13 @@ def resume_queue_item(item_id: str, port: int = 6800) -> dict[str, Any]:
             if new_gid:
                 with storage_locked():
                     live_items = core.load_queue()
-                    for it in live_items:
-                        if it.get("id") == item_id:
-                            it["gid"] = new_gid
-                            it["status"] = "active"
-                            break
-                    core.save_queue(live_items)
+                for it in live_items:
+                    if it.get("id") == item_id:
+                        it["gid"] = new_gid
+                        it["status"] = "active"
+                        it.pop("paused_at", None)
+                        break
+                core.save_queue(live_items)
                 _aria2_apply_priority(new_gid, int(item.get("priority", 0)))
                 item["gid"] = new_gid
                 item["status"] = "active"
@@ -628,6 +630,7 @@ def retry_queue_item(item_id: str) -> dict[str, Any]:
             "recovered",
             "recovered_at",
             "recovery_session_id",
+            "paused_at",
         ):
             item.pop(key, None)
         state = core.load_state()
