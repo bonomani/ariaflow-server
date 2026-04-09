@@ -41,17 +41,23 @@ def _avahi_publish_path() -> str | None:
 def _detect_backend() -> str | None:
     """Detect available mDNS backend: 'dns-sd', 'avahi', or None.
 
+    On WSL, tries dns-sd.exe via Windows interop before falling back to avahi.
     Does not check if the backend actually works — the startup
     verification in advertise_http_service handles that (polls the
     process after 0.2s, falls back to no-op if it exited).
     """
+    from .platform.detect import is_wsl
+
     system = platform.system()
     if system == "Darwin" and _dns_sd_path():
         return "dns-sd"
     if system == "Windows" and _dns_sd_path():
         return "dns-sd"
-    if system == "Linux" and _avahi_publish_path():
-        return "avahi"
+    if system == "Linux":
+        if is_wsl() and _dns_sd_path():
+            return "dns-sd"
+        if _avahi_publish_path():
+            return "avahi"
     return None
 
 

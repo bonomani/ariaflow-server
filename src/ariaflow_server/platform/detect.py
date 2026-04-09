@@ -29,6 +29,26 @@ def is_wsl() -> bool:
         return False
 
 
+def is_wsl2() -> bool:
+    """Detect WSL2 specifically (NATed networking)."""
+    if not is_wsl():
+        return False
+    try:
+        text = Path("/proc/version").read_text(encoding="utf-8", errors="replace")
+        return "wsl2" in text.lower()
+    except OSError:
+        return False
+
+
+def is_nated() -> bool:
+    """Detect if the network interface is NATed (WSL2, Docker, etc.).
+
+    WSL2 uses a virtual NAT switch — mDNS advertisements from inside WSL2
+    won't be visible on the host LAN without mirrored networking.
+    """
+    return is_wsl2()
+
+
 def wsl_windows_downloads() -> Path | None:
     """Return the Windows Downloads folder as a WSL path, or None."""
     if not is_wsl():
