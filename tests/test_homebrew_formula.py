@@ -33,7 +33,8 @@ class HomebrewFormulaScriptTests(unittest.TestCase):
         self.assertIn(
             'head "https://github.com/bonomani/ariaflow-server.git", branch: "main"', formula
         )
-        self.assertIn('PYTHONPATH="#{libexec}/src:${PYTHONPATH}"', formula)
+        self.assertIn('"$VENV/bin/python3" -m ariaflow_server', formula)
+        self.assertIn('PYTHONPATH="#{libexec}/src:$SITE:${PYTHONPATH}"', formula)
         self.assertNotIn("#{PYTHONPATH}", formula)
 
 
