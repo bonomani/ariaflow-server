@@ -142,6 +142,39 @@ brew services start ariaflow-web
 
 Tap formulas in `bonomani/homebrew-ariaflow-server` update automatically on each release.
 
+## Platform dependencies
+
+| Dependency | macOS | Windows | Linux | WSL2 |
+|---|---|---|---|---|
+| Python ≥3.10 | required | required | required | required |
+| aria2 | `brew install aria2` | [manual](https://aria2.github.io) | `apt install aria2` | `apt install aria2` |
+| portalocker | auto (pip) | auto (pip) | auto (pip) | auto (pip) |
+| Bonjour/mDNS | built-in | [iTunes](https://support.apple.com/kb/DL999) or Bonjour SDK | `apt install avahi-daemon avahi-utils` | `dns-sd.exe` via interop (needs Bonjour on Windows) |
+| networkquality | built-in (macOS 12+) | n/a | n/a | n/a |
+
+Bonjour is **optional** — peer discovery is disabled without it. Everything else works.
+
+### WSL2 notes
+
+- WSL2 is NATed by default — mDNS advertisements won't reach the host LAN
+- Enable mirrored networking in `%USERPROFILE%\.wslconfig` for LAN visibility:
+  ```ini
+  [wsl2]
+  networkingMode=mirrored
+  ```
+- Without mirrored networking, ariaflow-server uses `dns-sd.exe` via Windows interop (if Bonjour is installed on Windows)
+- Config dir defaults to `~/.config/ariaflow-server/` (override: `ARIAFLOW_DIR` env var)
+
+## Upgrading from pre-0.1.163
+
+Breaking changes in v0.1.163:
+
+- **Config dir**: auto-migrated from `~/.config/aria-queue/` → `~/.config/ariaflow-server/`
+- **Env var**: `ARIAFLOW_DIR` replaces `ARIA_QUEUE_DIR` (both accepted)
+- **API keys**: `"ariaflow"` → `"ariaflow-server"` in JSON responses (`/api/status`, `/api/lifecycle`, `/api/meta`)
+- **Bonjour**: service type changed to `_ariaflow-server._tcp`
+- **Python module**: `aria_queue` → `ariaflow_server`
+
 ## Release
 
 See [`docs/RELEASE.md`](./docs/RELEASE.md).

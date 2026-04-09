@@ -2,22 +2,6 @@
 
 
 
-### [Medium] G-9: Add Windows/WSL setup to README
-
-**What:** Add a "Platform setup" section to README covering:
-- Windows: Bonjour requirement (iTunes or standalone SDK) for peer discovery
-- WSL2: mirrored networking for LAN visibility, `dns-sd.exe` interop
-- `ARIAFLOW_DIR` env var override
-- Software dependencies table by OS
-**Where:** `README.md`
-**Why:** No documentation for Windows/WSL users. Bonjour silently disabled without guidance.
-**Scope:** ~30 lines added to README
-**Depends on:** Nothing
-
----
-
----
-
 ### [Low] G-4: Report Bonjour availability in /api/status
 
 **What:** Add `"discovery": {"available": bool, "backend": str|null}` to the `/api/status` response
@@ -28,18 +12,6 @@
 **TIC:** Register in tic-oracle.md
 
 ---
-
-### [Low] G-10: Add migration section to README
-
-**What:** Document breaking changes for users upgrading from pre-0.1.163:
-- Config dir auto-migrated (`~/.config/aria-queue/` → `~/.config/ariaflow-server/`)
-- Env var: `ARIAFLOW_DIR` replaces `ARIA_QUEUE_DIR` (both accepted)
-- API keys: `"ariaflow"` → `"ariaflow-server"` in responses (breaking)
-- Bonjour: `_ariaflow-server._tcp` (breaking for peer discovery)
-**Where:** `README.md`
-**Why:** No migration guide for breaking API changes.
-**Scope:** ~20 lines
-**Depends on:** G-9 (combine in same README update)
 
 ---
 
