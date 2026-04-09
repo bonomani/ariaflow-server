@@ -4,6 +4,12 @@
 - On ANY repo or directory other than this one (ariaflow-server), you MAY ONLY run read-only commands: `cat`, `head`, `grep`, `find`, `ls`, `git log`, `git show`, `git diff` (without write flags).
 - NEVER run mutating commands outside this repo: `git add`, `git commit`, `git push`, `git pull`, `git checkout`, `git reset`, `rm`, `mv`, `cp`, `sed`, `pip install`, or any command that modifies files, state, or history.
 
+## Testing policy
+- Every new feature, bug fix, or behavior change MUST include tests in the same commit.
+- Do not ship code without tests — no exceptions.
+- Tests must cover the new code paths, not just pass existing ones.
+- Register new tests in `docs/governance/tic-oracle.md` with Intent / Oracle / Trace Target.
+
 ## Cross-repo boundary — ariaflow-web (frontend)
 - The frontend repo is at /home/bc/repos/github/bonomani/ariaflow-web
 - The frontend is a separate project. All communication is through the API.
