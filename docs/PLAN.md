@@ -1,6 +1,99 @@
 # Plan
 
-No open items.
+### [High] Rename ariaflow → ariaflow-server
+
+**What:** Rename the package, CLI command, service names, Homebrew refs,
+and all documentation from `ariaflow` to `ariaflow-server`.
+
+**Why:** Disambiguate the backend server from the frontend (`ariaflow-web`).
+
+**Preserves:**
+- Python module: stays `aria_queue` (no internal rename)
+- Bonjour: stays `_ariaflow._tcp` (protocol identifier, breaking to change)
+- API response key `"ariaflow"` in `/api/status`: stays (coordinate with frontend later)
+
+---
+
+#### Step 1: Package & CLI
+
+**Where:**
+- `pyproject.toml:6` — `name = "ariaflow"` → `"ariaflow-server"`
+- `pyproject.toml:41` — entry point `ariaflow =` → `ariaflow-server =`
+- `pyproject.toml:32-34` — GitHub URLs → `bonomani/ariaflow-server`
+- `src/aria_queue/cli.py:17` — `prog="ariaflow"` → `prog="ariaflow-server"`
+**Scope:** 4 files, ~6 lines
+
+---
+
+#### Step 2: Service/daemon names
+
+**Where:**
+- `src/aria_queue/platform/linux.py:8` — `ariaflow-aria2.service` → `ariaflow-server-aria2.service`
+- `src/aria_queue/platform/windows.py:9` — `ariaflow-aria2` → `ariaflow-server-aria2`
+- `src/aria_queue/platform/launchd.py:9` — `com.ariaflow.aria2` → `com.ariaflow-server.aria2`
+**Scope:** 3 files, ~3 lines
+
+---
+
+#### Step 3: Homebrew & CI
+
+**Where:**
+- `src/aria_queue/install.py` — `brew install ariaflow` → `brew install ariaflow-server`
+- `.github/workflows/macos-install.yml` — tap/install commands
+- `.github/workflows/release.yml` — formula generation
+- `scripts/homebrew_formula.py` — URL and name references
+**Scope:** 4 files, ~15 lines
+
+---
+
+#### Step 4: Documentation
+
+**Where:**
+- `README.md` — title, command examples, URLs
+- `CONTRIBUTING.md` — clone URL
+- `SECURITY.md` — advisory URLs
+- `docs/ARCHITECTURE.md`, `docs/ALL_VARIABLES.md` — references
+- `openapi.yaml` (both copies) — info/title
+- `docs/governance/` — all governance docs
+**Scope:** ~10 files, ~30 lines
+
+---
+
+#### Step 5: Tests
+
+**Where:** All test files that reference `ariaflow` in strings
+(endpoint assertions, CLI prog name, homebrew formula, lifecycle mocks).
+- `tests/test_unit.py`, `test_api.py`, `test_cli.py`, `test_web.py`,
+  `test_scenarios.py`, `test_homebrew_formula.py`, `test_platform.py`
+**Scope:** ~7 files, ~50 lines
+**Approach:** Global find-replace `"ariaflow"` → `"ariaflow-server"` in
+test strings, then manually verify each change (some should stay, e.g.
+`_ariaflow._tcp`, `aria_queue` module name, `"ariaflow"` API key).
+
+---
+
+#### Step 6: Scripts
+
+**Where:**
+- `scripts/publish.py:13` — `REPO = "bonomani/ariaflow"`
+- `scripts/homebrew_formula.py` — all references
+**Scope:** 2 files, ~5 lines
+
+---
+
+#### Step 7: Cleanup
+
+- Delete `src/ariaflow.egg-info/` if present (will regenerate)
+- Run `pip install -e .` to regenerate
+- `python -m pytest tests/ -x -q` — full pass
+- Remove `docs/GAPS-RENAME.md` (done)
+
+---
+
+**Execution order:** 1 → 2 → 3 → 4 → 5 → 6 → 7 (single commit for atomicity)
+**Total scope:** ~25 files, ~110 lines changed
+**Risk:** Homebrew tap needs coordinated update. PyPI is a new package name.
+Existing `pip install ariaflow` installs will not auto-upgrade.
 
 ---
 
