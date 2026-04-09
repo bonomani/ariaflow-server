@@ -27,13 +27,13 @@ external_controls:
   rate_limiting_and_budget_control: implemented
   privacy_and_data_boundary_control: not_applicable
 
-bgs_version_ref: bgs@58c1467
+bgs_version_ref: bgs@38c0bb6
 member_version_refs:
-  biss: biss@58c1467
-  ucc: ucc@58c1467
-  uic: uic@58c1467
-  asm: asm@58c1467
-  tic: tic@58c1467
+  biss: biss@38c0bb6
+  ucc: ucc@38c0bb6
+  uic: uic@38c0bb6
+  asm: asm@38c0bb6
+  tic: tic@38c0bb6
 
 read_next:
   - "./docs/ARCHITECTURE.md"

@@ -1,15 +1,6 @@
 # Plan
 
 
-### [Medium] G-8: Update BGS version refs
-
-**What:** Check if BGS upstream (`bonomani/bgs`) has new SHAs. If so, update `bgs_version_ref` and all `member_version_refs` in BGS.md + bgs-decision.yaml, then re-run `check-bgs-compliance.py`
-**Where:** `docs/governance/BGS.md`, `docs/governance/bgs-decision.yaml`
-**Why:** Pinned refs `bgs@58c1467` may be outdated. Stale refs mean the claim references a version of BGS that may have evolved.
-**Scope:** 2 files, ~10 lines. Requires read access to `../BGSPrivate/`
-**Depends on:** Nothing
-
----
 
 ### [Medium] G-9: Add Windows/WSL setup to README
 

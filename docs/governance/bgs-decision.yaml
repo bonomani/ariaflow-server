@@ -11,7 +11,7 @@ decision_reason: >
   covering BISS + ASM + UIC + UCC + TIC is
   BGS-State-Modeled-Governed-Verified.
 
-bgs_version_ref: bgs@58c1467
+bgs_version_ref: bgs@38c0bb6
 
 members_used:
   - BISS
@@ -23,11 +23,11 @@ members_used:
 overlays_used: []
 
 member_version_refs:
-  biss: biss@58c1467
-  ucc: ucc@58c1467
-  uic: uic@58c1467
-  asm: asm@58c1467
-  tic: tic@58c1467
+  biss: biss@38c0bb6
+  ucc: ucc@38c0bb6
+  uic: uic@38c0bb6
+  asm: asm@38c0bb6
+  tic: tic@38c0bb6
 
 external_controls:
   iam_and_authorization: not_applicable
