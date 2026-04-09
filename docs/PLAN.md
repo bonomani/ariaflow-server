@@ -1,6 +1,121 @@
 # Plan
 
-_No open items._
+### [Medium] G-5: Fix hardcoded repo path in write boundary hook
+
+**What:** Replace hardcoded `/home/bc/repos/github/bonomani/ariaflow-server` with `git rev-parse --show-toplevel`
+**Where:** `.claude/settings.json` — PreToolUse Write|Edit hook
+**Why:** Hook breaks if repo cloned to a different path. Any collaborator gets a non-functional hook.
+**Scope:** 1 line changed in settings.json
+**Depends on:** Nothing
+
+---
+
+### [Medium] G-6: Add TIC registration check to commit hook
+
+**What:** Extend the PreToolUse git-commit hook: if `tests/*.py` changed, require `docs/governance/tic-oracle.md` to also be staged
+**Where:** `.claude/settings.json` — PreToolUse Bash hook
+**Why:** 10 tests went unregistered today. The existing `check_tic_coverage.py` catches this in CI but not at commit time.
+**Scope:** ~5 lines added to hook command
+**Depends on:** G-5 (should fix hook portability first)
+
+---
+
+### [Medium] G-8: Update BGS version refs
+
+**What:** Check if BGS upstream (`bonomani/bgs`) has new SHAs. If so, update `bgs_version_ref` and all `member_version_refs` in BGS.md + bgs-decision.yaml, then re-run `check-bgs-compliance.py`
+**Where:** `docs/governance/BGS.md`, `docs/governance/bgs-decision.yaml`
+**Why:** Pinned refs `bgs@58c1467` may be outdated. Stale refs mean the claim references a version of BGS that may have evolved.
+**Scope:** 2 files, ~10 lines. Requires read access to `../BGSPrivate/`
+**Depends on:** Nothing
+
+---
+
+### [Medium] G-9: Add Windows/WSL setup to README
+
+**What:** Add a "Platform setup" section to README covering:
+- Windows: Bonjour requirement (iTunes or standalone SDK) for peer discovery
+- WSL2: mirrored networking for LAN visibility, `dns-sd.exe` interop
+- `ARIAFLOW_DIR` env var override
+- Software dependencies table by OS
+**Where:** `README.md`
+**Why:** No documentation for Windows/WSL users. Bonjour silently disabled without guidance.
+**Scope:** ~30 lines added to README
+**Depends on:** Nothing
+
+---
+
+### [Low] G-1: Add logging to config dir migration
+
+**What:** Log when `~/.config/aria-queue/` is auto-renamed to `~/.config/ariaflow-server/`. Warn on failure instead of silent fallback.
+**Where:** `src/ariaflow_server/storage.py:config_dir()` (~line 22)
+**Why:** Silent migration failure leaves user on wrong config dir with no indication.
+**Scope:** ~5 lines (import logging, add 2 log calls)
+**Depends on:** Nothing
+
+---
+
+### [Low] G-2: Add test for config dir migration
+
+**What:** Test that `config_dir()` renames old dir to new when old exists and new doesn't. Test that it doesn't rename when new already exists.
+**Where:** `tests/test_platform.py` or `tests/test_unit.py`
+**Why:** Migration path has zero test coverage — all tests bypass it via `ARIAFLOW_DIR`.
+**Scope:** 1 new test class, ~20 lines
+**Depends on:** Nothing
+**TIC:** Register in tic-oracle.md
+
+---
+
+### [Low] G-4: Report Bonjour availability in /api/status
+
+**What:** Add `"discovery": {"available": bool, "backend": str|null}` to the `/api/status` response
+**Where:** `src/ariaflow_server/webapp.py:_status_payload()`, `src/ariaflow_server/openapi_schemas.py`
+**Why:** Discovery silently disabled when Bonjour unavailable. Frontend and users have no way to know.
+**Scope:** ~10 lines source + schema + test
+**Depends on:** Nothing
+**TIC:** Register in tic-oracle.md
+
+---
+
+### [Low] G-10: Add migration section to README
+
+**What:** Document breaking changes for users upgrading from pre-0.1.163:
+- Config dir auto-migrated (`~/.config/aria-queue/` → `~/.config/ariaflow-server/`)
+- Env var: `ARIAFLOW_DIR` replaces `ARIA_QUEUE_DIR` (both accepted)
+- API keys: `"ariaflow"` → `"ariaflow-server"` in responses (breaking)
+- Bonjour: `_ariaflow-server._tcp` (breaking for peer discovery)
+**Where:** `README.md`
+**Why:** No migration guide for breaking API changes.
+**Scope:** ~20 lines
+**Depends on:** G-9 (combine in same README update)
+
+---
+
+### [Low] G-7: Renumber TIC oracle sequentially
+
+**What:** Replace sub-IDs (`22a`, `232b`, `428a`) with sequential numbers. Update coverage summary total.
+**Where:** `docs/governance/tic-oracle.md`
+**Why:** Sub-IDs create ambiguity and drift between registered count and total.
+**Scope:** Mechanical renumber, ~50 lines changed
+**Depends on:** Do last — any other TIC changes should land first
+
+---
+
+### [Low] G-11: Test on Python 3.14 in CI
+
+**What:** Add Python 3.14 to the test matrix in `.github/workflows/release.yml` or a separate test workflow
+**Where:** `.github/workflows/release.yml` or new `test.yml`
+**Why:** Homebrew installs Python 3.14 on macOS but CI only tests 3.12.
+**Scope:** ~5 lines in workflow YAML
+**Depends on:** Nothing
+
+---
+
+### [Trivial] G-12: Fix PLAN.md Declined wording
+
+**What:** Update "Single `_ariaflow-server._tcp` service" text to clarify this is the current service type, not a declined one
+**Where:** `docs/PLAN.md` Declined section
+**Why:** Confusing wording after the rename
+**Scope:** 1 line
 
 ---
 
