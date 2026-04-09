@@ -163,17 +163,23 @@ drift will fail the test, not warn.
 `discovery.py` browses for `_ariaflow._tcp` but `bonjour.py` registers as
 `_ariaflow-server._tcp` (changed in commit `bf09621`). The service types
 diverged during the naming alignment. Peer discovery between backends is
-broken.
+broken — `/api/peers` returns no results.
 
 **Desired:**
 - `discovery.py` should browse `_ariaflow-server._tcp` (to find peer backends).
 - Optionally also browse `_ariaflow-dashboard._tcp` (to discover dashboards).
 
-**Impact on ariaflow-dashboard:** The `/api/peers` endpoint returns no
-peers because the backend never discovers anything. The dashboard's peer
-tab is empty even when multiple backends are running.
+**Files to fix:**
+- `src/ariaflow_server/discovery.py` — all occurrences of `_ariaflow._tcp`
+  in browse/resolve commands and regexes (lines ~46, 57, 70, 135, 195, 244).
+  Replace with `_ariaflow-server._tcp`.
 
-**Blocks frontend gap:** (none — pure backend infrastructure).
+**Why this matters for the frontend:** The dashboard uses `/api/peers` as a
+fallback for Bonjour discovery when local mDNS is unavailable (e.g. WSL
+behind NAT, containers, VMs). With BG-15 unfixed, this fallback returns
+nothing, so the dashboard can't discover any peers in those environments.
+
+**Blocks frontend gap:** FE-22.
 
 **Priority:** high.
 
