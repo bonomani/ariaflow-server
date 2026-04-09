@@ -238,7 +238,7 @@ class TestRegressions(IsolatedTestCase):
     def test_regression_storage_lock_closes_handle_on_flock_failure(self) -> None:
         from aria_queue.core import storage_locked
 
-        with patch("aria_queue.core.fcntl.flock", side_effect=OSError("lock failed")):
+        with patch("aria_queue.storage.portalocker.lock", side_effect=OSError("lock failed")):
             with self.assertRaises(OSError):
                 with storage_locked():
                     pass  # should not reach here

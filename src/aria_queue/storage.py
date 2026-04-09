@@ -6,7 +6,7 @@ import os
 import shutil
 import time
 import threading
-import fcntl
+import portalocker
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +62,7 @@ def storage_locked() -> Any:
         if depth == 0 or handle is None:
             handle = storage_lock_path().open("a+", encoding="utf-8")
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                portalocker.lock(handle, portalocker.LOCK_EX)
             except Exception:
                 handle.close()
                 raise
@@ -76,7 +76,7 @@ def storage_locked() -> Any:
             if next_depth == 0:
                 current = getattr(_STORAGE_LOCK_STATE, "handle", None)
                 if current is not None:
-                    fcntl.flock(current.fileno(), fcntl.LOCK_UN)
+                    portalocker.unlock(current)
                     current.close()
                 if hasattr(_STORAGE_LOCK_STATE, "handle"):
                     delattr(_STORAGE_LOCK_STATE, "handle")
