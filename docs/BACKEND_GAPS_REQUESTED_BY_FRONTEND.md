@@ -13,39 +13,12 @@
 
 ---
 
-### BG-12: Remove unused `/api/sessions/new` endpoint
+### BG-12: Remove unused `/api/sessions/new` endpoint — RESOLVED
 
-The `POST /api/sessions/new` endpoint exists in the backend
-(`src/aria_queue/webapp.py:225`, `src/aria_queue/routes/sessions.py:38`,
-documented in `openapi.yaml:1054`, listed in `routes/meta.py:126`) but
-is not called by the ariaflow-web dashboard and there is no plan to
-expose it again. The frontend agent has confirmed (grep of
-`src/ariaflow_web/static/`) that no markup or JS references the
-endpoint.
-
-The frontend currently silences the unused-endpoint test by adding
-`/api/sessions/new` to a `DELIBERATELY_UNUSED` set in
-`tests/test_api_params.py`. This works around the symptom but leaves
-dead code in the backend.
-
-**Desired:** Delete the endpoint and its supporting code:
-- Remove the route entry in `webapp.py`
-- Remove `post_session()` and any helpers in `routes/sessions.py` it
-  uniquely depends on (e.g. `start_new_state_session` if no other
-  caller remains)
-- Remove the OpenAPI entry in `openapi.yaml`
-- Remove the discovery entry in `routes/meta.py`
-- Drop any tests that exercise this endpoint specifically
-
-**Impact on ariaflow-web:** Once the backend route is gone, the
-`DELIBERATELY_UNUSED` workaround in `tests/test_api_params.py` can be
-removed and the unused-endpoint test will pass naturally.
-
-**Blocks local gap:** (none) — pure backend cleanup, no user-visible
-counterpart in the dashboard.
-
-**Priority:** low — purely cosmetic dead-code removal, no functional
-impact.
+> Resolved 2026-04-09. Endpoint, handler (`post_session`), OpenAPI spec,
+> discovery entry, and all endpoint-specific tests removed. The helper
+> `start_new_state_session()` in `state.py` was preserved (has other callers).
+> Cross-check tests updated to call it directly. Commit `34f039a`.
 
 ---
 
@@ -188,7 +161,7 @@ Historical resolved entries are preserved in git history.
 
 ## Resolved
 
-*(BG-1 through BG-11 cleaned — see git log for history)*
+*(BG-1 through BG-12 cleaned — see git log for history)*
 
 BG-10 was resolved across two backend commits:
 - Generator extension + 3 endpoint schemas (declaration / lifecycle / log) + UccEnvelope component
