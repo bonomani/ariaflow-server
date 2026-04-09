@@ -1,32 +1,6 @@
 # Plan
 
-
-
-
----
-
-### [Low] G-7: Renumber TIC oracle sequentially
-
-**What:** Replace sub-IDs (`22a`, `232b`, `428a`) with sequential numbers. Update coverage summary total.
-**Where:** `docs/governance/tic-oracle.md`
-**Why:** Sub-IDs create ambiguity and drift between registered count and total.
-**Scope:** Mechanical renumber, ~50 lines changed
-**Depends on:** Do last — any other TIC changes should land first
-
----
-
-### [Low] G-11: Test on Python 3.14 in CI
-
-**What:** Add Python 3.14 to the test matrix in `.github/workflows/release.yml` or a separate test workflow
-**Where:** `.github/workflows/release.yml` or new `test.yml`
-**Why:** Homebrew installs Python 3.14 on macOS but CI only tests 3.12.
-**Scope:** ~5 lines in workflow YAML
-**Depends on:** Nothing
-
----
-
-
----
+_No open items._
 
 ## How to use this file
 
