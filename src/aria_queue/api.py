@@ -43,9 +43,9 @@ from .install import (
     status_all,
     ucc_record,
 )
+from .platform.detect import is_macos
 from .platform.launchd import (
     install_aria2_launchd,
-    is_macos,
     uninstall_aria2_launchd,
 )
 

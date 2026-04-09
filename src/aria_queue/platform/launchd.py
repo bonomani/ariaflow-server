@@ -65,8 +65,7 @@ def launchd_aria2_status() -> dict[str, bool]:
     }
 
 
-def is_macos() -> bool:
-    return os.uname().sysname.lower() == "darwin"
+from .detect import is_macos  # noqa: F401 — re-exported for backwards compat
 
 
 def install_aria2_launchd(dry_run: bool = False) -> list[str]:

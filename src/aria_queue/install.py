@@ -6,10 +6,10 @@ import subprocess
 from pathlib import Path
 
 from .core import _find_networkquality
+from .platform.detect import is_macos
 from .platform.launchd import (
     launchd_aria2_status,
     install_aria2_launchd,
-    is_macos,
     uninstall_aria2_launchd,
 )
 
