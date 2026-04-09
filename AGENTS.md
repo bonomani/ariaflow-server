@@ -1,35 +1,18 @@
-# Repository Workflow
+# Agent Instructions — ariaflow-server (backend)
 
-Source repo for `ariaflow-server`. Documentation lives in [`docs/`](./docs/).
+## General rule — external repos and directories
+- On ANY repo or directory other than this one (ariaflow-server), you MAY ONLY run read-only commands: `cat`, `head`, `grep`, `find`, `ls`, `git log`, `git show`, `git diff` (without write flags).
+- NEVER run mutating commands outside this repo: `git add`, `git commit`, `git push`, `git pull`, `git checkout`, `git reset`, `rm`, `mv`, `cp`, `sed`, `pip install`, or any command that modifies files, state, or history.
 
-## Working Rules
+## Testing policy
+- Every new feature, bug fix, or behavior change MUST include tests in the same commit.
+- Do not ship code without tests — no exceptions.
+- Tests must cover the new code paths, not just pass existing ones.
+- Register new tests in `docs/governance/tic-oracle.md` with Intent / Oracle / Trace Target.
 
-- WSL checkout is the source repo
-- Make edits and commits in WSL
-- Use Git to sync companion repos/mirrors
-- Keep release state aligned across source and Homebrew tap
-
-## Release
-
-```bash
-python3 scripts/publish.py plan    # preview
-python3 scripts/publish.py push    # push main + auto-release
-```
-
-For explicit stable version: `python3 scripts/publish.py release --version X.Y.Z`
-
-See [`docs/RELEASE.md`](./docs/RELEASE.md) for full details.
-
-## Verification
-
-1. Check GitHub release is published (not draft/prerelease)
-2. Check Homebrew formula version in tap repo
-3. On macOS: `brew tap bonomani/ariaflow-server && brew upgrade ariaflow-server && ariaflow --version`
-
-## Homebrew Notes
-
-- Release workflow writes tap formula from `scripts/homebrew_formula.py` to `bonomani/homebrew-ariaflow-server`
-- Generated formula tracks `main` for `--HEAD`
-- Don't leave the tap pointing at an older tag after a new release
-
-If this file conflicts with a direct user instruction, follow the user instruction.
+## Cross-repo boundary — ariaflow-web (frontend)
+- The frontend repo is at /home/bc/repos/github/bonomani/ariaflow-web
+- The frontend is a separate project. All communication is through the API.
+- You MAY NOT read, write, or reference any files in the frontend repo. No exceptions.
+- If the user asks you to operate on the frontend repo, remind them of this boundary and suggest they use a separate session from the frontend repo.
+- The frontend agent may write to `docs/BACKEND_GAPS_REQUESTED_BY_FRONTEND.md` to report API gaps. Check this file when starting work — resolve gaps and move them to the Resolved section. Do not add or delete entries yourself (that's the frontend's responsibility).
