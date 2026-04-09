@@ -1447,8 +1447,16 @@ class TestOpenapiSchemas(unittest.TestCase):
             "_schema",
             "_request_id",
         }
+        # aria2 service key is platform-dependent (aria2-launchd/systemd/task)
+        _ARIA2_SVC = {"aria2-launchd", "aria2-systemd", "aria2-task"}
         for key in declared:
-            self.assertIn(key, live, f"declared key {key!r} missing from live")
+            if key in _ARIA2_SVC:
+                self.assertTrue(
+                    any(k in live for k in _ARIA2_SVC),
+                    "no aria2 service key found in live response",
+                )
+            else:
+                self.assertIn(key, live, f"declared key {key!r} missing from live")
 
     def test_bg10_bandwidth_schema_matches_live_response(self) -> None:
         """BG-10: GET /api/bandwidth top-level keys match the live shape."""

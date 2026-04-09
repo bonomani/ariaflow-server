@@ -38,16 +38,14 @@ from .core import (
     summarize_queue,
 )
 from .install import (
+    _aria2_install_service,
+    _aria2_uninstall_service,
     homebrew_install_ariaflow,
     homebrew_uninstall_ariaflow,
     status_all,
     ucc_record,
 )
 from .platform.detect import is_macos
-from .platform.launchd import (
-    install_aria2_launchd,
-    uninstall_aria2_launchd,
-)
 
 __all__ = [
     "add_queue_item",
@@ -92,7 +90,7 @@ __all__ = [
     "homebrew_install_ariaflow",
     "homebrew_uninstall_ariaflow",
     "ucc_record",
-    "install_aria2_launchd",
-    "uninstall_aria2_launchd",
+    "_aria2_install_service",
+    "_aria2_uninstall_service",
     "is_macos",
 ]

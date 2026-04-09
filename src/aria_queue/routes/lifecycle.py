@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from ..api import (
+    _aria2_install_service,
+    _aria2_uninstall_service,
     homebrew_install_ariaflow,
     homebrew_uninstall_ariaflow,
-    install_aria2_launchd,
     load_state,
     record_action,
     status_all,
     ucc_record,
-    uninstall_aria2_launchd,
 )
+from ..platform.detect import is_macos
 from .helpers import _error_payload
 
 
@@ -39,18 +40,18 @@ def get_lifecycle(h: object, parsed: object) -> None:
 
 
 def post_lifecycle_action(h: object, payload: object, path: str) -> None:
-    from .. import webapp as _wa
-
-    if not _wa.is_macos():
-        h._send_json(
-            _error_payload("macos_only", "this endpoint requires macOS"), status=400
-        )
-        return
+    _ARIA2_SERVICE_TARGETS = {"aria2-launchd", "aria2-task", "aria2-systemd", "aria2-service"}
     target = str(payload.get("target", "")).strip()
     action = str(payload.get("action", "")).strip()
     before = {"lifecycle": status_all()}
     try:
         if target == "ariaflow" and action == "install":
+            if not is_macos():
+                h._send_json(
+                    _error_payload("use_pipx", "install ariaflow via: pipx install ariaflow"),
+                    status=400,
+                )
+                return
             commands = homebrew_install_ariaflow(dry_run=False)
             result = {
                 "ariaflow": ucc_record(
@@ -64,6 +65,12 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
                 )
             }
         elif target == "ariaflow" and action == "uninstall":
+            if not is_macos():
+                h._send_json(
+                    _error_payload("use_pipx", "uninstall ariaflow via: pipx uninstall ariaflow"),
+                    status=400,
+                )
+                return
             commands = homebrew_uninstall_ariaflow(dry_run=False)
             result = {
                 "ariaflow": ucc_record(
@@ -76,29 +83,29 @@ def post_lifecycle_action(h: object, payload: object, path: str) -> None:
                     commands=commands,
                 )
             }
-        elif target == "aria2-launchd" and action == "install":
-            commands = install_aria2_launchd(dry_run=False)
+        elif target in _ARIA2_SERVICE_TARGETS and action == "install":
+            svc_target, commands = _aria2_install_service(dry_run=False)
             result = {
-                "aria2-launchd": ucc_record(
-                    target="aria2-launchd",
+                svc_target: ucc_record(
+                    target=svc_target,
                     observed=True,
                     outcome="changed",
                     completion="complete",
                     reason="install",
-                    detail="optional aria2 launchd service installed or queued for installation",
+                    detail=f"{svc_target} service installed or queued for installation",
                     commands=commands,
                 )
             }
-        elif target == "aria2-launchd" and action == "uninstall":
-            commands = uninstall_aria2_launchd(dry_run=False)
+        elif target in _ARIA2_SERVICE_TARGETS and action == "uninstall":
+            svc_target, commands = _aria2_uninstall_service(dry_run=False)
             result = {
-                "aria2-launchd": ucc_record(
-                    target="aria2-launchd",
+                svc_target: ucc_record(
+                    target=svc_target,
                     observed=True,
                     outcome="changed",
                     completion="complete",
                     reason="uninstall",
-                    detail="optional aria2 launchd removed or queued for removal",
+                    detail=f"{svc_target} service removed or queued for removal",
                     commands=commands,
                 )
             }

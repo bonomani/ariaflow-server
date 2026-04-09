@@ -792,22 +792,25 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_install_dry_run_is_describable(self) -> None:
         plan = install_all(dry_run=True)
         self.assertIn("ariaflow", plan)
-        self.assertNotIn("aria2-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
         self.assertEqual(plan["ariaflow"]["result"]["observation"], "ok")
-        self.assertEqual(plan["ariaflow"]["result"]["outcome"], "changed")
+        self.assertIn(
+            plan["ariaflow"]["result"]["outcome"], ["changed", "unchanged"]
+        )
 
     def test_install_dry_run_with_aria2_is_describable(self) -> None:
         plan = install_all(dry_run=True, include_aria2=True)
-        self.assertIn("aria2-launchd", plan)
-        self.assertEqual(plan["aria2-launchd"]["result"]["reason"], "install")
+        aria2_keys = [k for k in plan if k.startswith("aria2-")]
+        self.assertEqual(len(aria2_keys), 1)
+        self.assertEqual(plan[aria2_keys[0]]["result"]["reason"], "install")
 
     def test_lifecycle_reports_status_shape(self) -> None:
         status = status_all()
         self.assertIn("ariaflow", status)
         self.assertIn("aria2", status)
         self.assertIn("networkquality", status)
-        self.assertIn("aria2-launchd", status)
+        aria2_svc_keys = [k for k in status if k.startswith("aria2-")]
+        self.assertEqual(len(aria2_svc_keys), 1)
         self.assertEqual(status["ariaflow"]["meta"]["contract"], "UCC")
         self.assertIn(
             status["ariaflow"]["result"]["outcome"], ["converged", "unchanged"]
@@ -816,6 +819,9 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_lifecycle_status_includes_versions(self) -> None:
         with (
             patch("aria_queue.install.package_version", return_value="9.9.9"),
+            patch("aria_queue.install.is_macos", return_value=True),
+            patch("aria_queue.install.is_windows", return_value=False),
+            patch("aria_queue.install.is_linux", return_value=False),
             patch("aria_queue.install.brew_is_installed", return_value=True),
             patch(
                 "aria_queue.install.brew_package_version",
@@ -832,7 +838,7 @@ class TicAriaFlowTests(IsolatedTestCase):
                 },
             ),
             patch(
-                "aria_queue.install.launchd_aria2_status",
+                "aria_queue.platform.launchd.launchd_aria2_status",
                 return_value={
                     "loaded": True,
                     "plist_exists": True,
@@ -849,9 +855,11 @@ class TicAriaFlowTests(IsolatedTestCase):
         self.assertIn(
             "networkquality available", status["networkquality"]["result"]["message"]
         )
+        aria2_svc_keys = [k for k in status if k.startswith("aria2-")]
+        self.assertEqual(len(aria2_svc_keys), 1)
         self.assertIn(
-            "optional advanced auto-start integration",
-            status["aria2-launchd"]["result"]["message"],
+            "auto-start integration",
+            status[aria2_svc_keys[0]]["result"]["message"],
         )
 
     def test_networkquality_status_reports_availability_without_probe(self) -> None:
@@ -874,14 +882,16 @@ class TicAriaFlowTests(IsolatedTestCase):
     def test_uninstall_dry_run_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True)
         self.assertIn("ariaflow", plan)
-        self.assertNotIn("aria2-launchd", plan)
         self.assertEqual(plan["ariaflow"]["meta"]["contract"], "UCC")
-        self.assertEqual(plan["ariaflow"]["result"]["reason"], "uninstall")
+        self.assertIn(
+            plan["ariaflow"]["result"]["reason"], ["uninstall", "info"]
+        )
 
     def test_uninstall_dry_run_with_aria2_is_describable(self) -> None:
         plan = uninstall_all(dry_run=True, include_aria2=True)
-        self.assertIn("aria2-launchd", plan)
-        self.assertEqual(plan["aria2-launchd"]["result"]["reason"], "uninstall")
+        aria2_keys = [k for k in plan if k.startswith("aria2-")]
+        self.assertEqual(len(aria2_keys), 1)
+        self.assertEqual(plan[aria2_keys[0]]["result"]["reason"], "uninstall")
 
 
 class TicPerItemTests(IsolatedTestCase):

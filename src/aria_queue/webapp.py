@@ -21,7 +21,6 @@ from .api import (
     aria2_tell_active,
     aria2_tell_status,
     auto_preflight_on_run,  # noqa: F401 — re-exported for test patch compatibility
-    is_macos,  # noqa: F401 — re-exported for test patch compatibility
     load_queue,
     load_state,
     preflight,  # noqa: F401 — re-exported for test patch compatibility

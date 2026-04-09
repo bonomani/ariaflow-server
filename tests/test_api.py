@@ -828,7 +828,7 @@ class TestLifecycle(APIServerPerTestCase):
         self.assertEqual(body["ariaflow"]["meta"]["contract"], "UCC")
 
     def test_lifecycle_action_non_macos(self) -> None:
-        with patch("aria_queue.webapp.is_macos", return_value=False):
+        with patch("aria_queue.routes.lifecycle.is_macos", return_value=False):
             code, body = _request(
                 f"{self.base}/api/lifecycle/ariaflow/install",
                 "POST",
@@ -838,7 +838,7 @@ class TestLifecycle(APIServerPerTestCase):
                 },
             )
         self.assertEqual(code, 400)
-        self.assertEqual(body["error"], "macos_only")
+        self.assertEqual(body["error"], "use_pipx")
 
 
 # ──────────────────────────────────────────────────────
@@ -1472,7 +1472,7 @@ class TestPostEndpoints(APIServerTestCase):
 
     # 17. POST /api/lifecycle/ariaflow/install
     def test_post_api_lifecycle_action_non_macos(self) -> None:
-        with patch("aria_queue.webapp.is_macos", return_value=False):
+        with patch("aria_queue.routes.lifecycle.is_macos", return_value=False):
             code, body, _ = _req(
                 f"{self.base}/api/lifecycle/ariaflow/install",
                 "POST",
@@ -1482,11 +1482,11 @@ class TestPostEndpoints(APIServerTestCase):
                 },
             )
         self.assertEqual(code, 400)
-        self.assertEqual(body["error"], "macos_only")
+        self.assertEqual(body["error"], "use_pipx")
 
     def test_post_api_lifecycle_action_install(self) -> None:
         with (
-            patch("aria_queue.webapp.is_macos", return_value=True),
+            patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
             patch(
                 "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
                 return_value=["brew install ariaflow"],

@@ -6,12 +6,7 @@ import subprocess
 from pathlib import Path
 
 from .core import _find_networkquality
-from .platform.detect import is_macos
-from .platform.launchd import (
-    launchd_aria2_status,
-    install_aria2_launchd,
-    uninstall_aria2_launchd,
-)
+from .platform.detect import is_linux, is_macos, is_windows
 
 
 def current_ariaflow_version() -> str:
@@ -156,15 +151,69 @@ def homebrew_uninstall_ariaflow(dry_run: bool = False) -> list[str]:
     return [" ".join(cmd) for cmd in commands]
 
 
+def _aria2_on_path() -> bool:
+    return shutil.which("aria2c") is not None
+
+
+def _aria2_service_status() -> dict[str, object]:
+    """Return aria2 service status for the current platform."""
+    if is_macos():
+        from .platform.launchd import launchd_aria2_status
+
+        return launchd_aria2_status()
+    if is_windows():
+        from .platform.windows import task_scheduler_aria2_status
+
+        return task_scheduler_aria2_status()
+    if is_linux():
+        from .platform.linux import systemd_aria2_status
+
+        return systemd_aria2_status()
+    return {"loaded": False, "version": None}
+
+
+def _aria2_install_service(dry_run: bool = False) -> tuple[str, list[str]]:
+    """Install aria2 service; returns (target_name, commands)."""
+    if is_macos():
+        from .platform.launchd import install_aria2_launchd
+
+        return "aria2-launchd", install_aria2_launchd(dry_run=dry_run)
+    if is_windows():
+        from .platform.windows import install_aria2_task
+
+        return "aria2-task", install_aria2_task(dry_run=dry_run)
+    if is_linux():
+        from .platform.linux import install_aria2_systemd
+
+        return "aria2-systemd", install_aria2_systemd(dry_run=dry_run)
+    raise RuntimeError("aria2 service install not supported on this platform")
+
+
+def _aria2_uninstall_service(dry_run: bool = False) -> tuple[str, list[str]]:
+    """Uninstall aria2 service; returns (target_name, commands)."""
+    if is_macos():
+        from .platform.launchd import uninstall_aria2_launchd
+
+        return "aria2-launchd", uninstall_aria2_launchd(dry_run=dry_run)
+    if is_windows():
+        from .platform.windows import uninstall_aria2_task
+
+        return "aria2-task", uninstall_aria2_task(dry_run=dry_run)
+    if is_linux():
+        from .platform.linux import uninstall_aria2_systemd
+
+        return "aria2-systemd", uninstall_aria2_systemd(dry_run=dry_run)
+    raise RuntimeError("aria2 service uninstall not supported on this platform")
+
+
 def install_all(
     dry_run: bool = False,
     include_aria2: bool = False,
 ) -> dict[str, dict[str, object]]:
-    if not dry_run and not is_macos():
-        raise RuntimeError("install is only supported on macOS")
-    ariaflow_cmds = homebrew_install_ariaflow(dry_run=dry_run)
-    plan = {
-        "ariaflow": ucc_record(
+    plan: dict[str, dict[str, object]] = {}
+    if is_macos():
+        ariaflow_cmds = homebrew_install_ariaflow(dry_run=dry_run)
+        plan["ariaflow"] = ucc_record(
             target="ariaflow",
             observed=True,
             outcome="changed",
@@ -172,31 +221,46 @@ def install_all(
             reason="install",
             detail="ariaflow package installed or queued for installation",
             commands=ariaflow_cmds,
-        ),
-    }
+        )
+    else:
+        plan["ariaflow"] = ucc_record(
+            target="ariaflow",
+            observed=True,
+            outcome="unchanged",
+            completion="complete",
+            reason="info",
+            detail="install ariaflow via: pipx install ariaflow",
+            commands=["pipx install ariaflow"],
+        )
     if include_aria2:
-        aria2_cmds = install_aria2_launchd(dry_run=dry_run)
-        plan["aria2-launchd"] = ucc_record(
-            target="aria2-launchd",
+        target, cmds = _aria2_install_service(dry_run=dry_run)
+        plan[target] = ucc_record(
+            target=target,
             observed=True,
             outcome="changed",
             completion="complete",
             reason="install",
-            detail="aria2 launchd service installed or queued for installation",
-            commands=aria2_cmds,
+            detail=f"{target} service installed or queued for installation",
+            commands=cmds,
         )
     return plan
 
 
 def status_all() -> dict[str, dict[str, object]]:
-    ariaflow_installed = brew_is_installed("ariaflow")
-    ariaflow_version = brew_package_version("ariaflow")
     current_version = current_ariaflow_version()
-    aria2_installed = brew_is_installed("aria2")
-    aria2_version = brew_package_version("aria2")
-    aria2 = launchd_aria2_status()
+    if is_macos():
+        ariaflow_installed = brew_is_installed("ariaflow")
+        ariaflow_version = brew_package_version("ariaflow")
+        aria2_installed = brew_is_installed("aria2")
+        aria2_version = brew_package_version("aria2")
+    else:
+        ariaflow_installed = shutil.which("ariaflow") is not None
+        ariaflow_version = current_version if ariaflow_installed else None
+        aria2_installed = _aria2_on_path()
+        aria2_version = None
+    aria2 = _aria2_service_status()
     networkquality = networkquality_status()
-    plan = {
+    plan: dict[str, dict[str, object]] = {
         "ariaflow": ucc_record(
             target="ariaflow",
             observed=True,
@@ -204,9 +268,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if ariaflow_installed else "missing",
             detail=(
-                f"ariaflow installed {ariaflow_version or 'unknown'}; current production {current_version}; updates via Homebrew tap; default service bootstraps aria2 automatically"
+                f"ariaflow installed {ariaflow_version or 'unknown'}; current production {current_version}"
                 if ariaflow_installed
-                else f"ariaflow package absent; current production {current_version}; install/update via Homebrew tap; default service bootstraps aria2 automatically"
+                else f"ariaflow package absent; current production {current_version}; install via: pipx install ariaflow"
             ),
         ),
         "aria2": ucc_record(
@@ -216,9 +280,9 @@ def status_all() -> dict[str, dict[str, object]]:
             completion="complete",
             reason="match" if aria2_installed else "missing",
             detail=(
-                f"aria2 installed {aria2_version or 'unknown'}; current production {aria2.get('version') or 'unknown'}; runtime download dependency"
+                f"aria2 installed {aria2_version or 'unknown'}; version {aria2.get('version') or 'unknown'}; runtime download dependency"
                 if aria2_installed
-                else f"aria2 package absent; current production {aria2.get('version') or 'unknown'}; runtime download dependency"
+                else f"aria2 absent; runtime download dependency"
             ),
         ),
         "networkquality": ucc_record(
@@ -233,19 +297,20 @@ def status_all() -> dict[str, dict[str, object]]:
                 networkquality.get("message") or "networkquality status unavailable"
             ),
         ),
-        "aria2-launchd": ucc_record(
-            target="aria2-launchd",
-            observed=True,
-            outcome="converged" if aria2["loaded"] else "unchanged",
-            completion="complete",
-            reason="match" if aria2["loaded"] else "missing",
-            detail=(
-                f"aria2 launchd loaded ({aria2.get('version') or 'unknown'}); optional advanced auto-start integration"
-                if aria2["loaded"]
-                else "aria2 launchd absent; optional advanced auto-start integration"
-            ),
-        ),
     }
+    service_target = "aria2-launchd" if is_macos() else "aria2-systemd" if is_linux() else "aria2-task" if is_windows() else "aria2-service"
+    plan[service_target] = ucc_record(
+        target=service_target,
+        observed=True,
+        outcome="converged" if aria2["loaded"] else "unchanged",
+        completion="complete",
+        reason="match" if aria2["loaded"] else "missing",
+        detail=(
+            f"aria2 service active ({aria2.get('version') or 'unknown'}); auto-start integration"
+            if aria2["loaded"]
+            else "aria2 service absent; optional auto-start integration"
+        ),
+    )
     return plan
 
 
@@ -253,10 +318,9 @@ def uninstall_all(
     dry_run: bool = False,
     include_aria2: bool = False,
 ) -> dict[str, dict[str, object]]:
-    if not dry_run and not is_macos():
-        raise RuntimeError("uninstall is only supported on macOS")
-    plan = {
-        "ariaflow": ucc_record(
+    plan: dict[str, dict[str, object]] = {}
+    if is_macos():
+        plan["ariaflow"] = ucc_record(
             target="ariaflow",
             observed=True,
             outcome="changed",
@@ -264,17 +328,26 @@ def uninstall_all(
             reason="uninstall",
             detail="ariaflow package removed or queued for removal",
             commands=homebrew_uninstall_ariaflow(dry_run=dry_run),
-        ),
-    }
+        )
+    else:
+        plan["ariaflow"] = ucc_record(
+            target="ariaflow",
+            observed=True,
+            outcome="unchanged",
+            completion="complete",
+            reason="info",
+            detail="uninstall ariaflow via: pipx uninstall ariaflow",
+            commands=["pipx uninstall ariaflow"],
+        )
     if include_aria2:
-        aria2_cmds = uninstall_aria2_launchd(dry_run=dry_run)
-        plan["aria2-launchd"] = ucc_record(
-            target="aria2-launchd",
+        target, cmds = _aria2_uninstall_service(dry_run=dry_run)
+        plan[target] = ucc_record(
+            target=target,
             observed=True,
             outcome="changed",
             completion="complete",
             reason="uninstall",
-            detail="aria2 launchd removed or queued for removal",
-            commands=aria2_cmds,
+            detail=f"{target} service removed or queued for removal",
+            commands=cmds,
         )
     return plan

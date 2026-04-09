@@ -571,7 +571,7 @@ class TestScenarioLifecycle(ScenarioBase):
 
         # Install (mocked)
         with (
-            patch("aria_queue.webapp.is_macos", return_value=True),
+            patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
             patch(
                 "aria_queue.routes.lifecycle.homebrew_install_ariaflow",
                 return_value=["brew install ariaflow"],
@@ -589,7 +589,7 @@ class TestScenarioLifecycle(ScenarioBase):
 
         # Uninstall (mocked)
         with (
-            patch("aria_queue.webapp.is_macos", return_value=True),
+            patch("aria_queue.routes.lifecycle.is_macos", return_value=True),
             patch(
                 "aria_queue.routes.lifecycle.homebrew_uninstall_ariaflow",
                 return_value=["brew uninstall ariaflow"],
