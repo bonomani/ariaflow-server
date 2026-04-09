@@ -13,6 +13,59 @@
 
 ---
 
+### BG-13: Detect WSL and default download directory to Windows filesystem
+
+On WSL2, aria2 downloads to the Linux filesystem by default
+(`~/Downloads` or the configured dir). Files stored there are slow to
+access from Windows Explorer (`\\wsl$\...`) and invisible to most
+Windows applications.
+
+**Detection:** `/proc/version` contains "microsoft" on WSL1/WSL2.
+The Windows username can be resolved via `wslvar USERPROFILE` or
+`/mnt/c/Users/$USER`.
+
+**Desired:** When running on WSL, default the download directory to
+`/mnt/c/Users/<windows-user>/Downloads` (or a configurable WSL-aware
+path) so files land on the Windows NTFS filesystem and are natively
+accessible from both sides.
+
+**Impact on ariaflow-web:** None — download dir is backend config. The
+dashboard could optionally show a "WSL detected" hint, but that's
+cosmetic and not blocked by this gap.
+
+**Blocks local gap:** (none).
+
+**Priority:** medium — quality-of-life for WSL users.
+
+---
+
+### BG-14: Expose archivable count or cleanup criteria
+
+The frontend enables the Archive button when `sumDone > 0 || sumError > 0`,
+but `POST /api/downloads/cleanup` applies additional rules
+(`max_done_age_days: 7`, `max_done_count: 100`). A user with 1 recent
+done item clicks Archive and sees "0 archived" — confusing.
+
+**Desired:** Either:
+(a) Add an `archivable_count` field to `GET /api/status` (computed with
+the same criteria as `cleanup()`), so the frontend can disable the button
+when nothing qualifies; or
+(b) Document the cleanup thresholds in the OpenAPI spec so the frontend
+can replicate the logic client-side.
+
+Option (a) is preferred — it keeps the criteria in one place and avoids
+frontend/backend drift if the rules change.
+
+**Impact on ariaflow-web:** Frontend gap FE-20 is blocked by this.
+Once `archivable_count` is available, `canArchive` in `app.js` switches
+from `sumDone > 0 || sumError > 0` to `archivableCount > 0`.
+
+**Blocks local gap:** FE-20.
+
+**Priority:** low — cosmetic UX inconsistency, no data loss.
+
+---
+
 ### BG-12: Remove unused `/api/sessions/new` endpoint — RESOLVED
 
 > Resolved 2026-04-09. Endpoint, handler (`post_session`), OpenAPI spec,
