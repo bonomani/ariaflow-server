@@ -65,8 +65,8 @@ def launchd_aria2_status() -> dict[str, bool]:
     }
 
 
-from .detect import default_downloads_dir as _default_dl  # noqa: F401
-from .detect import is_macos  # noqa: F401 — re-exported for backwards compat
+from .detect import default_downloads_dir as _default_dl  # noqa: E402, F401
+from .detect import is_macos  # noqa: E402, F401 — re-exported for backwards compat
 
 
 def install_aria2_launchd(dry_run: bool = False) -> list[str]:

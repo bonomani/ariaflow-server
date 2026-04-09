@@ -7,7 +7,6 @@ Usage:
 
 from __future__ import annotations
 
-import ast
 import inspect
 import re
 import sys
@@ -17,8 +16,7 @@ from typing import Any
 _SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(_SRC))
 
-from ariaflow_server import aria2_rpc as _rpc_module
-from ariaflow_server import core
+from ariaflow_server import aria2_rpc as _rpc_module  # noqa: E402
 
 
 def _extract_rpc_method(func_name: str, source: str) -> str | None:
@@ -126,9 +124,9 @@ def render_markdown(wrappers: list[dict[str, Any]]) -> str:
     lines.append(">")
     lines.append("> Regenerate: `python scripts/gen_rpc_docs.py`")
     lines.append("")
-    lines.append(f"**aria2 version:** 1.37.0  ")
+    lines.append("**aria2 version:** 1.37.0  ")
     lines.append(f"**Total wrappers:** {len(wrappers)}  ")
-    lines.append(f"**Source:** `src/ariaflow_server/aria2_rpc.py`")
+    lines.append("**Source:** `src/ariaflow_server/aria2_rpc.py`")
     lines.append("")
 
     # Summary table

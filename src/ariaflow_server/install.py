@@ -239,7 +239,7 @@ def status_all() -> dict[str, dict[str, object]]:
             detail=(
                 f"aria2 installed {aria2_version or 'unknown'}; version {aria2.get('version') or 'unknown'}; runtime download dependency"
                 if aria2_installed
-                else f"aria2 absent; runtime download dependency"
+                else "aria2 absent; runtime download dependency"
             ),
         ),
         "networkquality": ucc_record(
