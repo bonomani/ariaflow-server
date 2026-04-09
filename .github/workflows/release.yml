@@ -121,7 +121,7 @@ jobs:
           TAP_TOKEN: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
         run: |
           if [ -z "$TAP_TOKEN" ]; then
-            echo "Missing ARIAFLOW_TAP_TOKEN secret; cannot update bonomani/homebrew-ariaflow-server"
+            echo "Missing ARIAFLOW_TAP_TOKEN secret; cannot update bonomani/homebrew-ariaflow"
             exit 1
           fi
 
@@ -142,7 +142,7 @@ jobs:
       - name: Checkout tap
         uses: actions/checkout@v4
         with:
-          repository: bonomani/homebrew-ariaflow-server
+          repository: bonomani/homebrew-ariaflow
           token: ${{ secrets.ARIAFLOW_TAP_TOKEN }}
           path: tap
 
