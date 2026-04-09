@@ -143,5 +143,60 @@ class TestLinuxModule(unittest.TestCase):
         self.assertIn("--enable-rpc=true", unit)
 
 
+class TestWSLDetection(unittest.TestCase):
+    def test_is_wsl_true(self) -> None:
+        from aria_queue.platform import detect
+
+        with (
+            patch("aria_queue.platform.detect.is_linux", return_value=True),
+            patch(
+                "aria_queue.platform.detect.Path.read_text",
+                return_value="Linux version 6.6.87-microsoft-standard-WSL2",
+            ),
+        ):
+            self.assertTrue(detect.is_wsl())
+
+    def test_is_wsl_false_on_regular_linux(self) -> None:
+        from aria_queue.platform import detect
+
+        with (
+            patch("aria_queue.platform.detect.is_linux", return_value=True),
+            patch(
+                "aria_queue.platform.detect.Path.read_text",
+                return_value="Linux version 6.1.0-generic",
+            ),
+        ):
+            self.assertFalse(detect.is_wsl())
+
+    def test_is_wsl_false_on_macos(self) -> None:
+        from aria_queue.platform import detect
+
+        with patch("aria_queue.platform.detect.is_linux", return_value=False):
+            self.assertFalse(detect.is_wsl())
+
+    def test_default_downloads_dir_non_wsl(self) -> None:
+        from aria_queue.platform.detect import default_downloads_dir
+
+        with patch("aria_queue.platform.detect.is_wsl", return_value=False):
+            result = default_downloads_dir()
+        from pathlib import Path
+
+        self.assertEqual(result, Path.home() / "Downloads")
+
+    def test_default_downloads_dir_wsl(self) -> None:
+        from aria_queue.platform.detect import default_downloads_dir
+
+        with (
+            patch("aria_queue.platform.detect.is_wsl", return_value=True),
+            patch(
+                "aria_queue.platform.detect.wsl_windows_downloads",
+                return_value=MagicMock(spec=True),
+            ) as mock_wsl,
+        ):
+            mock_wsl.return_value = "/mnt/c/Users/testuser/Downloads"
+            result = default_downloads_dir()
+        self.assertEqual(str(result), "/mnt/c/Users/testuser/Downloads")
+
+
 if __name__ == "__main__":
     unittest.main()

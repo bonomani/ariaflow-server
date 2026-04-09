@@ -65,6 +65,7 @@ def launchd_aria2_status() -> dict[str, bool]:
     }
 
 
+from .detect import default_downloads_dir as _default_dl  # noqa: F401
 from .detect import is_macos  # noqa: F401 — re-exported for backwards compat
 
 
@@ -85,7 +86,7 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
     <string>--rpc-allow-origin-all=true</string>
     <string>--console-log-level=warn</string>
     <string>--summary-interval=0</string>
-    <string>--dir={str(Path.home() / "Downloads")}</string>
+    <string>--dir={str(_default_dl())}</string>
     <string>--input-file={str(launchd_aria2_session_dir() / "session.txt")}</string>
     <string>--save-session={str(launchd_aria2_session_dir() / "session.txt")}</string>
   </array>
@@ -97,7 +98,7 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
 </plist>
 """
     commands = [
-        f"mkdir -p {launchd_aria2_session_dir()} {Path.home() / 'Downloads'} {launch_agents_dir()}",
+        f"mkdir -p {launchd_aria2_session_dir()} {_default_dl()} {launch_agents_dir()}",
         f"touch {launchd_aria2_session_dir() / 'session.txt'}",
         f"cat > {launchd_aria2_plist_path()} <<'PLIST'\n{plist}PLIST",
         f"launchctl bootstrap gui/{os.getuid()} {launchd_aria2_plist_path()}",
@@ -109,7 +110,7 @@ def install_aria2_launchd(dry_run: bool = False) -> list[str]:
             "mkdir",
             "-p",
             str(launchd_aria2_session_dir()),
-            str(Path.home() / "Downloads"),
+            str(_default_dl()),
             str(launch_agents_dir()),
         ],
         check=True,

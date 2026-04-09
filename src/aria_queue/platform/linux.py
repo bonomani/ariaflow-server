@@ -81,7 +81,9 @@ WantedBy=default.target
 def install_aria2_systemd(dry_run: bool = False) -> list[str]:
     bin_path = shutil.which("aria2c") or "aria2c"
     session_dir = _aria2_session_dir()
-    download_dir = Path.home() / "Downloads"
+    from .detect import default_downloads_dir
+
+    download_dir = default_downloads_dir()
     unit_text = _build_unit(bin_path, session_dir, download_dir)
     commands = [
         f"mkdir -p {session_dir} {download_dir} {_systemd_user_dir()}",

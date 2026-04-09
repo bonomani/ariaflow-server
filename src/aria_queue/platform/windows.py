@@ -51,7 +51,9 @@ def task_scheduler_aria2_status() -> dict[str, object]:
 def install_aria2_task(dry_run: bool = False) -> list[str]:
     bin_path = shutil.which("aria2c") or "aria2c"
     session_dir = _aria2_session_dir()
-    download_dir = Path.home() / "Downloads"
+    from .detect import default_downloads_dir
+
+    download_dir = default_downloads_dir()
     session_file = session_dir / "session.txt"
     aria2_args = (
         f'"{bin_path}" --enable-rpc=true --rpc-listen-all=false'
